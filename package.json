@@ -1,0 +1,72 @@
+{
+  "name": "block-city-tycoon",
+  "productName": "BLOCK CITY TYCOON",
+  "version": "1.0.0",
+  "description": "BLOCK CITY TYCOON — Build. Manage. Expand. City-building tycoon for Windows.",
+  "main": "main.js",
+  "private": true,
+  "author": "Block City Tycoon",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "check": "node scripts/check.js",
+    "build": "node scripts/check.js && electron-builder --win nsis portable --x64",
+    "dist": "node scripts/check.js && electron-builder --win nsis portable --x64 --publish never",
+    "build:dir": "electron-builder --win dir --x64",
+    "icon": "electron scripts/make-icon.js"
+  },
+  "bctUpdate": {
+    "manifestUrl": ""
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.blockcitytycoon.game",
+    "productName": "BLOCK CITY TYCOON",
+    "copyright": "Copyright © 2026 Block City Tycoon",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "electron/**/*",
+      "src/**/*"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "src/assets/icons/icon.ico",
+      "legalTrademarks": "BLOCK CITY TYCOON",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BLOCK CITY TYCOON",
+      "uninstallDisplayName": "BLOCK CITY TYCOON",
+      "installerIcon": "src/assets/icons/icon.ico",
+      "uninstallerIcon": "src/assets/icons/icon.ico",
+      "installerHeaderIcon": "src/assets/icons/icon.ico",
+      "include": "build/installer.nsh",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "BLOCK-CITY-TYCOON-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "BLOCK-CITY-TYCOON-Portable-${version}.${ext}"
+    }
+  }
+}

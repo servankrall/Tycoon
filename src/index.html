@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#12152b">
+<title>BLOCK CITY TYCOON</title>
+<link rel="icon" href="assets/icons/icon.png">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<!-- ======================= SPLASH / BOOT (real loading progress, see js/boot/loader.js) ======================= -->
+<div id="bootSplash">
+  <img id="bsIcon" alt="" width="96" height="96">
+  <div class="bsLogo">BLOCK CITY<span>TYCOON</span></div>
+  <div class="bsSub">BUILD.<br>MANAGE.<br>EXPAND.</div>
+  <div class="bsBar"><i id="bsFill"></i></div>
+  <div class="bsRow"><span id="bsStage">Loading engine...</span><b id="bsPct">0%</b></div>
+  <ul id="bsList"></ul>
+  <div id="bsError"></div>
+  <div id="bsVer">v1.0.0</div>
+</div>
+<!-- ===================== TITLE / LOADING SCREEN ===================== -->
+<div id="titleScreen">
+  <div id="titleBlocks"></div>
+  <div id="titleLogo">BLOCK CITY<span>TYCOON</span></div>
+  <div id="titleSub">BUILD. MANAGE. EXPAND.</div>
+  <div id="titleVersion">v1.0.0</div>
+  <div id="loadBar"><i></i></div>
+  <!-- MAIN MENU -->
+  <div id="menuMain" class="menuBox hidden">
+    <div id="continueCard" class="card"></div>
+    <button class="btn green big menuBtn" data-menu="new">▶ NEW CITY</button>
+    <button class="btn gold big menuBtn" id="playBtn">▶ CONTINUE</button>
+    <div class="row menuRow"><button class="btn blue menuBtn" data-menu="sandbox">▶ SANDBOX</button><button class="btn blue menuBtn" data-menu="scenario">▶ SCENARIO</button><button class="btn blue menuBtn" data-menu="challenges">▶ CHALLENGES</button></div>
+    <button class="btn menuBtn" data-menu="settings">⚙ SETTINGS</button>
+    <div class="row menuRow"><button class="btn menuBtn" data-menu="load">📂 LOAD</button><button class="btn menuBtn" data-act="importSave">📥 IMPORT CITY</button><button class="btn menuBtn" data-act="downloadSave">📤 EXPORT CITY</button><button class="btn menuBtn" data-menu="profile">👤 PROFILE</button><button class="btn menuBtn" data-menu="showcase">🖼️ SHOWCASE</button></div>
+    <div class="row menuRow"><button class="btn menuBtn" data-menu="stats">📊 STATISTICS</button><button class="btn menuBtn" data-menu="achievements">🏅 ACHIEVEMENTS</button><button class="btn menuBtn" data-menu="admin">🛡️ ADMIN</button></div>
+    <div class="row menuRow"><button class="btn menuBtn" id="menuImportOld">📦 Import old browser save</button><button class="btn menuBtn" id="menuExportAll">📦 Export all saves</button></div>
+  </div>
+  <!-- NEW CITY -->
+  <div id="menuNew" class="menuBox hidden">
+    <h2 id="newTitle">🏗️ New City</h2>
+    <label class="fld">City name<input id="ncName" maxlength="32" value="Block City"></label>
+    <label class="fld">City seed (e.g. CITY-839201)<div class="row"><input id="ncSeed" maxlength="12"><button class="btn small" id="ncDice" type="button">🎲</button></div></label>
+    <div class="fld">Difficulty<div class="seg" id="ncDiff"></div><div class="small" id="ncDiffDesc"></div></div>
+    <div class="fld">Map type<div class="seg" id="ncMap"></div><div class="small" id="ncMapDesc"></div></div>
+    <div class="fld">Map size<div class="seg" id="ncSize"></div></div>
+    <div class="fld">Starting money<div class="seg" id="ncMoney"></div></div>
+    <div class="fld">Economy<div class="seg" id="ncEcon"></div></div>
+    <div class="fld">Disaster frequency<div class="seg" id="ncDis"></div></div>
+    <div class="fld">City slot<div class="seg" id="ncSlot"></div></div>
+    <div class="row" style="justify-content:space-between;margin-top:10px"><button class="btn" data-menu="main">← Back</button><button class="btn gold big" id="ncCreate">Create City →</button></div>
+  </div>
+  <!-- LOAD CITY -->
+  <div id="menuLoad" class="menuBox hidden">
+    <h2>📂 Load City</h2>
+    <div id="slotList"></div>
+    <div class="row" style="justify-content:space-between;margin-top:10px"><button class="btn" data-menu="main">← Back</button><button class="btn small" data-act="importSave">📥 Import code</button></div>
+  </div>
+  <!-- STATISTICS -->
+  <div id="menuStats" class="menuBox hidden">
+    <h2>📊 Statistics</h2>
+    <div id="statsList"></div>
+    <div class="row" style="margin-top:10px"><button class="btn" data-menu="main">← Back</button></div>
+  </div>
+  <!-- SCENARIO -->
+  <div id="menuScenario" class="menuBox hidden">
+    <h2>🗺️ Create Scenario</h2>
+    <label class="fld">Scenario name<input id="scName" maxlength="32" value="My Scenario"></label>
+    <div class="fld">Starting money<div class="seg" id="scMoney"></div></div>
+    <div class="fld">Starting population<div class="seg" id="scPop"></div></div>
+    <div class="fld">Map type<div class="seg" id="scMap"></div><div class="small" id="scMapDesc"></div></div>
+    <div class="fld">Economic difficulty<div class="seg" id="scDiff"></div></div>
+    <div class="fld">Disaster frequency<div class="seg" id="scDis"></div></div>
+    <div class="fld">Tax limit<div class="seg" id="scTax"></div></div>
+    <div class="fld">Starting technology<div class="seg" id="scTech"></div></div>
+    <div class="fld">Win condition<div class="seg" id="scWin"></div><div class="seg" id="scWinV" style="margin-top:4px"></div></div>
+    <div class="fld">Time limit<div class="seg" id="scLimit"></div></div>
+    <div class="row" style="justify-content:space-between;margin-top:10px"><button class="btn" data-menu="main">← Back</button><button class="btn gold big" id="scCreate">Create Scenario →</button></div>
+  </div>
+  <!-- SANDBOX -->
+  <div id="menuSandbox" class="menuBox hidden">
+    <h2>🧱 Sandbox Mode</h2>
+    <label class="fld">City name<input id="sbxName" maxlength="32" value="Sandbox City"></label>
+    <div id="sbxOpts"></div>
+    <p class="small">Sandbox cities use a large 64×64 map. Achievements and challenges are disabled.</p>
+    <div class="row" style="justify-content:space-between;margin-top:10px"><button class="btn" data-menu="main">← Back</button><button class="btn gold big" id="sbxCreate">Create Sandbox →</button></div>
+  </div>
+  <!-- PLAYER PROFILE -->
+  <div id="menuProfile" class="menuBox hidden">
+    <h2>👤 Player Profile</h2>
+    <div id="profileList"></div>
+    <div class="row" style="margin-top:10px"><button class="btn" data-menu="main">← Back</button></div>
+  </div>
+  <!-- CHALLENGES -->
+  <div id="menuChallenges" class="menuBox hidden">
+    <h2>🏆 Challenges</h2>
+    <p class="small">Daily & weekly goals are accepted inside a city (Quests → 🏅 Challenges). Challenge mode starts a new city with special rules.</p>
+    <div id="challengeList"></div>
+    <div class="row" style="margin-top:10px"><button class="btn" data-menu="main">← Back</button></div>
+  </div>
+  <div id="titleHint">Grow from an empty lot to a Future Civilization: a 10-chapter story, connected economy, living citizens, challenges, photo mode and more. Press Ctrl+K in game for the command palette.</div>
+</div>
+
+<canvas id="game"></canvas>
+
+<!-- ============================ TOP BAR ============================= -->
+<header id="topbar">
+  <div id="logo"><span id="tCity">BLOCK CITY</span><small id="tLevel">LV 1 · HAMLET</small></div>
+  <div class="stat money" title="Player money (your companies)"><span>💰</span><div><span class="lbl">MONEY <span id="tIncome" class="pos"></span></span><span class="val" id="tMoney">$0</span></div></div>
+  <div class="stat budget" title="City budget (taxes → public services)"><span>🏛️</span><div><span class="lbl">BUDGET <span id="tBudgetNet" class="pos"></span></span><span class="val" id="tBudget">$0</span></div></div>
+  <div class="stat" title="Population"><span>👥</span><div><span class="lbl">POPULATION</span><span class="val" id="tPop">0</span></div></div>
+  <div class="stat" title="Happiness"><span id="tHapIc">😊</span><div><span class="lbl">HAPPY</span><span class="val" id="tHap">0%</span></div></div>
+  <div class="stat hideM" title="City Score"><span id="tEcon">⚖️</span><div><span class="lbl">SCORE</span><span class="val" id="tScore">0</span></div></div>
+  <div class="stat hideM" title="Research Points"><span>🔬</span><div><span class="lbl">RESEARCH</span><span class="val" id="tRP">0</span></div></div>
+  <div id="topRight">
+    <div id="clockBox"><div class="t" id="tClock">06:00</div><div class="d" id="tDate">Day 1 · 🌸 Spring</div></div>
+    <div class="speedBtns" id="speedBtns" title="Simulation speed (1-9, +/-)">
+      <button id="speedPause">⏸</button><button id="speedDown">◀</button><button id="speedLabel" class="on">1×</button><button id="speedUp">▶</button>
+    </div>
+    <button class="iconBtn" id="statsBtn" title="Statistics Center (G)">📈</button>
+    <button class="iconBtn" id="dashBtn" title="Live dashboard">📊</button>
+    <button class="iconBtn" id="settingsBtn" title="Settings">⚙️</button>
+  </div>
+</header>
+
+<!-- ============================ LEFT NAV ============================ -->
+<nav id="leftnav">
+  <button class="navbtn" data-panel="build"><span class="ic">🏗️</span>BUILD</button>
+  <button class="navbtn" data-panel="city"><span class="ic">🏙️</span>CITY</button>
+  <button class="navbtn" data-panel="companies"><span class="ic">🏢</span>COMPANY</button>
+  <button class="navbtn" data-panel="research"><span class="ic">🔬</span>RESEARCH</button>
+  <button class="navbtn" data-panel="world"><span class="ic">🌍</span>WORLD</button>
+  <button class="navbtn mobileOnly" id="navSettings"><span class="ic">⚙️</span>MORE</button>
+  <div class="navsep"></div>
+</nav>
+<aside id="leftPanel">
+  <div class="panelHead"><h2 id="lpTitle">Build</h2><button class="closeX" id="lpClose">✕</button></div>
+  <div class="tabs" id="lpTabs"></div>
+  <div class="panelBody" id="lpBody"></div>
+</aside>
+
+<!-- ============================ TOOLBAR ============================= -->
+<div id="toolbar">
+  <button class="toolBtn on" data-tool="select">👆<span class="tip">Select / inspect</span></button>
+  <button class="toolBtn" data-tool="road" id="roadToolBtn">🛣️<span class="tip">Roads — drag; choose type, upgrade, bridges & tunnels (T)</span></button>
+  <button class="toolBtn" data-tool="bulldoze">🚜<span class="tip">Bulldoze (50% refund)</span></button>
+  <button class="toolBtn" data-tool="zone" id="zoneBtn">🟩<span class="tip">Paint zones</span></button>
+  <button class="toolBtn" id="layersBtn">🗂️<span class="tip">Map layers</span></button>
+  <button class="toolBtn" id="heatBtn">🌡️<span class="tip">Heatmaps (N)</span></button>
+  <button class="toolBtn" id="overlayBtn">🗺️<span class="tip">Next heatmap</span></button>
+  <div id="overlayLabel">NONE</div>
+  <button class="toolBtn" id="centerBtn">🎯<span class="tip">Center camera</span></button>
+  <button class="toolBtn" id="miniBtn">🧭<span class="tip">Minimap</span></button>
+  <button class="toolBtn" id="advisorBtn">🤖<span class="tip">City Advisor report (H)</span></button>
+  <button class="toolBtn" id="photoBtn">📷<span class="tip">Photo mode (F)</span></button>
+  <button class="toolBtn" id="paletteBtn">⌨️<span class="tip">Command palette (Ctrl+K)</span></button>
+  <button class="toolBtn hidden" id="mobRotate">↻<span class="tip">Rotate (R)</span></button>
+</div>
+
+<!-- =========================== RIGHT PANEL ========================== -->
+<button class="iconBtn" id="rightToggle" title="Quests / Events / Notifications">📋</button>
+<aside id="rightPanel">
+  <div id="advisor"><div class="ah">🤖 CITY ADVISOR</div><div class="am" id="advMsg"></div><div class="row"><button class="btn blue small" id="advGo">Show me →</button><button class="btn small" id="advDismiss">Dismiss</button></div></div>
+  <div class="tabs" id="rpTabs" style="padding-top:10px">
+    <button class="tab on" data-rtab="quests">🎯 Quests</button>
+    <button class="tab" data-rtab="events">⚡ Events</button>
+    <button class="tab" data-rtab="notifs">🔔 Log <span id="notifBadge" class="tag r hidden">0</span></button>
+  </div>
+  <div class="panelBody" id="rpBody"></div>
+</aside>
+
+<!-- ======================= BOTTOM SELECTION INFO ==================== -->
+<div id="bottomInfo">
+  <div id="biIcon">🏠</div>
+  <div id="biMain"><div id="biTitle"></div><div id="biStats"></div></div>
+  <div id="biActions"></div>
+</div>
+
+<!-- ======================= PLACEMENT CONFIRM BAR ==================== -->
+<div id="placeBar" class="hidden">
+  <div class="pinfo" id="placeInfo"></div>
+  <button class="btn" id="placeRotate" title="Cancel">✕ Cancel</button>
+  <button class="btn blue" id="placeRotateBtn" title="Rotate">↻ ROTATE</button>
+  <button class="btn green" id="placeConfirm">✓ Build</button>
+</div>
+
+<!-- ======================= MODAL / TOASTS / HUD ===================== -->
+<div id="modalWrap"><div id="modal"><div id="modalHead"><h2 id="modalTitle"></h2><button class="closeX" id="modalClose">✕</button></div><div id="modalBody"></div></div></div>
+<div id="toasts"></div>
+<div id="zonePicker" class="popover hidden"></div>
+<div id="layersPop" class="popover hidden"></div>
+<div id="dashboard" class="hidden"></div>
+<div id="fpsBox" class="hidden"></div>
+<div id="debugBox" class="hidden"></div>
+<div id="levelFlash"></div>
+<div id="issuesBar" class="hidden"></div>
+<div id="dialogBox" class="hidden"><div id="dlgPortrait">🤖</div><div id="dlgMain"><div id="dlgChapter"></div><div id="dlgName"></div><div id="dlgText"></div><div id="dlgBtns"></div></div></div>
+<div id="paletteWrap" class="hidden"><div id="palette"><input id="palInput" placeholder="Type a command or building… (e.g. factory, research, map)" autocomplete="off"><div id="palList"></div><div class="palHint">↑↓ navigate · Enter run · Esc close</div></div></div>
+<div id="tooltip" class="hidden"></div>
+<div id="firstTip" class="hidden"><div class="between"><b id="ftTitle"></b><button class="closeX" id="ftClose" style="width:24px;height:24px;font-size:12px">✕</button></div><p id="ftText"></p></div>
+<div id="tutObj" class="hidden"></div>
+<div id="photoBar" class="hidden"></div>
+<canvas id="minimap" class="hidden"></canvas>
+<div id="heatPop" class="popover hidden"></div>
+<div id="roadPop" class="popover hidden"></div>
+<div id="heatLegend" class="hidden"></div>
+<div id="debug6" class="hidden"></div>
+<div id="dailyCard" class="hidden"></div>
+<div id="tutorial" class="hidden"><h3 id="tutTitle"></h3><p id="tutText"></p><div class="row"><button class="btn small" id="tutSkip">Skip</button><button class="btn gold small" id="tutNext">Next →</button></div></div>
+
+<!-- ======================= SYSTEM DIALOG (exit, recovery, import) ======================= -->
+<div id="sysDialog" class="hidden"><div id="sysBox"><h2 id="sysTitle"></h2><div id="sysText"></div><div id="sysBtns"></div></div></div>
+
+<script src="js/boot/loader.js"></script>
+</body>
+</html>
