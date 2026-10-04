@@ -1,17 +1,30 @@
 # BLOCK CITY TYCOON — builds the Windows installer + portable EXE on a real Windows runner and publishes a GitHub Release.
-# Run it from GitHub: Actions → "Windows Release" → Run workflow (choose the version tag, e.g. v1.0.0).
+# Runs automatically on every push to the game branch (tag = "v" + package.json version, e.g. v1.0.0),
+# and can also be started by hand: Actions → "Windows Release" → Run workflow.
 name: Windows Release
 
 on:
+  push:
+    branches: [claude/happy-mayer-nu7z1c]
+    paths:
+      - "src/**"
+      - "electron/**"
+      - "build/**"
+      - "scripts/**"
+      - "main.js"
+      - "preload.js"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/windows-release.yml"
+      - ".github/RELEASE_NOTES.md"
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Release tag (must match package.json version, e.g. v1.0.0)"
-        required: true
-        default: "v1.0.0"
 
 permissions:
   contents: write
+
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -26,17 +39,28 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Check tag matches package.json version
+      - name: Read version
+        id: ver
         shell: pwsh
         run: |
           $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          if ("v$v" -ne "${{ github.event.inputs.tag }}") { Write-Error "Tag ${{ github.event.inputs.tag }} does not match package.json version v$v"; exit 1 }
+          "tag=v$v" >> $env:GITHUB_OUTPUT
+          "version=$v" >> $env:GITHUB_OUTPUT
 
       - name: Install
         run: npm ci
 
       - name: Build installer + portable EXE
         run: npm run dist
+
+      - name: Keep the EXEs as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BLOCK-CITY-TYCOON-${{ steps.ver.outputs.version }}-windows
+          path: |
+            dist/BLOCK-CITY-TYCOON-Setup-*.exe
+            dist/BLOCK-CITY-TYCOON-Portable-*.exe
+          if-no-files-found: error
 
       - name: Release notes with SHA-256 checksums
         shell: pwsh
@@ -49,10 +73,11 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag }}
+          tag_name: ${{ steps.ver.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: BLOCK CITY TYCOON ${{ github.event.inputs.tag }} — Windows
+          name: BLOCK CITY TYCOON ${{ steps.ver.outputs.tag }} — Windows
           body_path: release-notes.md
+          make_latest: true
           files: |
             dist/BLOCK-CITY-TYCOON-Setup-*.exe
             dist/BLOCK-CITY-TYCOON-Portable-*.exe
