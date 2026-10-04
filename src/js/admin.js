@@ -5,7 +5,7 @@
    entity tools, error log and save tools. Optional PIN protection (stored hashed in the profile). */
 const ADMIN = { tab: 'overview', ok: false };
 /* F10 / Ctrl+Shift+A / menu: the Part 8 Admin Control Center (classic tools stay available inside it: ⚙ SYSTEM → Classic admin tools) */
-function openAdmin() { openAdminCenter(); }
+function openAdmin() { promptEnableAdmin(); }      // Part 9: admin mode must be enabled (Settings or this confirmation)
 function admBtn(act, label, cls, v) { return '<button class="btn small ' + (cls || '') + '" data-adm="' + act + '"' + (v !== undefined ? ' data-v="' + esc(String(v)) + '"' : '') + '>' + label + '</button>'; }
 function admToggle(k, label) { const on = S.p5.admin[k]; return '<div class="between" style="padding:5px 0"><span>' + label + '</span>' + admBtn('toggle', on ? 'ON' : 'OFF', on ? 'green' : '', k) + '</div>'; }
 function admNum(id, label, val, act) { return '<div class="admRow"><span>' + label + '</span><input class="admInput" id="' + id + '" value="' + esc(String(val)) + '">' + admBtn(act, 'Set', 'blue') + '</div>'; }

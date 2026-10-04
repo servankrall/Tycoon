@@ -167,6 +167,7 @@ function seedLabel(seed) { return 'CITY-' + String((seed === undefined ? S.city.
 function parseSeed(txt) { const m = String(txt || '').toUpperCase().replace(/\s/g, '').match(/^(?:CITY-)?(\d{1,7})$/); return m ? (+m[1]) % 1000000 : NaN; }
 function logHistory(icon, text, kind) {
   S.p5.history.push({ day: gameDay(), icon: icon, text: String(text).slice(0, 120), kind: kind || 'event' });
+  if (S.p9 && (['landmark', 'first', 'milestone'].indexOf(kind) >= 0 || (kind === 'level' && /Level (5|10|15|20)\b/.test(text)))) timelineAdd(icon, text, kind);      // Part 9 city timeline
   if (S.p5.history.length > 80) S.p5.history.shift();
 }
 function markFirst(key, icon, text) { if (S.p5.firsts[key]) return false; S.p5.firsts[key] = 1; logHistory(icon, text, 'first'); return true; }

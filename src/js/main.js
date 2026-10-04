@@ -22,6 +22,7 @@ function pickBuilding(wx, wy) {
 }
 function handleTap(sx, sy) {
   if (ADM.pick && adminPickAt(sx, sy)) return;          // admin inspector: pick a citizen / vehicle
+  if (p9TapHook(sx, sy)) return;                       // Part 9: entity inspector / disaster location pickers
   const t = tileAtScreen(sx, sy);
   UI.idleTimer = 0;
   if (!inMap(t.x, t.y) && UI.tool !== 'select') return;
@@ -73,8 +74,8 @@ function showAgentInfo(a) {
   if (a.v) {
     const v = a.v;
     const dest = v.dest ? bdef(v.dest).name : (v.type === 'bus' ? 'Next bus stop' : 'Roaming');
-    showModal(({ car: '🚗', taxi: '🚕', bus: '🚌', truck: '🚚', ambulance: '🚑', firetruck: '🚒', race: '🏎️', police: '🚓', garbage: '🚛', tanker: '⛽' }[v.type] || '🚗') + ' ' + v.type.toUpperCase(),
-      '<div class="card"><div class="between small"><span>Destination</span><b>' + dest + '</b></div><div class="between small"><span>Speed</span><b>' + Math.round(v.speed) + ' / ' + Math.round(v.maxSpeed) + '</b></div><div class="between small"><span>Lane</span><b>Right-hand</b></div><div class="between small"><span>Traffic state</span><b>' + (v.state || 'moving') + '</b></div>' + (v.passenger ? '<div class="between small"><span>Passenger</span><b>Citizen #' + v.passenger.id + '</b></div>' : '') + '</div>');
+    showModal(({ car: '🚗', taxi: '🚕', bus: '🚌', truck: '🚚', ambulance: '🚑', firetruck: '🚒', race: '🏎️', police: '🚓', garbage: '🚛', tanker: '⛽', tram: '🚋', shuttle: '🚐', maint: '🛠️' }[v.type] || '🚗') + ' ' + v.type.toUpperCase(),
+      '<div class="card"><div class="between small"><span>Destination</span><b>' + dest + '</b></div><div class="between small"><span>Speed</span><b>' + Math.round(v.speed) + ' / ' + Math.round(v.maxSpeed) + '</b></div><div class="between small"><span>Lane</span><b>' + (S.p9 ? 'Lane ' + ((v.lane || 0) + 1) + ' of ' + lanesPerDir(v.path[Math.min(v.seg, v.path.length - 1)]) + ' (right-hand)' : 'Right-hand') + '</b></div><div class="between small"><span>Traffic state</span><b>' + (v.state || 'moving') + '</b></div>' + (v.passenger ? '<div class="between small"><span>Passenger</span><b>Citizen #' + v.passenger.id + '</b></div>' : '') + (v.line && lineById(v.line) ? '<div class="between small"><span>Line</span><b>' + esc(lineById(v.line).name) + ' · ' + (v.pax || []).length + ' aboard</b></div>' : '') + (v.routeInfo ? '<p class="small">🧭 ' + esc(routeInfoText(v.routeInfo)) + '</p>' : '') + '</div>');
     return;
   }
   const c = a.c, n = c.needs;
@@ -97,6 +98,7 @@ function onPointerDown(e) {
   if (e.button === 2) return;
   INPUT.down = { x: e.clientX, y: e.clientY, camX: CAM.x, camY: CAM.y, t: performance.now() };
   INPUT.moved = false;
+  if (p9PointerDown(e)) { INPUT.down.tool = true; return; }      // Part 9: world brush / region selector
   if (UI.tool === 'road' && e.pointerType === 'mouse') {
     const t = tileAtScreen(e.clientX, e.clientY);
     UI.roadDrag = { x0: t.x, y0: t.y, x1: t.x, y1: t.y, mouse: true };
@@ -122,6 +124,7 @@ function onPointerMove(e) {
     return;
   }
   const dn = INPUT.down; if (!dn) return;
+  if (dn.tool) { p9PointerMove(e); return; }
   const dx = e.clientX - dn.x, dy = e.clientY - dn.y;
   if (!INPUT.moved && Math.hypot(dx, dy) > (e.pointerType === 'mouse' ? 5 : 10)) INPUT.moved = true;
   if (UI.roadDrag && UI.roadDrag.mouse) { UI.roadDrag.x1 = t.x; UI.roadDrag.y1 = t.y; return; }
@@ -138,6 +141,7 @@ function onPointerUp(e) {
   if (INPUT.pointers.size < 2) INPUT.pinch = null;
   const dn = INPUT.down; INPUT.down = null;
   if (!dn) return;
+  if (dn.tool) { p9PointerUp(); return; }
   if (UI.roadDrag && UI.roadDrag.mouse) {
     const rd = UI.roadDrag; UI.roadDrag = null;
     placeRoads(lineTiles(rd.x0, rd.y0, rd.x1, rd.y1));
@@ -157,6 +161,7 @@ function onPointerUp(e) {
 }
 function cancelAction() {
   if (PHOTO.on) { exitPhoto(); return; }
+  if (S && S.p9 && p9CancelTools()) return;
   if (!$('paletteWrap').classList.contains('hidden')) { closePalette(); return; }
   if (UI.dialog) return;
   if (!$('zonePicker').classList.contains('hidden') && UI.tool !== 'zone') $('zonePicker').classList.add('hidden');
@@ -482,6 +487,7 @@ function loop(ts) {
     updateRockets(dt);
     updateCinematic(dt);
     updateCameraFly(dt);
+    if (STARTED) p9FrameTick(dt);
   } catch (err) {
     logError('Loop', err);
     if (!FX.errShown) { FX.errShown = true; toast('⚠️ Recovered from an error: ' + err.message, 'bad'); setTimeout(function () { FX.errShown = false; }, 15000); }

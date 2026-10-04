@@ -293,27 +293,28 @@ function updateWeather(dt) {
   let w = FX.weather;
   if (storm) w = 'storm';
   else if (FX.lock && S.clock.gameSec < FX.weatherUntil) w = FX.lock;            // weather chosen by the admin / world climate
+  else if (S.p9 && S.p9.freeze.weather) { FX.weatherUntil = S.clock.gameSec + 3600; }           // Part 9: frozen weather
   else if (S.clock.gameSec >= FX.weatherUntil || w === 'storm') {
     FX.lock = null;
     const season = currentSeason().id;
     const r = Math.random();
-    w = season === 'winter' ? (r < 0.45 ? 'snow' : 'clear') : (r < (season === 'autumn' ? 0.35 : season === 'summer' ? 0.12 : 0.25) ? 'rain' : 'clear');
+    w = S.p9 ? pickWeather2(season) : season === 'winter' ? (r < 0.45 ? 'snow' : 'clear') : (r < (season === 'autumn' ? 0.35 : season === 'summer' ? 0.12 : 0.25) ? 'rain' : 'clear');
     FX.weatherUntil = S.clock.gameSec + rand(2, 5) * 3600;
   }
   if (w !== FX.weather) { FX.weather = w; FX.drops = []; if (w !== 'clear') sfx('weather'); }
-  const precip = FX.weather === 'rain' || FX.weather === 'storm' || FX.weather === 'snow';
-  const want = !precip ? 0 : Math.floor((FX.weather === 'snow' ? 140 : FX.weather === 'storm' ? 320 : 200) * perf().weather * PERF.scale);
+  const precip = FX.weather === 'rain' || FX.weather === 'storm' || FX.weather === 'snow' || FX.weather === 'heavyrain' || FX.weather === 'coldwave';
+  const want = !precip ? 0 : Math.floor((FX.weather === 'snow' ? 140 : FX.weather === 'coldwave' ? 70 : FX.weather === 'storm' || FX.weather === 'heavyrain' ? 330 : 200) * perf().weather * PERF.scale);
   while (FX.drops.length < want) FX.drops.push({ x: Math.random() * CW, y: Math.random() * CH, s: rand(0.6, 1.2), o: Math.random() * 6 });
   if (FX.drops.length > want) FX.drops.length = want;
-  const snow = FX.weather === 'snow';
-  const vy = snow ? 40 : (FX.weather === 'storm' ? 700 : 500), vx = snow ? 0 : (FX.weather === 'storm' ? -220 : -80);
+  const snow = FX.weather === 'snow' || FX.weather === 'coldwave';
+  const vy = snow ? 40 : (FX.weather === 'storm' ? 700 : FX.weather === 'heavyrain' ? 640 : 500), vx = snow ? 0 : (FX.weather === 'storm' ? -220 : FX.weather === 'heavyrain' ? -120 : -80);
   FX.drops.forEach(function (d) {
     d.y += vy * d.s * dt; d.x += (vx + (snow ? Math.sin(FX.time + d.o) * 20 : 0)) * d.s * dt;
     if (d.y > CH) { d.y = -10; d.x = Math.random() * (CW + 200); }
     if (d.x < -20) d.x = CW + 10;
   });
   if (FX.weather === 'storm' && Math.random() < dt * 0.25) { FX.flash = 1; shake(3); sfx('thunder'); }
-  SND.setRain(FX.weather === 'rain' || FX.weather === 'storm');
+  SND.setRain(FX.weather === 'rain' || FX.weather === 'storm' || FX.weather === 'heavyrain');
 }
 
 /* --- Heat-map overlays ---------------------------------------------------------- */
@@ -410,7 +411,7 @@ function drawVehicle(v) {
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(-L / 2 + 1, -W / 2 + 2, L, W);
   ctx.fillStyle = v.color; ctx.fillRect(-L / 2, -W / 2, L, W);
   ctx.fillStyle = 'rgba(160,210,255,.85)';
-  if (v.type === 'bus') { for (let k = -L / 2 + 3; k < L / 2 - 3; k += 4) ctx.fillRect(k, -W / 2 + 1, 2.5, W - 2); }
+  if (v.type === 'bus' || v.type === 'tram' || v.type === 'shuttle') { for (let k = -L / 2 + 3; k < L / 2 - 3; k += 4) ctx.fillRect(k, -W / 2 + 1, 2.5, W - 2); if (v.type === 'tram') { ctx.fillStyle = '#fff'; ctx.fillRect(-L / 2, -1, L, 2); } }
   else ctx.fillRect(L / 2 - 5, -W / 2 + 1, 3, W - 2);
   if (v.type === 'truck') { ctx.fillStyle = '#e9ecef'; ctx.fillRect(-L / 2, -W / 2, L - 6, W); }
   if (v.type === 'taxi') { ctx.fillStyle = '#222'; ctx.fillRect(-2, -1.5, 4, 3); }
@@ -435,6 +436,7 @@ function drawBuilding(b) {
   const x0 = b.x * T + m, y0 = b.y * T + m, w = d.w * T - 2 * m, h = d.h * T - 2 * m;
   const q = perf();
   if (d.id === 'tree') { drawTree(b.x * T + T / 2, b.y * T + T - 6, 1.1, season, b.id); return; }
+  if (!b.built && S.p9) { drawConstructionSite(b, d, x0, y0, w, h); return; }
   if (!b.built) {
     const H = buildingHeight(b) * b.progress;
     ctx.fillStyle = '#8d8d99'; ctx.fillRect(x0, y0, w, h);
@@ -737,8 +739,8 @@ function drawLights(v, vis) {
 function render() {
   const season = currentSeason();
   updateSun();
-  if (MAP.groundDirty || GROUND.season !== seasonIndex() || GROUND.exp !== S.city.expansion || GROUND.layerKey !== layerKey()) drawGroundLayer();
   const L = S.settings.layers;
+  weUpdateTiers();
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   const nf = nightFactor();
   const bg = ctx.createLinearGradient(0, 0, 0, CH);
@@ -756,8 +758,10 @@ function render() {
   v.tx1 = clamp(Math.floor(v.x1 / TILE), 0, MAP.W - 1); v.ty1 = clamp(Math.floor(v.y1 / TILE), 0, MAP.H - 1);
   // Map shadow + ground
   ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(10, 14, MAP.W * TILE, MAP.H * TILE);
+  drawNeighbors();
   ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(GROUND.canvas, 0, 0, MAP.W * TILE, MAP.H * TILE);
+  weDrawGround(v);                 // Part 9 chunk streaming: only the chunks around the camera are loaded
+  weDrawLockedBorder();
   // Water shimmer
   if (perf().shadow && PERF.scale >= 0.6) {
     ctx.fillStyle = 'rgba(255,255,255,.08)';
@@ -775,20 +779,14 @@ function render() {
   drawDeco(v);
   if (L.resources && CAM.zoom > 0.4) drawResources(v);
   if (L.power || L.water) drawUtilityNetworks(v, L);
-  if (L.rail) drawTransit();
-  if (L.road) drawTrafficLights(v);
+  if (L.rail) { if (!drawTransitNetwork()) drawTransit(); }
+  if (L.road) { drawTrafficLights(v); if (S.p9) drawJunctions(v); }
   if (UI.tool === 'build' || UI.tool === 'zone' || UI.tool === 'road') drawGrid(v);
   drawShips();
   // Depth-sorted drawables
   const items = [];
-  const vis = [];
-  const list = S.buildings.list;
-  for (let i = 0; i < list.length; i++) {
-    const b = list[i], d = bdef(b);
-    const bx = b.x * TILE, by = b.y * TILE;
-    if (bx + d.w * TILE < v.x0 || bx > v.x1 || by + d.h * TILE < v.y0 || by - 300 > v.y1) continue;
-    vis.push(b); items.push({ y: by + d.h * TILE, k: 0, o: b });
-  }
+  const vis = weBuildingsInView(v, []);           // spatial partitioning: only chunks around the view are scanned
+  for (let i = 0; i < vis.length; i++) { const b = vis[i]; items.push({ y: (b.y + bdef(b).h) * TILE, k: 0, o: b }); }
   if (L.terrain) for (let y = v.ty0; y <= v.ty1; y++) for (let x = v.tx0; x <= v.tx1; x++) if (MAP.nature[idx(x, y)] === 1) items.push({ y: y * TILE + TILE - 4, k: 1, x: x, yy: y });
   // Level of detail: citizens only when zoomed in, vehicles hidden in the far "city view"
   const showNPC = CAM.zoom >= 0.55, showVeh = CAM.zoom >= 0.4;
@@ -856,6 +854,8 @@ function render() {
   drawDistrictLabels();
   drawWorldDebug();
   drawAccidents();
+  drawIncidents();
+  if (typeof drawP9Overlays === 'function') drawP9Overlays();
   drawHighlights();
   drawBubbles(v);
   // Screen-space weather & flash
@@ -863,13 +863,14 @@ function render() {
   if (FX.weather === 'cloudy') { ctx.fillStyle = 'rgba(70,80,100,.2)'; ctx.fillRect(0, 0, CW, CH); }
   else if (FX.weather === 'fog') { ctx.fillStyle = 'rgba(215,222,232,.38)'; ctx.fillRect(0, 0, CW, CH); }
   else if (FX.weather !== 'clear' && FX.weather !== 'heatwave') {
-    if (FX.weather === 'snow') { ctx.fillStyle = 'rgba(255,255,255,.9)'; FX.drops.forEach(function (d) { ctx.fillRect(d.x, d.y, 2.5 * d.s, 2.5 * d.s); }); }
+    if (FX.weather === 'coldwave') { ctx.fillStyle = 'rgba(160,200,255,.16)'; ctx.fillRect(0, 0, CW, CH); }
+    if (FX.weather === 'snow' || FX.weather === 'coldwave') { ctx.fillStyle = 'rgba(255,255,255,.9)'; FX.drops.forEach(function (d) { ctx.fillRect(d.x, d.y, 2.5 * d.s, 2.5 * d.s); }); }
     else {
       ctx.strokeStyle = 'rgba(180,200,255,.45)'; ctx.lineWidth = 1; ctx.beginPath();
-      const k = FX.weather === 'storm' ? 0.35 : 0.15;
+      const k = FX.weather === 'storm' ? 0.35 : FX.weather === 'heavyrain' ? 0.25 : 0.15;
       FX.drops.forEach(function (d) { ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - 12 * k * d.s * 2, d.y + 14 * d.s); });
       ctx.stroke();
-      ctx.fillStyle = 'rgba(20,30,60,' + (FX.weather === 'storm' ? 0.25 : 0.1) + ')'; ctx.fillRect(0, 0, CW, CH);
+      ctx.fillStyle = 'rgba(20,30,60,' + (FX.weather === 'storm' ? 0.25 : FX.weather === 'heavyrain' ? 0.2 : 0.1) + ')'; ctx.fillRect(0, 0, CW, CH);
     }
   }
   if (FX.weather === 'heatwave') { ctx.fillStyle = 'rgba(255,140,40,.10)'; ctx.fillRect(0, 0, CW, CH); }

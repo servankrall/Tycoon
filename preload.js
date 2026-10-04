@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('bct', {
   dev: !!info.dev,
   portable: !!info.portable,
   session: { previousCrashed: !!sessionInfo.previousCrashed },
+  selftest: info.selftest ? { phase: Number(info.selftest) || 0, restart: function () { ipcRenderer.send('selftest:restart'); }, report: function (json) { ipcRenderer.send('selftest:report', str(json)); } } : null,
   store: {
     loadAll: function () { return ipcRenderer.sendSync('store:loadAll'); },
     write: function (key, value) { return ipcRenderer.sendSync('store:write', str(key), str(value)); },

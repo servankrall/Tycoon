@@ -107,7 +107,9 @@ function decide(c) {
     if (c.money >= 12) push('GO_RESTAURANT', (100 - c.needs.food) * 1.1 + (c.needs.food < 30 ? 40 : 0) + ((h >= 12 && h < 13.5) ? 35 : (h >= 19 && h < 21) ? 20 : 0), MAP.lists.FOOD);
     if (c.money >= 15) push('GO_ENTERTAINMENT', ((100 - c.needs.fun) * 0.9 + (c.needs.fun < 30 ? 30 : 0) + (h >= 19 && h < 22 ? 30 : 0) + (weekend ? 15 : 0)) * P.fun, MAP.lists.ENTERTAINMENT.concat(P.tech ? MAP.lists.commercial.filter(function (b) { return bdef(b).sector === 'TECHNOLOGY'; }) : []));
     if (c.money >= 20 / spend) push('GO_SHOPPING', ((100 - c.needs.shopping) * 0.7 + (h >= 17 && h < 19 ? 30 : h >= 11 && h < 17 ? 10 : 0) + (weekend ? 12 : 0)) * P.shop, MAP.lists.SHOPPING);
-    push('GO_PARK', ((100 - c.needs.fun) * 0.6 + (h >= 9 && h < 20 ? 10 : 0) + (weekend ? 15 : 0)) * (P.park || 1) * (({ winter: 0.45, summer: 1.25 })[currentSeason().id] || 1), MAP.lists.parks);
+    push('GO_PARK', ((100 - c.needs.fun) * 0.6 + (h >= 9 && h < 20 ? 10 : 0) + (weekend ? 15 : 0)) * (P.park || 1) * (({ winter: 0.45, summer: 1.25 })[currentSeason().id] || 1) * (S.p9 ? weatherOutdoor() : 1), MAP.lists.parks);
+    // Part 9 households: young citizens study on weekdays (schools, colleges, universities)
+    if (S.p9 && c.age && c.age <= 24 && !weekend && h >= 7.5 && h < 14 && c.lastSchoolDay !== today) push('GO_SCHOOL', 80, MAP.lists.schools.concat(S.buildings.list.filter(function (b) { return bdef(b).eduHigh; })));
     push('GO_HOME', (18 + (h >= 22 || (h >= 20 && P.home) ? 40 : 0)) * (P.home || 1), null);
   }
   push('IDLE', 10, null);
@@ -162,7 +164,8 @@ function currentRoadTile(c) {
   for (let r = 0; r < 3; r++) for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) if (isRoad(x, y)) return idx(x, y);
   return -1;
 }
-function goTo(c, target) {
+function goTo(c, target, noTransit) {
+  if (!noTransit && !c.driving && transitPlan(c, target)) return;     // Part 9: walk → stop → ride → stop → walk
   c.target = target.id;
   const from = currentRoadTile(c);
   const to = target._entry;
@@ -188,6 +191,7 @@ function arrive(c) {
   const stay = function (min) { c.inside = b.id; c.insideUntil = gs + min * 60; };
   switch (c.state) {
     case 'GO_WORK': stay(Math.max(120, ((h < 12 ? 12 : 17) - h) * 60)); c.needs.work = 100; c.lastWorkDay = gameDay(); c.atWork = true; b.visitors++; break;
+    case 'GO_SCHOOL': stay(Math.max(90, (15 - h) * 60)); c.lastSchoolDay = gameDay(); c.needs.work = 100; b.visitors++; break;
     case 'GO_RESTAURANT': stay(45); c.needs.food = 100; c.money -= 12; b.visitors++; break;
     case 'GO_SHOPPING': stay(40); c.needs.shopping = 100; c.money -= 20; b.visitors++; break;
     case 'GO_ENTERTAINMENT': stay(120); c.needs.fun = 100; c.money -= 15; b.visitors++; break;
@@ -248,6 +252,7 @@ function updateCitizen(c, dt, gs) {
   c.happiness = (c.needs.food + c.needs.fun + c.needs.shopping + c.energy + c.needs.work + c.needs.housing) / 6;
   if (c.tourist) { c.life -= dt; if (c.life <= 0 && !c.driving) return true; }
   if (c.driving) return false;
+  if (c.transit && c.transit.phase === 'wait') { transitWaitTick(c, gs); return false; }
   if (c.inside) {
     if (!MAP.byId.has(c.inside)) { c.inside = 0; c.pending = true; return false; }
     if (gs >= c.insideUntil) exitBuilding(c);
@@ -268,7 +273,7 @@ function updateCitizen(c, dt, gs) {
       if (c.pi >= c.path.length) {
         if (c.parkUntil) { c.path = null; break; }
         if (c.state === 'IDLE') { c.path = null; c.thinkAt = gs + rand(300, 1200); }
-        else arrive(c);
+        else if (!transitReachedStop(c)) arrive(c);
         break;
       }
     } else { c.x += dx / dist * step; c.y += dy / dist * step; c.dir = dx; step = 0; }
@@ -291,6 +296,8 @@ function laneWaypoints(path) {
 }
 function makeVehicle(type, path, opts) {
   if (!path || path.length < 2) return null;
+  let routeInfo = null;
+  if (routeAIEligible(type, opts)) { const ch = trafficAIChoose(path, type); if (ch.path && ch.path.length >= 2) path = ch.path; routeInfo = ch.info; }   // Traffic AI 2.0
   const spec = VEHICLE_SPECS[type];
   const wp = laneWaypoints(path);
   const v = {
@@ -299,8 +306,10 @@ function makeVehicle(type, path, opts) {
     siren: !!spec.siren, passenger: opts && opts.passenger || null, dest: opts && opts.dest || null, route: opts && opts.route, dwell: 0,
     ambient: !!(opts && opts.ambient), cleared: -1, life: 0,
     ev: type !== 'bus' && type !== 'race' && type !== 'firetruck' && Math.random() < (SIM.evShare || 0),
-    cargo: opts && opts.cargo || null, capacity: (type === 'truck' || type === 'tanker') ? 25 : (type === 'garbage' ? 12 : 0), fuel: rand(0.5, 1)
+    cargo: opts && opts.cargo || null, capacity: (type === 'truck' || type === 'tanker') ? 25 : (type === 'garbage' ? 12 : 0), fuel: rand(0.5, 1),
+    lane: 0, lat: 0, laneT: 0, mode: routeInfo ? routeInfo.mode : 'fastest', routeInfo: routeInfo
   };
+  const n0 = lanesPerDir(path[0]); if (n0 > 1 && !spec.siren) v.lane = Math.floor(Math.random() * n0);
   if (v.ev) { v.maxSpeed *= 1.05; v.color = type === 'car' ? pick(['#90e0ef', '#b9fbc0', '#f1faee']) : v.color; if (v.capacity) v.capacity = 20; }
   const dx = wp[1].x - wp[0].x, dy = wp[1].y - wp[0].y, l = Math.hypot(dx, dy) || 1;
   v.hx = dx / l; v.hy = dy / l;
@@ -330,8 +339,8 @@ function spawnAmbientVehicle(type) {
   let from = null, to = null;
   if (type === 'truck') return spawnLogisticsTruck();
   if (type === 'garbage') return spawnGarbageTruck();
-  else if (type === 'taxi') { from = pick(S.buildings.list.filter(function (b) { return b.type === 'taxi' && b._op; })); to = pick(S.buildings.list.filter(function (b) { return b._road && b.built; })); }
-  else { from = pick(S.buildings.list.filter(function (b) { return b._road && b.built; })); to = pick(S.buildings.list.filter(function (b) { return b._road && b.built; })); }
+  else if (type === 'taxi') { from = pick(S.buildings.list.filter(function (b) { return b.type === 'taxi' && b._op; })); to = pickNearCamera(S.buildings.list.filter(function (b) { return b._road && b.built; })); }
+  else { const cand = S.buildings.list.filter(function (b) { return b._road && b.built; }); from = pickNearCamera(cand); to = pick(cand); }   // ambient traffic near the camera; far away it is statistical
   if (!from || !to || from === to) {
     if (type === 'race' && MAP.roadCount > 4) {
       const roads = []; for (let i = 0; i < MAP.roads.length; i++) if (MAP.roads[i]) roads.push(i);
@@ -354,7 +363,8 @@ function spawnBus(k) {
   const a = stops[k % stops.length], b = stops[(k + 1) % stops.length];
   return makeVehicle('bus', roadPath(a._entry, b._entry), { route: (k + 1) % stops.length });
 }
-function lightGreen(tile, axis) {
+function lightGreen(tile, axis, turn) {
+  if (S.p9) return signalGreen(tile, axis, turn || 'S');
   const cyc = hasTech('t_lights') ? 7.2 : 8.4;
   const ph = (AG.lightClock + (tile * 1.618) % cyc) % cyc;
   const g = cyc * 0.43, y = cyc * 0.07;
@@ -362,6 +372,7 @@ function lightGreen(tile, axis) {
   return ph >= g + y && ph < g * 2 + y;
 }
 function lightState(tile, axis) {
+  if (S.p9) return signalLight(tile, axis);
   const cyc = hasTech('t_lights') ? 7.2 : 8.4;
   const ph = (AG.lightClock + (tile * 1.618) % cyc) % cyc;
   const g = cyc * 0.43, y = cyc * 0.07;
@@ -379,6 +390,7 @@ function validateVehicles() {
 function removeVehicle(i, arrived) {
   const v = AG.vehicles[i];
   AG.vehicles.splice(i, 1);
+  if (v.pax && v.pax.length) dropPassengers(v.pax, v.x, v.y);
   if (v.passenger) {
     const c = v.passenger;
     c.driving = false;
@@ -386,8 +398,8 @@ function removeVehicle(i, arrived) {
     else { c.x = v.x; c.y = v.y; c.path = null; c.state = 'IDLE'; c.thinkAt = 0; }
   }
 }
-function trafficStep(dt) {
-  AG.lightClock += dt;
+function trafficStep(dtStep) {
+  AG.lightClock += dtStep;
   const H = AG.hash; H.clear();
   const vs = AG.vehicles;
   for (let i = 0; i < vs.length; i++) {
@@ -400,7 +412,11 @@ function trafficStep(dt) {
   AG.sirens = vs.filter(function (v) { return v.siren; });
   for (let i = vs.length - 1; i >= 0; i--) {
     const v = vs[i];
+    let dt = dtStep;
+    // Part 9 simulation tiers: vehicles in FAR chunks move in bigger, rarer steps
+    if (!v.siren && WE.tier) { v._tier = WE.tier[chunkOfWorld(v.x, v.y)]; if (v._tier === 2) { v._acc = (v._acc || 0) + dt; if (v._acc < dtStep * 3 - 1e-6) continue; dt = v._acc; v._acc = 0; } }
     v.life += dt;
+    if (v.laneT > 0) v.laneT -= dt;
     if (v.dwell > 0) { v.dwell -= dt; continue; }
     const A = v.wp[v.seg], B = v.wp[v.seg + 1];
     if (!B) { arriveVehicle(i); continue; }
@@ -410,15 +426,21 @@ function trafficStep(dt) {
     const node = v.path[v.seg + 1];
     // Accident scene: the road is blocked for normal traffic
     if (!v.siren && MAP.blocked[node] && remaining < TILE * 0.9) blocked = true;
-    // Traffic lights at intersections
-    if (!blocked && !v.siren && MAP.inter[node] && v.cleared !== v.seg + 1 && remaining < TILE * 0.8) {
-      const axis = Math.abs(B.x - A.x) > Math.abs(B.y - A.y) ? 'EW' : 'NS';
-      if (remaining > TILE * 0.32 && !lightGreen(node, axis)) blocked = true;
-      else v.cleared = v.seg + 1;
+    // Junctions: traffic lights (protected lefts, pedestrian phase, AI timing), roundabouts, priority roads, all-way stops
+    let atJunction = false;
+    if (!blocked) {
+      if (S.p9) { const jr = junctionRule(v, node, remaining, H, dt); if (jr === 1) { blocked = true; atJunction = true; } else if (jr === 2) v.cleared = v.seg + 1; }
+      else if (!v.siren && MAP.inter[node] && v.cleared !== v.seg + 1 && remaining < TILE * 0.8) {
+        const axis = Math.abs(B.x - A.x) > Math.abs(B.y - A.y) ? 'EW' : 'NS';
+        if (remaining > TILE * 0.32 && !lightGreen(node, axis)) { blocked = true; atJunction = true; }
+        else v.cleared = v.seg + 1;
+      }
     }
-    // Car following / no overlapping
+    // Car following per lane, lane changes when the lane ahead is blocked or a turn is coming
+    const nL = lanesPerDir(v.path[v.seg]), laneTol = laneWidth(nL) * 0.6;
+    if (v.lane >= nL) v.lane = nL - 1;
+    const cand = (H.get(v.path[v.seg]) || []).concat(H.get(node) || []);
     if (!blocked && v.ghost <= 0) {
-      const cand = (H.get(v.path[v.seg]) || []).concat(H.get(node) || []);
       for (let k = 0; k < cand.length; k++) {
         const o = cand[k]; if (o === v) continue;
         const dx = o.x - v.x, dy = o.y - v.y;
@@ -426,11 +448,14 @@ function trafficStep(dt) {
         if (along <= 0 || along > (v.len + o.len) * 0.5 + 5) continue;
         const lat = Math.abs(dx * v.hy - dy * v.hx);
         if (v.siren && !o.siren) continue;          // emergency priority: other cars pull over
-        if (lat < TILE * 0.2 && (o.hx * v.hx + o.hy * v.hy) > -0.3) { blocked = true; break; }
+        if (lat < laneTol && (o.hx * v.hx + o.hy * v.hy) > -0.3) {
+          if (!(nL > 1 && tryLaneChange(v, cand, nL))) { blocked = true; break; }
+        }
       }
     }
+    if (!blocked && !atJunction && nL > 1 && !v.siren && (v.laneT || 0) <= 0) { const want = laneIntent(v, nL); if (want !== v.lane) tryLaneChange(v, cand, nL, want); }
     if (v.ghost > 0) v.ghost -= dt;
-    v.state = blocked ? (v.state === 'red light' || (MAP.inter[node] && remaining < TILE * 0.8 && v.cleared !== v.seg + 1) ? 'red light' : 'queued') : 'moving';
+    v.state = blocked ? (atJunction ? (S.p9 && junctionType(node) !== 'signal' ? 'yielding' : 'red light') : 'queued') : 'moving';
     if (blocked) {
       v.speed = 0; v.stopped += dt; stoppedCount++;
       if (v.stopped > 3 && !v.rerouted && v.dest) tryReroute(v);       // look for an alternative route around the jam
@@ -443,7 +468,7 @@ function trafficStep(dt) {
     if (!v.siren && AG.sirens) for (let k = 0; k < AG.sirens.length; k++) { const e = AG.sirens[k], ex = v.x - e.x, ey = v.y - e.y; if (ex * ex + ey * ey < 4900 && ex * e.hx + ey * e.hy > 0) { pull = 1; break; } }
     v.pull = lerp(v.pull || 0, pull, 0.2);
     const rt = ROAD_TYPES[MAP.roads[v.path[v.seg]]] || ROAD_TYPES[1];
-    const target = v.maxSpeed * rt.speed * (v.siren || v.type === 'race' ? 1.15 : cong) * (v.pull > 0.5 ? 0.35 : 1);
+    const target = v.maxSpeed * rt.speed * (v.siren || v.type === 'race' ? 1.15 : cong) * (v.pull > 0.5 ? 0.35 : 1) * (1 + 0.04 * (v.lane || 0)) * (MAP.blocked[v.path[v.seg]] === 4 ? 0.45 : 1);
     v.speed = Math.min(target, v.speed + 80 * dt);
     v.t += v.speed * dt;
     let A2 = A, B2 = B, L2 = segLen;
@@ -456,6 +481,9 @@ function trafficStep(dt) {
     const f = v.t / L2;
     v.x = A2.x + (B2.x - A2.x) * f; v.y = A2.y + (B2.y - A2.y) * f;
     const hx = (B2.x - A2.x) / L2, hy = (B2.y - A2.y) / L2;
+    const nl2 = lanesPerDir(v.path[Math.min(v.seg, v.path.length - 1)]);
+    v.lat = lerp(v.lat || 0, nl2 > 1 || v.lat ? laneExtra(Math.min(v.lane || 0, nl2 - 1), nl2) : 0, Math.min(1, dt * 4));
+    if (v.lat) { v.x += -hy * v.lat; v.y += hx * v.lat; }
     v.hx = lerp(v.hx, hx, 0.35); v.hy = lerp(v.hy, hy, 0.35);
     const hl = Math.hypot(v.hx, v.hy) || 1; v.hx /= hl; v.hy /= hl;
   }
@@ -463,6 +491,8 @@ function trafficStep(dt) {
 }
 function arriveVehicle(i) {
   const v = AG.vehicles[i];
+  if (v.line && transitVehicleArrive(v)) return;
+  if (v.incident) onIncidentCrew(v);
   if (v.type === 'bus') {
     const stops = busRouteStops();
     if (stops.length >= 2) {
@@ -492,7 +522,7 @@ function updateTraffic(simDt) {
   const step = 1 / hz;
   AG.trafficAcc += simDt;
   let n = 0;
-  while (AG.trafficAcc >= step && n < 6) { trafficStep(step); AG.trafficAcc -= step; n++; }
+  while (AG.trafficAcc >= step && n < 6) { trafficStep(step); if (S.p9) transitPods(step); AG.trafficAcc -= step; n++; }
   if (n >= 6) AG.trafficAcc = 0;
   // Spawning
   AG.spawnTimer -= simDt;
@@ -508,11 +538,14 @@ function updateTraffic(simDt) {
     } else if (ambient > want + 3) {
       for (let i = AG.vehicles.length - 1; i >= 0; i--) if (AG.vehicles[i].ambient && AG.vehicles[i].type !== 'race') { AG.vehicles.splice(i, 1); break; }
     }
-    const stops = busRouteStops();
-    const buses = AG.vehicles.filter(function (v) { return v.type === 'bus'; }).length;
-    const wantBus = stops.length >= 2 ? Math.min(8, Math.ceil(stops.length / 2)) : 0;
-    if (buses < wantBus) spawnBus(randInt(0, stops.length - 1));
-    else if (buses > wantBus) { for (let i = AG.vehicles.length - 1; i >= 0; i--) if (AG.vehicles[i].type === 'bus') { AG.vehicles.splice(i, 1); break; } }
+    if (S.p9) transitTick(0);            // Part 9 transit network: lines decide how many buses / trams / shuttles run
+    else {
+      const stops = busRouteStops();
+      const buses = AG.vehicles.filter(function (v) { return v.type === 'bus'; }).length;
+      const wantBus = stops.length >= 2 ? Math.min(8, Math.ceil(stops.length / 2)) : 0;
+      if (buses < wantBus) spawnBus(randInt(0, stops.length - 1));
+      else if (buses > wantBus) { for (let i = AG.vehicles.length - 1; i >= 0; i--) if (AG.vehicles[i].type === 'bus') { AG.vehicles.splice(i, 1); break; } }
+    }
   }
   // Airplanes
   const ap = S.buildings.list.find(function (b) { return b.type === 'airport' && b._op; });

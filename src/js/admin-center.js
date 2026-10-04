@@ -54,7 +54,7 @@ function shareTargetTick(sector) {
 function part8Mods(m) { if (S.p8) { m.demand = (m.demand || 1) * S.p8.mods.demand; m.production *= S.p8.mods.supply; } return m; }
 
 /* ---------------- Admin action log (logs/admin.log on Windows) ---------------- */
-const ADM = { open: false, cat: 'world', mode: false, pauseOnOpen: true, prevSpeed: null, log: [], pick: null, sel: null, selV: null, wgPreset: 'balanced', wgCustom: null, search: '', bench: null, stress: null, consoleOut: [], history: [], hi: -1, menuButton: false };
+const ADM = { open: false, cat: 'wc_world', mode: false, pauseOnOpen: true, prevSpeed: null, log: [], pick: null, sel: null, selV: null, wgPreset: 'balanced', wgCustom: null, search: '', bench: null, stress: null, consoleOut: [], history: [], hi: -1, menuButton: false };
 function adminLog(msg) {
   const d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
   const line = '[' + p(d.getHours()) + ':' + p(d.getMinutes()) + '] Admin: ' + String(msg).slice(0, 400);
@@ -123,12 +123,15 @@ function aKv(k, v) { return '<div class="kpi"><div class="k">' + k + '</div><div
 function aVal(id) { const e = $(id); return e ? e.value : ''; }
 
 function renderAdminCenter() {
-  const nav = ADM_CATS.map(function (c) { return '<button class="admNav ' + (ADM.cat === c[0] ? 'on' : '') + '" data-acat="' + c[0] + '"><span>' + c[1] + '</span>' + c[2] + '</button>'; }).join('');
+  const navBtn = function (c) { return '<button class="admNav ' + (ADM.cat === c[0] ? 'on' : '') + '" data-acat="' + c[0] + '"><span>' + c[1] + '</span>' + c[2] + '</button>'; };
+  const nav = '<div class="admNavGroup">🌐 WORLD CONTROL CENTER</div>' + WC_CATS.map(navBtn).join('') + '<div class="admNavGroup">🛡️ ADMIN TOOLS</div>' + ADM_CATS.map(navBtn).join('');
   $('admNavList').innerHTML = nav;
   let body = '';
   try { body = ADM.search ? adminSearchHtml(ADM.search) : (ADM_VIEWS[ADM.cat] || ADM_VIEWS.world)(); }
   catch (e) { body = '<p class="neg">Panel error: ' + esc(e.message) + '</p>'; logError('Admin panel', e); }
   $('admBody').innerHTML = body;
+  bindAdvisorButtons($('admBody'));
+  renderWorldStatusBar();
   $('admLogTail').textContent = ADM.log.slice(-4).join('\n');
   $('admStatus').textContent = (S.city ? S.city.name : '') + ' · ' + seedLabel() + ' · Pop ' + fmt(Math.floor(S.city.population)) + ' · ' + S.buildings.list.length + ' buildings · ' + (STARTED ? (S.settings.speed ? S.settings.speed + '×' : 'paused') : 'main menu');
   $('admPauseBtn').textContent = ADM.pauseOnOpen ? '⏸ Sim paused while open' : '▶ Sim runs while open';
@@ -292,7 +295,7 @@ const ADM_VIEWS = {
   },
   system: function () {
     return aCard('⚙ System', aToggle('pauseOnOpen', '⏸ Pause the simulation while the admin panel is open', ADM.pauseOnOpen) +
-      '<p class="small">Admin mode is hidden from normal players. Shortcuts: <b>F10</b> admin panel · <b>Ctrl+F10</b> world generator · <b>Ctrl+Shift+F10</b> world debugger · <b>Ctrl+Shift+A</b> admin panel.</p>' +
+      '<p class="small">Admin mode is hidden from normal players and must be enabled first (⚙️ Settings → ENABLE ADMIN MODE, or <b>Ctrl+Alt+F10</b>). Then: <b>F10</b> World Control Center · <b>Ctrl+F10</b> world generator · <b>Ctrl+Shift+F10</b> world debugger · <b>Ctrl+Shift+A</b> admin panel.</p>' + aToggle('p9_adminMode', '🛡️ ADMIN MODE ENABLED on this device', adminModeEnabled()) +
       aRow(ab('exitAdmin', '🚪 EXIT ADMIN MODE', 'red') + ab('openLogs', '📜 Open logs folder') + ab('classicAdmin', '🛡️ Classic admin tools'))) +
       aCard('🔐 Admin PIN', '<p class="small">' + (PROFILE.pin ? 'A PIN protects the admin panel.' : 'No PIN set — anyone on this device can open the admin panel.') + '</p><div class="admRow"><span>New PIN (4-12 digits)</span><input class="admInput" id="acPin" type="password" inputmode="numeric" maxlength="12">' + ab('setPin', 'Set PIN', 'green') + '</div>' + (PROFILE.pin ? aRow(ab('clearPin', 'Remove PIN', 'red')) : '')) +
       aCard('ℹ️ Build', '<p class="small">BLOCK CITY TYCOON v' + GAME_VERSION + ' · save v' + SAVE_VERSION + ' · world generator v' + WORLDGEN_VERSION + ' · ' + (DESKTOP ? 'Windows desktop' : 'browser') + '</p>');
@@ -502,6 +505,7 @@ function adminDo(a, v, el) {
     case 'setPin': { const pin = aVal('acPin'); if (!/^\d{4,12}$/.test(pin)) return admRe('PIN must be 4-12 digits', 'bad'); PROFILE.pin = hashPin(pin); ADMIN.ok = true; saveProfile(); return admRe('Admin PIN set'); }
     case 'clearPin': PROFILE.pin = ''; saveProfile(); return admRe('Admin PIN removed');
     case 'runCmd': ADM.search = ''; $('admSearch').value = ''; runAdminCommand(v); return;
+    default: return p9AdminDo(a, v, el);              // Part 9 World Control Center actions
   }
 }
 function admPromptAsk(title, label, def, cb) {
@@ -641,16 +645,27 @@ function duplicateWorld() {
 const SNAP_INDEX = 'bct_snap_index', SNAP_MAX = 20;
 function snapshotIndex() { try { const a = JSON.parse(Store.getItem(SNAP_INDEX) || '[]'); return Array.isArray(a) ? a.filter(function (s) { return s && /^snapshot_\d{3}$/.test(s.id); }) : []; } catch (e) { return []; } }
 function snapKey(id) { return 'bct_snap_' + id.slice(9); }
-function createSnapshot(name) {
+function createSnapshot(name, silent) {
   const idx0 = snapshotIndex();
   let n = 1; idx0.forEach(function (s) { n = Math.max(n, (+s.id.slice(9)) + 1); }); if (n > 999) n = 1;
   const id = 'snapshot_' + String(n).padStart(3, '0');
+  let json;
   try {
     const obj = buildSaveObject();
-    if (validateSaveObject(obj).length) { admRe('Snapshot blocked: invalid world data', 'bad'); return null; }
-    Store.setItem(snapKey(id), JSON.stringify(obj));
-  } catch (e) { admRe('Snapshot failed: ' + e.message, 'bad'); return null; }
-  const meta = { id: id, name: String(name || id).replace(/[<>]/g, '').slice(0, 48), created: Date.now(), city: S.city.name, pop: Math.floor(S.city.population), seed: seedLabel(), slot: S.slot || 1 };
+    if (validateSaveObject(obj).length) { if (!silent) admRe('Snapshot blocked: invalid world data', 'bad'); return null; }
+    json = JSON.stringify(obj);
+  } catch (e) { if (!silent) admRe('Snapshot failed: ' + e.message, 'bad'); return null; }
+  // Browser storage is small (≈5 MB): the oldest snapshots make room; the desktop app stores them as files
+  for (let tries = 0; ; tries++) {
+    try { Store.setItem(snapKey(id), json); break; }
+    catch (e) {
+      if (!idx0.length || tries > 20) { if (!silent) admRe('Snapshot failed: storage full (' + e.message + ')', 'bad'); return null; }
+      const old = idx0.shift(); Store.removeItem(snapKey(old.id));
+    }
+  }
+  if (!DESKTOP) while (idx0.length > 7) { const old = idx0.shift(); Store.removeItem(snapKey(old.id)); }
+  const meta = { id: id, name: String(name || id).replace(/[<>]/g, '').slice(0, 48), created: Date.now(), city: S.city.name, pop: Math.floor(S.city.population), seed: seedLabel(), slot: S.slot || 1,
+    timeline: S.p9 ? S.p9.branch.name : 'Original Timeline', branchId: S.p9 ? S.p9.branch.id : 'original', year: typeof gameYear === 'function' ? gameYear() : 1 };
   idx0.push(meta);
   while (idx0.length > SNAP_MAX) { const old = idx0.shift(); Store.removeItem(snapKey(old.id)); }
   Store.setItem(SNAP_INDEX, JSON.stringify(idx0));
@@ -862,7 +877,7 @@ function bindAdminCenter() {
   $('admClose').onclick = closeAdminCenter;
   $('admPauseBtn').onclick = function () { ADM.pauseOnOpen = !ADM.pauseOnOpen; if (STARTED) { if (ADM.pauseOnOpen && S.settings.speed > 0) { ADM.prevSpeed = S.settings.speed; setSpeed(0); } else if (!ADM.pauseOnOpen && ADM.prevSpeed !== null) { setSpeed(ADM.prevSpeed); ADM.prevSpeed = null; } } renderAdminCenter(); };
   $('admGenBig').onclick = function () { ADM.cat = 'world'; ADM.search = ''; renderAdminCenter(); adminGenerate(); };
-  $('admFixBig').onclick = function () { adminDo('fixWorld'); ADM.cat = 'debug'; renderAdminCenter(); };
+  $('admFixBig').onclick = function () { ADM.cat = 'wc_debug'; quickAction('q_repairWorld'); };
   $('admUnlockBig').onclick = function () { confirmDialog('🔓 Unlock everything?', 'All regions, buildings, roads, technologies, vehicles, landmarks, mega projects, scenarios and quests are unlocked for this city.', 'Unlock', unlockEverything); };
   $('admMaxBig').onclick = function () { maxCity(); };
   $('admSearch').oninput = function () { ADM.search = this.value.trim(); renderAdminCenter(); };
@@ -881,13 +896,17 @@ function bindAdminCenter() {
   const ver = $('titleVersion'); let clicks = 0, tmr = 0;
   if (ver) ver.addEventListener('click', function () { clicks++; clearTimeout(tmr); tmr = setTimeout(function () { clicks = 0; }, 1500); if (clicks >= 5) { clicks = 0; ADM.menuButton = true; const b = document.querySelector('[data-menu="admin"]'); if (b) b.classList.remove('hidden'); toast('🛡️ Admin button revealed', ''); } });
 }
+/* Admin security (Part 9): F10 works only when ADMIN MODE is enabled (⚙️ Settings or Ctrl+Alt+F10 + confirmation) */
 window.addEventListener('keydown', function (e) {
   if (e.key !== 'F10') return;
   e.preventDefault(); e.stopImmediatePropagation();
   if (typeof S === 'undefined' || !S || !MAP.roads) return;
-  if (e.ctrlKey && e.shiftKey) { toggleWorldDebug(); return; }
-  if (e.ctrlKey) { openAdminCenter('world'); return; }
-  if (ADM.open) closeAdminCenter(); else openAdminCenter();
+  if (e.ctrlKey && e.altKey) { promptEnableAdmin('wc_world'); return; }
+  if (ADM.open) { closeAdminCenter(); return; }
+  if (e.ctrlKey && e.shiftKey) { if (adminModeEnabled()) toggleWorldDebug(); else requestAdmin(); return; }
+  if (e.ctrlKey) { requestAdmin('world'); return; }
+  if (WB.on || RS.on) p9CancelTools();
+  requestAdmin();
 }, true);
 window.addEventListener('keydown', function (e) {
   if (!ADM.open || e.key !== 'Escape') return;

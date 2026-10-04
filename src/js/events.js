@@ -6,17 +6,20 @@ function constructionTick(dt) {
   S.buildings.list.forEach(function (b) {
     const d = bdef(b);
     if (!b.built) {
-      b.progress = Math.min(1, b.progress + dt * speed * (0.5 + 0.5 * (SIM.fulfill && SIM.fulfill.materials !== undefined ? SIM.fulfill.materials : 1)) / b.buildTime);   // construction materials speed up building
+      const f9 = S.p9 && !(S.p5 && S.p5.admin.instant) ? constructionFactor(b, dt) : 1;    // Construction 2.0: crews + materials
+      b.progress = Math.min(1, b.progress + dt * speed * f9 * (b.cp ? 1 : (0.5 + 0.5 * (SIM.fulfill && SIM.fulfill.materials !== undefined ? SIM.fulfill.materials : 1))) / b.buildTime);   // construction materials speed up building
       if (Math.random() < 0.5) { const c = buildingCenter(b); spawnParticles(c.x + rand(-10, 10), c.y + rand(-6, 6), Math.random() < 0.5 ? 'dust' : 'spark', 1); }
       if (b.progress >= 1) {
-        b.built = true; b.progress = 1;
+        b.built = true; b.progress = 1; b.cond = 100;
+        if (b.cp) delete b.cp;
         S.statistics.totals.built++;
+        if (S.p9) p9OnBuilt(b);
         const c = buildingCenter(b);
         spawnParticles(c.x, c.y - 10, 'confetti', 26);
         sfx('complete');
         if (d.landmark || d.id === 'airport') { shake(6); flashBig(d.icon + ' ' + d.name + '<br>COMPLETE!'); notify('🏆 ' + d.name + ' is complete!', 'gold'); }
         else if (d.cost >= 5000) notify('🏗️ ' + d.name + ' construction finished.', 'good');
-        onMapChanged();
+        requestMapChanged();
         p5OnBuilt(b);
       }
     } else if (b.upg > 0) {
@@ -146,8 +149,11 @@ function eventsTick(dt) {
       const covered = b._cov && b._cov.fire;
       if (covered && !b._truck) {
         b._truck = true;
-        const st = nearestService('fire', b);
-        if (st) { dispatchVehicle('firetruck', st, b); const eta = responseEta(st, b._entry); if (isFinite(eta) && b.owner !== 'city') toast('🚒 Fire at ' + bdef(b).name + ' (' + districtName(b.x, b.y) + ') — ETA ' + Math.round(eta) + 's', 'bad'); }
+        if (S.p9) { const pk = emergencyPick('fire', b._entry, 3); if (emergencyDispatch('fire', b._entry, { dest: b, priority: 3 }) && pk && b.owner !== 'city') toast('🚒 Fire at ' + bdef(b).name + ' (' + districtName(b.x, b.y) + ') — ETA ' + Math.round(pk.eta) + 's' + (pk.busy ? ' (all engines busy — queued)' : ''), 'bad'); }
+        else {
+          const st = nearestService('fire', b);
+          if (st) { dispatchVehicle('firetruck', st, b); const eta = responseEta(st, b._entry); if (isFinite(eta) && b.owner !== 'city') toast('🚒 Fire at ' + bdef(b).name + ' (' + districtName(b.x, b.y) + ') — ETA ' + Math.round(eta) + 's', 'bad'); }
+        }
       }
       b.fire -= dt * (covered ? 2.5 : 1);
       if (b.fire <= 0) {

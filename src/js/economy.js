@@ -95,12 +95,16 @@ function globalMods() {
   part5Mods(m);
   part6Mods(m);
   part8Mods(m);
+  part9Mods(m);
   return m;
 }
 
 /* Clear derived values when a new city starts (prestige, NG+, reset, import) */
 function resetSim() {
   SIM.traffic = 0; SIM.unpaid = 0; SIM.dDisp = {}; SIM.sDisp = {}; SIM.flood = false; SIM.visualStopRatio = 0; SIM.goodsRatioSmooth = 1;
+  // Part 9 derived values (neighbour flows, grid, water, sewage, construction crews) start fresh for every city
+  ['p9InCommuters', 'p9OutCommuters', 'p9Tourists', 'p9PowerImport', 'p9PowerExport', 'p9WaterBoost', 'gridBrown', 'gridNoConn', 'sewageOverload', 'lowPressure', 'p9CrewNeed', 'p9CrewAvail'].forEach(function (k) { SIM[k] = 0; });
+  SIM.p9Crew = 1; SIM.p9Trade = null; SIM.budgetUnpaid = 0;
   UI.advice = null; UI.idleTimer = 0;
 }
 /* econTick() lives in the Part 4 Economy system (see 5b. ECONOMY SYSTEM) */

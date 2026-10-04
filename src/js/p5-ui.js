@@ -184,6 +184,11 @@ function paletteCommands() {
   add('Open Megacity & mega projects', '🌆', function () { openPanel('city', 'mega'); }, 'endgame');
   add('Open Company directory & stocks', '🏛️', function () { openPanel('companies', 'directory'); }, 'shares stock market');
   add('Toggle debug panel (F3)', '🐞', function () { toggleDebug6(); }, 'fps debug');
+  add('Smart Advisor 2.0', '🧠', function () { openAdvisor2(); }, 'advisor analysis solution problems');
+  add('City timeline & history', '📜', function () { openTimeline2(); }, 'timeline history years');
+  add('World, regions & neighbouring cities', '🌐', function () { openWorldOverview(); }, 'region neighbour chunks world');
+  add('Entity inspector (pick on map)', '🔎', function () { EI.pick = true; toast('🎯 Click a citizen, vehicle, building, road or empty land', ''); }, 'inspect entity');
+  add('World Control Center (admin, F10)', '🌐', function () { promptEnableAdmin('wc_world'); }, 'admin world control');
   add('Generate a challenge', '🎲', function () { generateChallenge(); }, 'random challenge');
   HEATMAPS.forEach(function (hm) { add('Heatmap: ' + hm.name, hm.icon, function () { setHeatmap(hm.id); }, 'overlay'); });
   return C;

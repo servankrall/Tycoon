@@ -10,10 +10,10 @@
 function weatherEffects() {
   const w = FX.weather;
   return {
-    traffic: w === 'rain' ? 1.12 : w === 'snow' ? 1.3 : w === 'storm' ? 1.2 : 1,
-    powerProd: w === 'storm' && !hasTech('e_storage') ? 0.85 : 1,
-    powerDemand: w === 'heatwave' ? 1.25 : 1,
-    hap: w === 'rain' ? -2 : w === 'heatwave' ? -3 : w === 'storm' ? -3 : w === 'snow' ? -1 : 0
+    traffic: w === 'rain' ? 1.12 : w === 'heavyrain' ? 1.25 : w === 'snow' ? 1.3 : w === 'storm' ? 1.2 : w === 'coldwave' ? 1.15 : w === 'fog' ? 1.1 : 1,
+    powerProd: (w === 'storm' || w === 'heavyrain') && !hasTech('e_storage') ? 0.85 : 1,
+    powerDemand: w === 'heatwave' ? 1.25 : w === 'coldwave' ? 1.3 : w === 'snow' ? 1.08 : 1,
+    hap: w === 'rain' ? -2 : w === 'heavyrain' ? -3 : w === 'heatwave' ? -3 : w === 'storm' ? -3 : w === 'snow' ? -1 : w === 'coldwave' ? -3 : w === 'fog' ? -1 : 0
   };
 }
 function tradeableCities() { return WORLD_CITIES.filter(function (c) { return relationOf(c.id) > -30; }); }
@@ -244,7 +244,7 @@ function ownerTraits(owner, sector) {
 function landValue(b) {
   const dist = districtOf(b.x, b.y);
   const cov = b._cov ? (b._cov.fire + b._cov.police + b._cov.health) : 0;
-  return 0.88 + cov * 0.04 + (dist ? dist.level * 0.04 + dist.green * 0.02 : 0) - SIM.traffic * 0.0008;
+  return (0.88 + cov * 0.04 + (dist ? dist.level * 0.04 + dist.green * 0.02 : 0) - SIM.traffic * 0.0008) * (S.p9 ? clamp(0.8 + 0.2 * (b._lvF || 1), 0.9, 1.2) : 1);
 }
 
 /* Main economic simulation step (dt in simulated seconds, normally 1). */
@@ -272,10 +272,10 @@ function econTick(dt) {
     if (b._op) jobs += b.workers;
   }
   const effJobs = jobs * mods.jobs;
-  const labor = Math.floor(pop * 0.55);
+  const labor = Math.floor(pop * 0.55) + Math.round(SIM.p9InCommuters || 0);          // Part 9: commuters from neighbouring cities
   const staffRatio = jobs > 0 ? Math.min(1, labor / jobs) : 1;
   const employed = Math.min(labor, effJobs);
-  const unemployment = Math.max(0, labor - employed) / Math.max(labor, 20);
+  const unemployment = Math.max(0, labor - employed - (SIM.p9OutCommuters || 0)) / Math.max(labor, 20);
   SIM.labor = labor; SIM.jobs = jobs; SIM.employed = employed; SIM.unemployment = unemployment; SIM.builtTiles = builtTiles;
   for (let i = 0; i < list.length; i++) {
     const b = list[i], d = bdef(b);
@@ -295,7 +295,7 @@ function econTick(dt) {
       b._gen = out; gen += out; fuelCost += out * (d.fuel || 0);
     } else b._gen = 0;
   }
-  gen += city.emergencyPower;
+  gen += city.emergencyPower + (SIM.p9PowerImport || 0) + (S.p9 && S.p9.util.infinitePower ? 1e7 : 0);
   const useMult = season.power * (hasTech('e_grid') ? 0.9 : 1) * Wx.powerDemand * mods.powerDemand;
   const consumers = [];
   for (let i = 0; i < list.length; i++) {
@@ -317,6 +317,7 @@ function econTick(dt) {
     powerDemand += need; b._pneed = need;
     if (remaining >= need) remaining -= need; else b._powered = false;
   }
+  if (S.p9) gridPass(consumers);                 // Part 9 power grid: substations, district transformers, brownouts
   const powerRatio = powerDemand > 0 ? Math.min(1, gen / powerDemand) : 1;
   SIM.powerGen = gen; SIM.powerUse = powerDemand; SIM.powerRatio = powerRatio;
 
@@ -329,6 +330,7 @@ function econTick(dt) {
     if (d.water > 0) wgen += d.water * lvlMult(b.level) * b._weff * (b._powered ? 1 : 0.3) * (b.damaged ? 0.5 : 1) * (season.id === 'summer' && FX.weather === 'heatwave' ? 0.85 : 1) * mods.waterProd;
     else if (d.water < 0) wuse += -d.water * lvlMult(b.level) * wMult * mods.waterUse;
   }
+  wgen += (SIM.p9WaterBoost || 0) + (S.p9 && S.p9.util.infiniteWater ? 1e7 : 0);          // reservoirs release stored water
   const waterRatio = wuse > 0 ? Math.min(1, wgen / wuse) : 1;
   SIM.waterGen = wgen; SIM.waterUse = wuse; SIM.waterRatio = waterRatio;
 
@@ -341,6 +343,7 @@ function econTick(dt) {
     if (b.owner === 'city' && SIM.budgetUnpaid > 0) e *= 0.6;
     if (SIM.flood && b._nearWater) e *= 0.6;
     if (d.water < 0 && d.sector !== 'HOUSING') e *= 0.7 + 0.3 * waterRatio;
+    if (S.p9) e *= condMult(b) * (d.water < 0 ? waterPressureMult(b) : 1) * (b._sewerBack ? 0.85 : 1);   // condition, water pressure, sewage
     b._eff = e;
   }
 
@@ -491,7 +494,7 @@ function econTick(dt) {
       if (b._fuelRev) { const f = b._fuelRev * gm; r += f; if (b.owner === 'player') P.fuel += f; }
       if (d.transit && transitWeight > 0) { const f = fareTotal * d.transit * lvlMult(b.level) * b._eff / transitWeight; r += f; b._cust = riders * d.transit * lvlMult(b.level) * b._eff / transitWeight; if (b.owner === 'city') B.fares += f; else if (b.owner === 'player') P.transport += f; }
       if (d.tour && tourWeight > 0) { const t = tourTotal * d.tour * lvlMult(b.level) * b._eff / tourWeight; r += t; if (b.owner === 'city') B.tourism += t; else if (b.owner === 'player') P.tourism += t; }
-      if (d.housing && b._hcap) { const occ = b._hcap * occRate; const h = occ * d.rent * city.housingPrice * gm; r += h; b._cust = occ; if (b.owner === 'city') B.rent += h; else if (b.owner === 'player') P.rent += h; }
+      if (d.housing && b._hcap) { const occ = b._hcap * occRate; const h = occ * d.rent * city.housingPrice * gm * rentMult(b); r += h; b._cust = occ; if (b.owner === 'city') B.rent += h; else if (b.owner === 'player') P.rent += h; }
       if (d.power > 0 && gen > 0 && b._gen) { const e = surplus * b._gen / gen; r += e; B.energy += e; }
     }
     // costs
@@ -633,6 +636,7 @@ function econTick(dt) {
   h += add('Traffic', -SIM.traffic * 0.1);
   h += add('Power shortage', -(1 - powerRatio) * 25);
   h += add('Water shortage', -(1 - waterRatio) * 30);
+  if (S.p9) { h += add('Sewage overload', -(SIM.sewageOverload || 0) * 14); h += add('Low water pressure', -(SIM.lowPressure || 0) * 10); h += add('Grid brownouts', -Math.min(8, (SIM.gridBrown || 0) * 0.4)); }
   if (pop > housingCap * 1.02 + 1) h += add('Homelessness', -8);
   if (pop > 80) h += add('Housing affordability', (SIM.housingSat - 70) * 0.12);
   if (pop > 100) h += add('Waste', -SIM.wastePenalty * 15);
@@ -668,6 +672,7 @@ function econTick(dt) {
     const attraction = tourWeight + pop * 0.03;
     touristsT = attraction * 0.2 * (1 - city.pollution / 150) * (1 - city.crime / 200) * (0.6 + city.happiness / 250) * (0.6 + city.reputation / 125) * season.tour * mods.tour * (1 + 0.08 * partners);
   }
+  if (city.tourismUnlocked) touristsT += SIM.p9Tourists || 0;                       // visitors from neighbouring cities
   city.tourists = Math.max(0, lerp(city.tourists, touristsT, 0.05 * dt));
 
   // --- 20. Population ---------------------------------------------------------------------------

@@ -40,6 +40,8 @@ function decodeGrid(str, arr, maxVal) {
 
 function initMap(isNew) {
   MAP.W = MAP.H = S.city.size;
+  ensureExpansionTable(MAP.W);              // expanded worlds (Part 9) have their own fully unlocked size
+  p9MapReset();                             // Part 9 grids (environment, land value, utility networks, transit) follow the map
   const N = MAP.W * MAP.H;
   MAP.roads = new Uint8Array(N); MAP.nature = new Uint8Array(N); MAP.occ = new Int32Array(N);
   MAP.inter = new Uint8Array(N); MAP.comp = new Int32Array(N);
@@ -343,7 +345,7 @@ function removeBuilding(b) {
 function buildingAtTile(x, y) { if (!inMap(x, y)) return null; const id = MAP.occ[idx(x, y)]; return id ? MAP.byId.get(id) || null : null; }
 function lvlMult(l) { return 1 + 0.6 * (l - 1); }
 function buildCost(d) { return Math.round(d.cost * costMult()); }
-function buildingValue(b) { return bdef(b).cost * lvlMult(b.level) * costMult(); }
+function buildingValue(b) { return bdef(b).cost * lvlMult(b.level) * costMult() * propertyValueMult(b); }   // land value & condition (Part 9)
 function upgradeCost(b) { const d = bdef(b); return Math.round(d.cost * 0.9 * Math.pow(1.85, b.level - 1) * costMult()); }
 function buildTimeFor(cost) { return clamp(3 + Math.sqrt(cost) * 0.08, 3, 90) / (1 + 0.1 * ppLevel('build')); }
 /* Counts for quests & achievements only include player/city buildings (not AI companies) */
@@ -424,6 +426,7 @@ function placeBuilding(d0, x, y, rot) {
   b.rot = rot;
   if (S.p5 && S.p5.admin.instant) b.buildTime = 0.2;
   b.built = false; b.progress = 0; if (!(S.p5 && S.p5.admin.instant)) b.buildTime = buildTimeFor(d.cost);
+  if (S.p9 && !(S.p5 && S.p5.admin.instant)) { b.cp = constructionPlan(d); b.buildTime = Math.min(590, b.buildTime * constructionScale(d)); }   // Construction 2.0 project
   addBuildingToMap(b);
   if (d.cat === 'Industry' && S.p5 && S.p5.weekly && !S.p5.weekly.done) { const wt = WEEKLY_TEMPLATES.find(function (t) { return t.id === S.p5.weekly.id; }); if (wt && wt.noFactories) S.p5.weekly.tainted = true; }
   onMapChanged();
@@ -554,8 +557,22 @@ function bulldozeTile(x, y) {
   }
 }
 
+/* Systems that place many buildings in one tick (AI companies, zone developers, construction) request ONE
+   recompute instead of one per building; Game.step flushes it after the systems ran (Part 9 performance). */
+function requestMapChanged() { MAP._pending = true; }
+function flushMapChanged() { if (!MAP._pending) return; const now = performance.now(); if (MAP._flushAt && now - MAP._flushAt < 300) return; MAP._flushAt = now; MAP._pending = false; onMapChanged(); }
+/* Free zoned tiles per zone type, cached until the map changes (AI developers & zone growth scan them often) */
+function freeZoneTiles(z) {
+  if (!MAP._zf || MAP._zf.ver !== MAP.version || MAP._zf.exp !== S.city.expansion) {
+    const L = {}, r = unlockedRect();
+    for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) { const i = idx(x, y), zz = MAP.zone[i]; if (zz && !MAP.occ[i] && !MAP.roads[i]) (L[zz] || (L[zz] = [])).push([x, y]); }
+    MAP._zf = { ver: MAP.version, exp: S.city.expansion, lists: L };
+  }
+  return (MAP._zf.lists[z] || []).filter(function (p) { const i = idx(p[0], p[1]); return !MAP.occ[i] && !MAP.roads[i]; });
+}
 /* Recompute everything that depends on the map layout. */
 function onMapChanged() {
+  MAP._pending = false;
   const W = MAP.W, N = W * MAP.H;
   let rc = 0;
   for (let i = 0; i < N; i++) {
@@ -625,11 +642,16 @@ function doorPoint(b) {
 /* A* shortest path on the road grid (binary heap, Manhattan heuristic, cached).
    Blocked tiles (traffic accidents) are very expensive, so traffic routes around them;
    emergency vehicles (allowBlocked) may drive into them. Returns tile index array or null. */
-function roadPath(a, b, allowBlocked) {
+/* Route modes (Part 9): fastest (default: speed + junction delay + live congestion), shortest (distance),
+   leastTraffic (congestion weighted heavily), cheapest (distance + fuel, avoids highway tolls).
+   Blocked tiles: 1 accident, 2 broken main, 3 closure / road works / flood (impassable for normal traffic), 4 breakdown (one lane). */
+const ROUTE_MODE_KEYS = { fastest: 0, shortest: 1, leastTraffic: 2, cheapest: 3 };
+function roadPath(a, b, allowBlocked, mode) {
   if (a < 0 || b < 0 || !MAP.roads[a] || !MAP.roads[b]) return null;
   if (MAP.comp[a] !== MAP.comp[b]) return null;
   if (a === b) return [a];
-  const key = a * 100000 + b + (allowBlocked ? 0.5 : 0);
+  const mk = ROUTE_MODE_KEYS[mode] | 0;
+  const key = a * 100000 + b + (allowBlocked ? 5e9 : 0) + mk * 1e10;
   const cached = MAP.pathCache.get(key);
   if (cached) return cached;
   if (typeof pathRequests !== 'undefined') pathRequests++;
@@ -661,9 +683,12 @@ function roadPath(a, b, allowBlocked) {
       if (k === 0) { if (x + 1 >= W) continue; n = c + 1; } else if (k === 1) { if (x <= 0) continue; n = c - 1; }
       else if (k === 2) { if (y + 1 >= MAP.H) continue; n = c + W; } else { if (y <= 0) continue; n = c - W; }
       if (!MAP.roads[n]) continue;
-      const cost = 1 / ROAD_TYPES[MAP.roads[n]].speed + (bl[n] && !(allowBlocked && n === b) ? 40 : 0) + (MAP.inter[n] ? 0.15 : 0) + (MAP.cong && !allowBlocked ? MAP.cong[n] * 1.5 : 0);
+      const blk = bl[n] && !(allowBlocked && n === b) ? (bl[n] === 3 ? (allowBlocked ? 8 : 400) : bl[n] === 4 ? 3 : 40) : 0;
+      const cg = MAP.cong && !allowBlocked ? MAP.cong[n] : 0, rt = ROAD_TYPES[MAP.roads[n]];
+      const cost = mk === 1 ? 1 + blk : mk === 2 ? 1 / rt.speed + blk + (MAP.inter[n] ? 0.3 : 0) + cg * 5 : mk === 3 ? 1 + blk + (MAP.inter[n] ? 0.05 : 0) + (rt.id === 4 ? 0.8 : 0) + cg * 0.5
+        : 1 / rt.speed + blk + (MAP.inter[n] ? 0.15 : 0) + cg * 1.5;
       const ng = gc + cost;
-      if (ng < g[n]) { g[n] = ng; par[n] = c; push(n, ng + (Math.abs(n % W - bx) + Math.abs(((n / W) | 0) - by)) * 0.64); }
+      if (ng < g[n]) { g[n] = ng; par[n] = c; push(n, ng + (Math.abs(n % W - bx) + Math.abs(((n / W) | 0) - by)) * (mk === 1 || mk === 3 ? 1 : 0.64)); }
     }
     if (hn >= heap.length - 4) break;
   }
@@ -729,21 +754,20 @@ function coverRadius(b) {
 function computeCoverage() {
   const types = ['fire', 'police', 'health'];
   const tot = { fire: 0, police: 0, health: 0 }; let count = 0;
+  // stations are prepared once (centre + squared radius); the per-building test is a plain distance check (Part 9 performance)
+  const ST = {};
+  types.forEach(function (t) { ST[t] = []; MAP.lists[t].forEach(function (s) { if (!s.built || !s._road) return; const sc = buildingCenter(s), r = coverRadius(s) * TILE; ST[t].push(sc.x, sc.y, r * r); }); });
   S.buildings.list.forEach(function (b) {
     const d = bdef(b);
     b._cov = { fire: 0, police: 0, health: 0 };
     if (d.id === 'tree' || d.id === 'park') return;
-    const c = buildingCenter(b);
+    const cx = (b.x + d.w / 2) * TILE, cy = (b.y + d.h / 2) * TILE;
     const w = d.w * d.h;
     count += w;
-    types.forEach(function (t) {
-      const st = MAP.lists[t];
-      for (let k = 0; k < st.length; k++) {
-        const s = st[k]; if (!s.built || !s._road) continue;
-        const sc = buildingCenter(s);
-        if (Math.hypot(sc.x - c.x, sc.y - c.y) / TILE <= coverRadius(s)) { b._cov[t] = 1; tot[t] += w; break; }
-      }
-    });
+    for (let q = 0; q < 3; q++) {
+      const t = types[q], a = ST[t];
+      for (let k = 0; k < a.length; k += 3) { const dx = a[k] - cx, dy = a[k + 1] - cy; if (dx * dx + dy * dy <= a[k + 2]) { b._cov[t] = 1; tot[t] += w; break; } }
+    }
   });
   types.forEach(function (t) { SIM.cov[t] = count ? tot[t] / count : 0; });
 }

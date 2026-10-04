@@ -53,6 +53,24 @@ jobs:
       - name: Build installer + portable EXE
         run: npm run dist
 
+      - name: Self-test the built EXE (20 steps, including a restart)
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          $exe = Get-ChildItem dist/win-unpacked -Filter *.exe | Where-Object { $_.Name -notmatch 'Uninstall' } | Select-Object -First 1
+          if (-not $exe) { throw "win-unpacked EXE not found" }
+          $out = Join-Path $env:GITHUB_WORKSPACE "dist/selftest-report.json"
+          Write-Host "Running $($exe.FullName) --selftest"
+          Start-Process -FilePath $exe.FullName -ArgumentList "--selftest", "--selftest-out=$out"
+          $deadline = (Get-Date).AddMinutes(10)
+          while (-not (Test-Path $out) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 3 }
+          if (-not (Test-Path $out)) { throw "The self-test did not finish within 10 minutes" }
+          Start-Sleep -Seconds 2
+          $r = Get-Content $out -Raw | ConvertFrom-Json
+          $r.steps | ForEach-Object { Write-Host ("{0} {1,2}. {2} — {3}" -f ($(if ($_.ok) { 'PASS' } else { 'FAIL' })), $_.n, $_.name, $_.detail) }
+          Write-Host ("Self-test: {0}/{1} passed in {2} s" -f $r.passed, $r.total, $r.seconds)
+          if (-not $r.ok) { throw "Self-test failed" }
+
       - name: Keep the EXEs as a workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -60,6 +78,7 @@ jobs:
           path: |
             dist/BLOCK-CITY-TYCOON-Setup-*.exe
             dist/BLOCK-CITY-TYCOON-Portable-*.exe
+            dist/selftest-report.json
           if-no-files-found: error
 
       - name: Release notes with SHA-256 checksums
@@ -81,3 +100,4 @@ jobs:
           files: |
             dist/BLOCK-CITY-TYCOON-Setup-*.exe
             dist/BLOCK-CITY-TYCOON-Portable-*.exe
+            dist/selftest-report.json

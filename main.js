@@ -17,6 +17,11 @@ const { createUpdater } = require('./electron/updater');
 const pkg = require('./package.json');
 
 const DEV = process.argv.includes('--dev') || process.env.BCT_DEV === '1';
+/* Automatic self-test (Part 9): "BLOCK CITY TYCOON.exe --selftest [--selftest-out=<file>]" plays the 20-step release test plan,
+   restarts itself once (phase 2), writes logs/selftest.json and exits with code 0 (all passed) or 1. */
+const SELFTEST = process.argv.includes('--selftest');
+const SELFTEST_PHASE = SELFTEST ? (process.argv.includes('--selftest-phase=2') ? 2 : 1) : 0;
+const SELFTEST_OUT = (process.argv.find(function (a) { return a.indexOf('--selftest-out=') === 0; }) || '').slice('--selftest-out='.length);
 const PRODUCT = 'BLOCK CITY TYCOON';
 const ICON = path.join(__dirname, 'src', 'assets', 'icons', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
 const INDEX = path.join(__dirname, 'src', 'index.html');
@@ -24,6 +29,7 @@ const MIN_W = 1024, MIN_H = 600;
 
 /* --- User data location: %APPDATA%\BLOCK CITY TYCOON (portable build: next to the .exe; tests: BCT_USER_DATA) --- */
 if (process.env.BCT_USER_DATA) app.setPath('userData', path.resolve(process.env.BCT_USER_DATA));
+else if (SELFTEST) app.setPath('userData', path.join(require('os').tmpdir(), 'BLOCK-CITY-TYCOON-SelfTest'));      // never touches real cities
 else if (process.env.PORTABLE_EXECUTABLE_DIR) app.setPath('userData', path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'BLOCK CITY TYCOON Data'));
 
 /* Smooth simulation when the window is in the background (Alt+Tab) */
@@ -50,6 +56,7 @@ if (!app.requestSingleInstanceLock()) {
 
 function start() {
   const userData = app.getPath('userData');
+  if (SELFTEST_PHASE === 1) { try { fs.rmSync(userData, { recursive: true, force: true }); } catch (e) { /* first run */ } }
   fs.mkdirSync(userData, { recursive: true });
   log = createLogger(path.join(userData, 'logs'));
   log.info('Game started — ' + PRODUCT + ' v' + app.getVersion() + ' (Electron ' + process.versions.electron + ', ' + process.platform + ' ' + process.arch + (DEV ? ', DEVELOPMENT' : '') + ')');
@@ -209,7 +216,24 @@ function registerIpc() {
   ipcMain.on('store:write', function (e, key, value) { e.returnValue = trusted(e) ? storage.write(String(key), value) : { ok: false, error: 'untrusted' }; });
   ipcMain.on('store:remove', function (e, key) { e.returnValue = trusted(e) ? storage.remove(String(key)) : { ok: false }; });
   ipcMain.on('app:info', function (e) {
-    e.returnValue = { version: app.getVersion(), dev: DEV, portable: !!process.env.PORTABLE_EXECUTABLE_DIR, platform: process.platform };
+    e.returnValue = { version: app.getVersion(), dev: DEV, portable: !!process.env.PORTABLE_EXECUTABLE_DIR, platform: process.platform, selftest: SELFTEST_PHASE };
+  });
+  /* self-test: restart into phase 2, final report */
+  ipcMain.on('selftest:restart', function (e) {
+    if (!trusted(e) || !SELFTEST) return;
+    quitting = true; sessionLock.close(); log.info('Self-test: restarting the EXE (phase 2)');
+    app.relaunch({ args: process.argv.slice(1).filter(function (a) { return a.indexOf('--selftest-phase=') !== 0; }).concat(['--selftest-phase=2']) });
+    app.exit(0);
+  });
+  ipcMain.on('selftest:report', function (e, json) {
+    if (!trusted(e) || !SELFTEST) return;
+    let ok = false;
+    try { ok = !!JSON.parse(json).ok; } catch (err) { ok = false; }
+    try { fs.writeFileSync(path.join(log.dir, 'selftest.json'), json, 'utf8'); } catch (err) { log.error('selftest.json: ' + err.message); }
+    if (SELFTEST_OUT) { try { fs.writeFileSync(path.resolve(SELFTEST_OUT), json, 'utf8'); } catch (err) { log.error('selftest out: ' + err.message); } }
+    log.info('Self-test finished: ' + (ok ? 'ALL PASSED' : 'FAILED') + ' — report ' + path.join(log.dir, 'selftest.json'));
+    quitting = true; sessionLock.close();
+    setTimeout(function () { app.exit(ok ? 0 : 1); }, 300);
   });
   ipcMain.on('session:info', function (e) {
     e.returnValue = { previousCrashed: sessionLock.previousCrashed || rendererCrashed };

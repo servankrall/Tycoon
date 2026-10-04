@@ -197,7 +197,7 @@ function part6Mods(m) {
   return m;
 }
 function megaDone(id) { const x = S.p6 && S.p6.mega.projects[id], mp = MEGA_PROJECTS.find(function (q) { return q.id === id; }); return !!(x && mp && x.stage >= mp.stages); }
-function seasonFarmMult() { return ({ spring: 1.1, summer: 1.2, autumn: 1.35, winter: 0.45 })[currentSeason().id] || 1; }
+function seasonFarmMult() { return (({ spring: 1.1, summer: 1.2, autumn: 1.35, winter: 0.45 })[currentSeason().id] || 1) * (S.p9 ? weatherFarmMult() : 1); }
 function disasterFreq() {
   if (!S.p6) return 1;
   if (S.p6.sandbox && !S.p6.sandbox.disasters) return 0;
@@ -388,13 +388,15 @@ function bestResponder(types, tile) {
 function dispatchMaintenance(target) {
   const tile = typeof target === 'number' ? target : target._entry;
   if (tile === undefined || tile < 0) return null;
-  const r = bestResponder(['maintdepot', 'townhall', 'fire'], tile); if (!r) return null;
+  const r = S.p9 ? emergencyPick('maintenance', tile, 1) : bestResponder(['maintdepot', 'townhall', 'fire'], tile); if (!r) return null;
   const p = roadPath(r.b._entry, tile, true); if (!p) return null;
   const v = makeVehicle('maint', p.length === 1 ? [p[0], p[0]] : p, { dest: typeof target === 'number' ? null : target });
-  if (v) { v.repairTile = typeof target === 'number' ? target : -1; S.p6.stats.dispatch++; }
+  if (v) { v.repairTile = typeof target === 'number' ? target : -1; S.p6.stats.dispatch++; v.station = r.b.id; v.emKind = 'maintenance'; }
   return v;
 }
 function onMaintenanceArrive(v) {
+  if (v.pipeFix !== undefined) { repairPipe(v.pipeFix); toast('🛠️ Water main repaired — pressure restored', 'good'); }
+  if (v.maintFix) maintenanceArrive(v);
   if (v.repairTile >= 0 && MAP.blocked[v.repairTile] === 2) { MAP.blocked[v.repairTile] = 0; MAP.pathCache.clear(); S.p6.effects = S.p6.effects.filter(function (x) { return x.id !== 'watermain'; }); toast('🛠️ Road and water main repaired', 'good'); }
   if (v.dest && v.dest.damaged) { v.dest.repair = Math.min(v.dest.repair || 0, 4); }
 }
@@ -471,10 +473,8 @@ function zoneAllows(z, d) {
   return (Z.cats && Z.cats.indexOf(d.cat) >= 0) || (Z.ids && Z.ids.indexOf(d.id) >= 0);
 }
 function zoneDevelopTick() {
-  const r = unlockedRect();
   for (let z = 5; z <= 9; z++) {
-    const cands = [];
-    for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) { const i = idx(x, y); if (MAP.zone[i] === z && !MAP.occ[i] && !MAP.roads[i]) cands.push([x, y]); }
+    const cands = freeZoneTiles(z);
     if (!cands.length) continue;
     const opts = ZONE_DEVELOP[z].filter(function (o) {
       const d = BUILDINGS[o[0]]; if (!d || !unlockStatusAI(d)) return false;
@@ -488,12 +488,14 @@ function zoneDevelopTick() {
     if (!owner || !S.ai[owner]) continue;
     const cost = buildCost(d);
     if (S.ai[owner].cash < cost) continue;
-    for (let k = 0; k < Math.min(30, cands.length); k++) {
-      const c = cands[RNG.int(0, cands.length - 1)];
+    const sample = []; for (let k = 0; k < Math.min(30, cands.length); k++) sample.push(cands[RNG.int(0, cands.length - 1)]);
+    if (S.p9 && propReady()) sample.sort(function (a, b) { return landValueTile(b[0], b[1]) - landValueTile(a[0], a[1]); });   // investors pick the most valuable land of the sample
+    for (let k = 0; k < sample.length; k++) {
+      const c = sample[k];
       if (!canPlace(d, c[0], c[1], true).ok) continue;
-      S.ai[owner].cash -= cost; S.budget += d.w * d.h * 20 * costMult();
+      S.ai[owner].cash -= cost; S.budget += S.p9 ? landPriceFor(c[0], c[1], d) : d.w * d.h * 20 * costMult();
       const b = makeBuilding(d.id, c[0], c[1]); b.owner = owner; b.built = false; b.progress = 0; b.buildTime = buildTimeFor(d.cost);
-      addBuildingToMap(b); onMapChanged();
+      addBuildingToMap(b); requestMapChanged();
       break;
     }
   }
@@ -682,6 +684,7 @@ function lodViewRect() {
   LODV = { x0: tl.x, y0: tl.y, x1: br.x, y1: br.y, mx0: tl.x - mx, my0: tl.y - my, mx1: br.x + mx, my1: br.y + my };
 }
 function lodOf(x, y) {
+  if (WE.tier && S.p9) return weTierAt(x, y);            // Part 9: chunk simulation tiers NEAR / MID / FAR
   const v = LODV; if (!v || PHOTO.on) return 0;
   if (x >= v.x0 && x <= v.x1 && y >= v.y0 && y <= v.y1) return 0;
   if (x >= v.mx0 && x <= v.mx1 && y >= v.my0 && y <= v.my1) return 1;
@@ -722,6 +725,7 @@ function jobStats() {
 
 /* --- TRANSIT lines ----------------------------------------------------------------------------------------------------------- */
 function transitLineStats() {
+  if (S.p9) return p9TransitLineStats();                 // Part 9 transit network (stop → line → route → vehicle → passenger)
   const out = [], riders = SIM.riders || 0, cap = Math.max(1, SIM.transitCap || 1), fare = FARE_PER_RIDER * priceLevel();
   const line = function (name, icon, types, vehicles, stationsLabel) {
     let c = 0, maint = 0, st = 0;

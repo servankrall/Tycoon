@@ -6,7 +6,7 @@
 const BCT = (typeof window !== 'undefined' && window.bct) ? window.bct : null;   // exposed by preload.js (desktop only)
 const DESKTOP = !!(BCT && BCT.isDesktop);
 const DEV_MODE = !!(BCT && BCT.dev);
-const GAME_VERSION = (BCT && BCT.version) || '1.1.0';
+const GAME_VERSION = (BCT && BCT.version) || '1.2.0';
 
 /* --- Storage: same interface as localStorage. Desktop: every key is a file in %APPDATA%\Block City Tycoon\ (atomic writes) --- */
 const Store = (function () {
@@ -93,7 +93,7 @@ function defaultGSET() {
     settingsVersion: 1, resolution: '1280x720', fullscreen: false, borderless: false,
     music: false, sfx: true, masterVolume: 80, graphics: small ? 'LOW' : 'HIGH', particles: 'ON', shadows: true,
     npcDensity: 100, trafficDensity: 100, autosave: true, autosaveInterval: 30, language: (navigator.language || '').toLowerCase().indexOf('tr') === 0 ? 'tr' : 'en',
-    pauseOnBlur: false, browserImportPrompted: false, localMigrated: false
+    pauseOnBlur: false, browserImportPrompted: false, localMigrated: false, adminEnabled: false
   };
 }
 function sanitizeGSET(src) {
@@ -102,7 +102,7 @@ function sanitizeGSET(src) {
   const pickIn = function (v, list, def) { return list.indexOf(v) >= 0 ? v : def; };
   const n = function (v, def, lo, hi) { v = Number(v); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def; };
   o.resolution = pickIn(src.resolution, RESOLUTIONS, d.resolution);
-  ['fullscreen', 'borderless', 'music', 'pauseOnBlur', 'browserImportPrompted', 'localMigrated'].forEach(function (k) { o[k] = !!src[k]; });
+  ['fullscreen', 'borderless', 'music', 'pauseOnBlur', 'browserImportPrompted', 'localMigrated', 'adminEnabled'].forEach(function (k) { o[k] = !!src[k]; });
   ['sfx', 'shadows', 'autosave'].forEach(function (k) { o[k] = src[k] === undefined ? d[k] : !!src[k]; });
   o.masterVolume = Math.round(n(src.masterVolume, d.masterVolume, 0, 100));
   o.graphics = pickIn(src.graphics, ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'], d.graphics);

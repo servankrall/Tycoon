@@ -19,14 +19,14 @@
   <div class="bsRow"><span id="bsStage">Loading engine...</span><b id="bsPct">0%</b></div>
   <ul id="bsList"></ul>
   <div id="bsError"></div>
-  <div id="bsVer">v1.1.0</div>
+  <div id="bsVer">v1.2.0</div>
 </div>
 <!-- ===================== TITLE / LOADING SCREEN ===================== -->
 <div id="titleScreen">
   <div id="titleBlocks"></div>
   <div id="titleLogo">BLOCK CITY<span>TYCOON</span></div>
   <div id="titleSub">BUILD. MANAGE. EXPAND.</div>
-  <div id="titleVersion">v1.1.0</div>
+  <div id="titleVersion">v1.2.0</div>
   <div id="loadBar"><i></i></div>
   <!-- MAIN MENU -->
   <div id="menuMain" class="menuBox hidden">
@@ -214,16 +214,29 @@
 <!-- ======================= ADMIN CONTROL CENTER (Part 8 — hidden by default, F10) ======================= -->
 <div id="adminCenter" class="hidden">
   <div id="admTop">
-    <div id="admBrand">🛡️ ADMIN CONTROL<small id="admStatus"></small></div>
+    <div id="admBrand">🌐 WORLD CONTROL CENTER<small id="admStatus"></small></div>
     <input id="admSearch" placeholder="Search command, building, citizen, company, district…" autocomplete="off">
     <button class="btn small" id="admPauseBtn"></button>
     <button class="closeX" id="admClose" title="Close (Esc / F10)">✕</button>
   </div>
+  <div id="admWorldStatus"></div>
   <div id="admHero">
-    <button class="btn gold big" id="admGenBig">🌍 GENERATE LIVEABLE WORLD</button>
-    <button class="btn green" id="admFixBig">🔧 FIX WORLD</button>
-    <button class="btn blue" id="admUnlockBig">🔓 UNLOCK EVERYTHING</button>
+    <button class="btn gold" id="admGenBig">🌍 GENERATE WORLD</button>
+    <button class="btn green" id="admFixBig">🔧 REPAIR WORLD</button>
     <button class="btn" id="admMaxBig">🏙️ MAX CITY</button>
+    <button class="btn blue" id="admUnlockBig">🔓 UNLOCK EVERYTHING</button>
+    <button class="btn" data-ac="q_utilities">⚡ BUILD ALL UTILITIES</button>
+    <button class="btn" data-ac="q_fixTraffic">🚦 FIX TRAFFIC</button>
+    <button class="btn" data-ac="q_fixEconomy">💹 FIX ECONOMY</button>
+    <button class="btn" data-ac="q_repairAll">🛠️ REPAIR ALL</button>
+    <button class="btn" data-ac="q_clearDisasters">🧯 CLEAR DISASTERS</button>
+    <button class="btn" data-ac="q_maxHappy">😊 MAX HAPPINESS</button>
+    <button class="btn" data-ac="q_clearPollution">🌿 CLEAR POLLUTION</button>
+    <button class="btn gold" data-ac="q_treasury">💰 FILL TREASURY</button>
+    <button class="btn red" data-ac="q_megacity">🌆 SPAWN MEGACITY</button>
+    <button class="btn" data-ac="q_newRegion">🗺️ CREATE NEW REGION</button>
+    <button class="btn" data-ac="q_clone">🧬 CLONE WORLD</button>
+    <button class="btn" data-ac="q_snapshot">📸 CREATE SNAPSHOT</button>
   </div>
   <div id="admMain">
     <nav id="admNavList"></nav>

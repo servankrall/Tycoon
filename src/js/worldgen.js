@@ -6,8 +6,8 @@
    Also: World Validator, Auto-Repair (FIX WORLD), World Health score and the World Debugger overlay. */
 
 const WORLDGEN_VERSION = 1;
-const WORLD_SIZES = { SMALL: 40, MEDIUM: 52, LARGE: 64, HUGE: 80, MEGA: 96 };
-const WORLD_POP_BASE = { 40: 6000, 52: 9500, 64: 15000, 80: 22000, 96: 30000 };
+const WORLD_SIZES = { SMALL: 40, MEDIUM: 52, LARGE: 64, HUGE: 80, MEGA: 96, GIGA: 128 };
+const WORLD_POP_BASE = { 40: 6000, 52: 9500, 64: 15000, 80: 22000, 96: 30000, 128: 45000 };
 const WG_DEFAULT = {
   name: 'New Metropolis', seed: null, size: 'LARGE', mapType: 'standard', coast: 'none',
   water: 1, mountains: 1, rivers: 1, forest: 1, roadDensity: 1, buildingDensity: 1, popDensity: 1,
@@ -586,6 +586,7 @@ const WG_RUN = {
       await ctx.tick('fix', rounds / 3);
       ctx.report = validateWorld();
     }
+    if (S.p9) { const u = p9AutoFixUtilities(); if (u) ctx.fixLog = (ctx.fixLog || []).concat(['🔌 Part 9 networks: ' + u]); ctx.report = validateWorld(); }   // substations, sewage plants, pumps
     await ctx.tick('fix', 1);
   },
   /* --- 18. Start: world profile, save, simulation running --- */
@@ -608,6 +609,7 @@ const WG_RUN = {
     S.quests.mission = MISSIONS.length;
     SIDE_QUESTS.forEach(function (q) { S.quests.side[q.id] = 1; });
     S.clock.runSec = 0; milestoneTick();
+    if (S.p9) { S.p9.timeline = []; S.p9.history = []; S.p9.stats.worldsBuilt++; timelineAdd('🌍', 'World generated: ' + (WORLD_PRESETS[cfg.preset] ? WORLD_PRESETS[cfg.preset].name : 'custom world') + ' (' + seedLabel() + ')', 'founded', 'Your city was founded in ' + S.p9.foundedYear + ' as a planned ' + (WORLD_PRESETS[cfg.preset] ? WORLD_PRESETS[cfg.preset].name.toLowerCase() : 'world') + '.'); }
     setActiveSlot(S.slot);
     CAM.x = MAP.W * TILE / 2; CAM.y = MAP.H * TILE / 2; CAM.zoom = MAP.W >= 80 ? 0.6 : MAP.W >= 64 ? 0.75 : 0.9;
     S.settings.speed = 1;
@@ -1092,7 +1094,7 @@ function setWeather(w, hours) {
   if (WEATHER_TYPES.indexOf(w) < 0) return false;
   FX.weather = w; FX.lock = w; FX.drops = [];
   FX.weatherUntil = S.clock.gameSec + (hours || 6) * 3600;
-  SND.setRain(w === 'rain' || w === 'storm');
+  SND.setRain(w === 'rain' || w === 'storm' || w === 'heavyrain');
   return true;
 }
 function setHour(h) { S.clock.gameSec = Math.floor(S.clock.gameSec / 86400) * 86400 + clamp(h, 0, 23.99) * 3600; }

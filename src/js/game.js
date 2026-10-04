@@ -47,20 +47,21 @@ const Game = {
     { name: 'Identity', every: 30, acc: 0, tick: function () { identityTick(); } },
     { name: 'Statistics', every: 5, acc: 0, tick: function () { recordHistory(); recordStockHistory(); } },
     { name: 'Cleanup', every: 10, acc: 0, tick: function () { cleanupTick(); } },
-    { name: 'Construction', every: 0.25, acc: 0, tick: function (dt) { constructionTick(dt); } },
+    { name: 'Construction', every: 0.25, acc: 0, tick: function (dt) { if (!(S.p9 && S.p9.freeze.buildings)) constructionTick(dt); } },
     { name: 'Incidents', every: 0.25, acc: 0, tick: function (dt) { updateAccidents(dt); } },
     { name: 'Part6', every: 1, acc: 0, tick: function (dt) { part6Tick(dt); } },
     { name: 'Congestion', every: 1, acc: 0, tick: function () { congestionTick(); } },
     { name: 'Crises', every: 5, acc: 0, tick: function () { crisisTick(); } },
     { name: 'StockMarket', every: 5, acc: 0, tick: function (dt) { stockMarketTick(dt); } },
-    { name: 'ZoneDevelop', every: 6, acc: 0, tick: function () { zoneDevelopTick(); } },
-    { name: 'Evolution', every: 20, acc: 0, tick: function () { evolutionTick(); } },
-    { name: 'Districts6', every: 10, acc: 0, tick: function () { computeDistrictNames(); } }
+    { name: 'ZoneDevelop', every: 6, acc: 0, tick: function () { if (!(S.p9 && S.p9.freeze.buildings)) zoneDevelopTick(); } },
+    { name: 'Evolution', every: 20, acc: 0, tick: function () { if (!(S.p9 && S.p9.freeze.buildings)) evolutionTick(); } },
+    { name: 'Districts6', every: 10, acc: 0, tick: function () { computeDistrictNames(); } },
+    { name: 'World', every: 1, acc: 0, tick: function (dt) { part9Tick(dt); } }          // Part 9: regions, neighbours, grid, water, sewage, environment, households, property, maintenance, incidents, disasters, validator
   ],
   /* fixed-rate (20 TPS) systems */
   tickSystems: [
-    { name: 'Population', tick: function (dt) { syncCitizens(); updateCitizens(dt); } },
-    { name: 'Transportation', tick: function (dt) { updateTraffic(dt); updateShips(dt); } }
+    { name: 'Population', tick: function (dt) { if (S.p9 && S.p9.freeze.citizens) return; syncCitizens(); updateCitizens(dt); } },
+    { name: 'Transportation', tick: function (dt) { if (S.p9 && S.p9.freeze.traffic) return; updateTraffic(dt); updateShips(dt); } }
   ],
   prof: {},
   safe: function (s, dt) {
@@ -85,6 +86,7 @@ const Game = {
       let k = 0; while (s.acc >= big && k < 6) { s.acc -= big; self.safe(s, big); k++; }
       if (s.acc > big * 6) s.acc = 0;
     });
+    flushMapChanged();                   // one map recompute for everything built during this step
   },
   /* Advance the fixed-tick simulation; returns the interpolation factor for rendering */
   advance: function (simDt) {

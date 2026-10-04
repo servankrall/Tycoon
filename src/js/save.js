@@ -72,7 +72,7 @@ function defaultState(meta, settings, achievements, lifetime, opts) {
   meta = meta || newMeta();
   opts = opts || {};
   const diffId = DIFFICULTIES[opts.difficulty] ? opts.difficulty : 'NORMAL';
-  let size = [40, 52, 64, 80, 96].indexOf(opts.size) >= 0 ? opts.size : 40;
+  let size = [40, 52, 64, 80, 96, 128].indexOf(opts.size) >= 0 ? opts.size : (isValidWorldSize(opts.size) ? opts.size : 40);
   if (meta.ngLevel >= 1 && size <= 64) size = size === 40 ? 48 : 64;     // New Game+ brings a bigger map
   const st = {
     version: SAVE_VERSION,
@@ -117,6 +117,7 @@ function defaultState(meta, settings, achievements, lifetime, opts) {
   };
   st.p6 = newP6(st.city.seed);
   st.p8 = newP8();
+  st.p9 = newP9(st.city.seed);
   NPC_STOCKS.forEach(function (s) { st.companies.stocks[s.id] = { price: s.base, hist: [s.base] }; });
   PRODUCT_IDS.forEach(function (p) { st.economy.inventory[p] = 0; st.economy.prices[p] = PRODUCTS[p].base; st.trade.mode[p] = 'auto'; });
   MARKET_SECTORS.forEach(function (m) { st.market.price[m] = 1; });
@@ -146,6 +147,7 @@ function serializeBuilding(b) {
     progress: +b.progress.toFixed(4), buildTime: b.buildTime, upg: +(b.upg || 0).toFixed(4), upgTime: b.upgTime, damaged: b.damaged,
     repair: b.repair, fire: b.fire, vault: Math.floor(b.vault || 0), visitors: b.visitors | 0, owner: b.owner, skin: b.skin | 0, recipe: b.recipe, rot: b.rot | 0,
     rating: b.nrev ? +b.rating.toFixed(3) : 0, nrev: b.nrev | 0, health: b.health === undefined ? undefined : +b.health.toFixed(2), closed: b.closed || 0,
+    cond: b.cond === undefined ? undefined : +b.cond.toFixed(1), cp: b.cp && !b.built ? { w: b.cp.w, m: b.cp.m, u: { steel: +b.cp.u.steel.toFixed(2), concrete: +b.cp.u.concrete.toFixed(2), glass: +b.cp.u.glass.toFixed(2) } } : undefined,
     discount: b.discount ? 1 : 0, su: b.su ? { name: b.su.name, stage: b.su.stage, prog: +b.su.prog.toFixed(4), age: Math.floor(b.su.age), value: Math.round(b.su.value) } : undefined };
 }
 
@@ -161,6 +163,11 @@ function buildSaveObject() {
   o.citizens = serializeCitizens();
   o.vehicles = serializeVehicles();
   o.header = saveHeader();
+  if (S.p9) {          // Save 3.0: per-chunk data, region statistics and the soil memory
+    o.p9 = Object.assign({}, S.p9, { chunks: serializeChunks(), regions: weRegionStats(false).map(function (r) { return { id: r.id, pop: Math.round(r.pop), jobs: r.jobs, homes: r.homes, traffic: Math.round(r.traffic), value: Math.round(r.landValue), happy: Math.round(r.happiness) }; }) });
+    o.p9.env = Object.assign({}, S.p9.env, { soilChunks: ENV.soil ? serializeChunks().map(function (c) { return c.soil; }) : S.p9.env.soilChunks });
+    delete o.p9._acc5; delete o.p9._accV;
+  }
   o.lastNet = Math.max(0, SIM.pNet || 0);
   o.lastBudgetNet = Math.max(0, SIM.bNet || 0);
   return o;
@@ -175,17 +182,20 @@ function saveHeader() {
     sections: {
       player: ['money', 'meta', 'p5.score'], economy: ['budget', 'economy', 'market', 'trade', 'bank', 'p6.econ'], citizens: ['citizens'], buildings: ['buildings'],
       roads: ['city.roads'], vehicles: ['vehicles'], companies: ['companies', 'ai'], stocks: ['companies.stocks', 'p6.stocks'], research: ['research', 'technology', 'p6.future'],
-      quests: ['quests', 'p6.dq', 'p5.challenges'], achievements: ['achievements'], statistics: ['statistics', 'p6.reports'], settings: ['settings'], world: ['p8.world']
+      quests: ['quests', 'p6.dq', 'p5.challenges', 'p9.challenges'], achievements: ['achievements'], statistics: ['statistics', 'p6.reports'], settings: ['settings'], world: ['p8.world'],
+      worldSeed: ['city.seed', 'p8.world.seedLabel'], chunks: ['p9.chunks'], regions: ['p9.regions', 'p9.neighbors'], households: ['p9.households'], traffic: ['p9.traffic', 'vehicles'], utilityNetworks: ['p9.util', 'p9.water', 'p9.env'],
+      disasters: ['p9.disasters', 'p9.disasterLog'], weather: ['p9.weather'], timeline: ['p9.timeline', 'p9.history', 'p9.branch'], transit: ['p9.transit'], snapshots: ['bct_snap_index (separate files)']
     }
   };
 }
 /* Vehicles in transit (logistics trucks, tankers, garbage trucks, buses) keep their cargo and destination across saves.
    Private cars and emergency vehicles are not stored: citizens and incidents re-create them. */
-const SAVED_VEHICLE_TYPES = ['truck', 'tanker', 'garbage', 'bus'];
+const SAVED_VEHICLE_TYPES = ['truck', 'tanker', 'garbage', 'bus', 'tram', 'shuttle'];
 function serializeVehicles() {
   if (typeof AG === 'undefined' || !AG.vehicles) return [];
-  return AG.vehicles.filter(function (v) { return SAVED_VEHICLE_TYPES.indexOf(v.type) >= 0 && v.path && v.dest && v.dest.id; }).slice(0, 300).map(function (v) {
-    return { type: v.type, at: v.path[Math.min(v.seg, v.path.length - 1)] | 0, dest: v.dest.id, route: v.route === undefined ? undefined : v.route,
+  return AG.vehicles.filter(function (v) { return SAVED_VEHICLE_TYPES.indexOf(v.type) >= 0 && v.path && ((v.dest && v.dest.id) || v.line); }).slice(0, 300).map(function (v) {
+    if (v.line && (!v.dest || !v.dest.id)) { const L = typeof lineById === 'function' ? lineById(v.line) : null; const sid = L ? L.stops[(v.stopIdx | 0) % L.stops.length] : 0; v = Object.assign({}, v, { dest: MAP.byId.get(sid) || { id: 0 } }); }
+    return { type: v.type, at: v.path[Math.min(v.seg, v.path.length - 1)] | 0, dest: v.dest.id, route: v.route === undefined ? undefined : v.route, line: v.line || undefined, lane: v.lane | 0,
       cargo: v.cargo ? { item: String(v.cargo.item).slice(0, 16), qty: Math.round(num(v.cargo.qty, 0, 0, 1e6)), from: String(v.cargo.from || '').slice(0, 30) } : null };
   });
 }
@@ -200,7 +210,10 @@ function restoreVehicles(raw) {
       const opts = { ambient: r.type !== 'bus', dest: dest };
       if (r.route !== undefined) opts.route = num(r.route, 0, 0, 1e6) | 0;
       if (r.cargo && typeof r.cargo === 'object') opts.cargo = { item: String(r.cargo.item || 'goods').slice(0, 16), qty: num(r.cargo.qty, 0, 0, 1e6), from: String(r.cargo.from || '').slice(0, 30) };
-      if (makeVehicle(r.type, roadPath(at, dest._entry), opts)) n++;
+      const line = typeof r.line === 'string' && typeof lineById === 'function' ? lineById(r.line) : null;
+      if (line) opts.fixedPath = true;
+      const v = makeVehicle(r.type, roadPath(at, dest._entry), opts);
+      if (v) { n++; v.lane = num(r.lane, 0, 0, 3) | 0; if (line) { v.line = line.id; v.pax = []; v.capacity = TRANSIT_MODES[line.mode].cap; v.color = line.color; v.stopIdx = Math.max(0, line.stops.indexOf(dest.id)); } }
     } catch (e) { /* one broken vehicle never blocks loading */ }
   });
   return n;
@@ -218,6 +231,7 @@ function validateSaveObject(o) {
   if (!o.p5 || typeof o.p5 !== 'object') errs.push('p5');
   if (!o.p6 || typeof o.p6 !== 'object') errs.push('p6');
   if (!o.p8 || typeof o.p8 !== 'object') errs.push('p8');
+  if (!o.p9 || typeof o.p9 !== 'object') errs.push('p9');
   if (!Array.isArray(o.citizens)) errs.push('citizens');
   if (!Array.isArray(o.vehicles)) errs.push('vehicles');
   if (!o.header || o.header.saveVersion !== SAVE_VERSION) errs.push('header');
@@ -263,7 +277,8 @@ const MIGRATIONS = [
   { from: 4, to: 5, run: function (d) { return migrateV4toV5(d); } },
   { from: 5, to: 6, run: function (d) { return migrateV5toV6(d); } },
   { from: 6, to: 7, run: function (d) { return migrateV6toV7(d); } },
-  { from: 7, to: 8, run: function (d) { return migrateV7toV8(d); } }
+  { from: 7, to: 8, run: function (d) { return migrateV7toV8(d); } },
+  { from: 8, to: 9, run: function (d) { return migrateV8toV9(d); } }
 ];
 function migrateSave(d) {
   if (!d || typeof d !== 'object' || Array.isArray(d)) throw new Error('Invalid save');
@@ -282,6 +297,14 @@ function migrateSave(d) {
 /* v4 = ULTRA CITY SIMULATION (Part 4). v5 adds Part 5 systems (story, score, challenges…) */
 /* v6 = MASTER SIMULATION ENGINE: inflation, road types, stock market, dynamic quests, citizens in the save */
 /* v8 = ADMIN PANEL + WORLD GENERATOR: world profile, custom companies, market-share targets */
+/* v9 = WORLD ENGINE (Part 9): chunks, regions, neighbours, traffic 2.0, transit lines, households, utility networks, timeline */
+function migrateV8toV9(o) {
+  o.version = 9;
+  o.p9 = newP9(o.city && o.city.seed);
+  o.p9.migratedGrid = true;
+  if (o.header && typeof o.header === 'object') { o.header.version = 9; o.header.saveVersion = 9; }
+  return o;
+}
 function migrateV7toV8(o) {
   o.version = 8;
   o.p8 = newP8();
@@ -367,7 +390,8 @@ function sanitizeState(d) {
 
   // City
   const c = d.city || {};
-  st.city.size = [40, 48, 52, 64, 80, 96].indexOf(c.size) >= 0 ? c.size : (meta.ngLevel >= 1 ? 48 : 40);
+  st.city.size = isValidWorldSize(c.size) ? c.size : (meta.ngLevel >= 1 ? 48 : 40);      // Part 9: generated / expanded worlds up to 160×160
+  ensureExpansionTable(st.city.size);
   st.city.seed = num(c.seed, st.city.seed) | 0;
   st.city.population = num(c.population, 5, 0, 1e7);
   st.city.peakPop = num(c.peakPop, st.city.population, 0, 1e7);
@@ -541,6 +565,7 @@ function sanitizeState(d) {
   st.p5 = sanitizeP5(d.p5);
   st.p6 = sanitizeP6(d.p6, st.city.seed);
   st.p8 = sanitizeP8(d.p8);
+  st.p9 = sanitizeP9(d.p9, st.city.seed);
   st.city.mapType = MAP_TYPES[c.mapType] ? c.mapType : 'standard';
   st._rawCitizens = Array.isArray(d.citizens) ? d.citizens.slice(0, 400) : null;
   st._rawVehicles = Array.isArray(d.vehicles) && d.vehicles.length ? d.vehicles.slice(0, 300) : null;
@@ -601,6 +626,8 @@ function validateBuildings(raw) {
     if (r.health !== undefined && r.health !== null) b.health = num(r.health, 60, 0, 100);
     b.closed = num(r.closed, 0, 0, 9e15);
     b.discount = !!r.discount;
+    if (r.cond !== undefined && r.cond !== null) b.cond = num(r.cond, 100, 0, 100);
+    if (r.cp && typeof r.cp === 'object' && !b.built) { const m = r.cp.m || {}, u = r.cp.u || {}; b.cp = { w: num(r.cp.w, 4, 0, 1000) | 0, m: { steel: num(m.steel, 0, 0, 1e6), concrete: num(m.concrete, 0, 0, 1e6), glass: num(m.glass, 0, 0, 1e6) }, u: { steel: num(u.steel, 0, 0, 1e6), concrete: num(u.concrete, 0, 0, 1e6), glass: num(u.glass, 0, 0, 1e6) }, wait: '', bought: 0 }; }
     if (r.su && d.id === 'startup') b.su = { name: String(r.su.name || 'Startup').replace(/[<>]/g, '').slice(0, 24), stage: clamp(num(r.su.stage, 0) | 0, 0, 3), prog: num(r.su.prog, 0, 0, 1), age: num(r.su.age, 0, 0, 1e12), value: num(r.su.value, 20000, 0, 1e13) };
     if (b.built) b.progress = 1;
     seenIds[b.id] = 1; maxId = Math.max(maxId, b.id);
@@ -667,7 +694,7 @@ function exportSaveJSON() { try { return JSON.stringify(buildSaveObject(), null,
 /* IMPORT VALIDATION: version, data types, negative values, unknown properties and maximum values */
 const SAVE_TOP_KEYS = ['version', 'meta', 'money', 'budget', 'city', 'buildings', 'workers', 'research', 'technology', 'companies', 'bank', 'transport', 'economy', 'market', 'ai', 'trade',
   'diplomacy', 'contracts', 'investors', 'space', 'events', 'statistics', 'achievements', 'quests', 'tutorial', 'settings', 'clock', 'p5', 'lastNet', 'lastBudgetNet', 'lastSaveTime', 'slot',
-  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'p8', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
+  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'p8', 'p9', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
 function validateImport(d) {
   const errs = [];
   if (!d || typeof d !== 'object' || Array.isArray(d)) return ['The save is not a JSON object.'];

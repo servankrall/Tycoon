@@ -1,6 +1,6 @@
 # 🏙️ BLOCK CITY TYCOON — Windows Desktop Edition
 
-**Build. Manage. Expand.** · Sürüm **1.1.0** · Kayıt formatı **v8**
+**Build. Manage. Expand.** · Sürüm **1.2.0** · Kayıt formatı **v9**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
 `BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
@@ -32,8 +32,8 @@ npm run icon       # icon.svg'den icon.ico / icon.png'yi yeniden üret (isteğe 
 
 ```text
 dist/
-├── BLOCK-CITY-TYCOON-Setup-1.1.0.exe      ← kurulum sihirbazı
-├── BLOCK-CITY-TYCOON-Portable-1.1.0.exe   ← kurulumsuz, çift tıkla çalışır
+├── BLOCK-CITY-TYCOON-Setup-1.2.0.exe      ← kurulum sihirbazı
+├── BLOCK-CITY-TYCOON-Portable-1.2.0.exe   ← kurulumsuz, çift tıkla çalışır
 └── win-unpacked/BLOCK CITY TYCOON.exe     ← paketlenmiş uygulamanın kendisi
 ```
 
@@ -93,6 +93,12 @@ BLOCK-CITY-TYCOON/
         ├── audio.js            Web Audio ses ve müzik
         ├── worldgen.js         dünya üretici, World Validator, otomatik onarım (FIX WORLD), World Health, World Debugger
         ├── admin-center.js     Admin Kontrol Merkezi: 20 kategori, komut konsolu, snapshot/rollback, stres testi, benchmark, admin.log
+        ├── world-engine.js     Part 9: chunk/bölge motoru, zemin akışı (streaming), NEAR/MID/FAR simülasyon katmanları, bölge istatistikleri, komşu şehirler, yeni bölge açma
+        ├── traffic2.js         Part 9: şeritli trafik, kavşaklar + trafik ışığı AI, alternatif rota AI, trafik olayları, Emergency AI 2.0, toplu taşıma ağı
+        ├── citylife.js         Part 9: haneler, emlak piyasası (arazi değeri), Construction 2.0, bina bakımı (condition)
+        ├── utilities2.js       Part 9: güç şebekesi (santral→trafo merkezi→trafo→bölge→bina), su basıncı ağı, kanalizasyon, çevre (rüzgârla kirlilik, gürültü, su/toprak), Weather 2.0
+        ├── world-control.js    Part 9: World Control Center, Entity Inspector, World Brush, bölge seçici, Disaster Command Center, Snapshot 2.0 + dallanma, klonlama, zaman çizelgesi, meydan okumalar, Validator 2.0, Smart Advisor 2.0
+        ├── selftest.js         Part 9: otomatik 20 adımlı EXE testi (--selftest)
         ├── main.js             döngü, girdi, menüler, açılış adımları
         └── platform-ui.js      çıkış onayı, çökme kurtarma, eski kayıt aktarımı, masaüstü ayarları, kısayollar
 ```
@@ -127,9 +133,11 @@ BLOCK CITY TYCOON\
 
 Her kayıt `header` bölümü taşır: `saveVersion, gameVersion, timestamp, citySeed, cityName, slot, playSec, population` ve her bölümün JSON içindeki yeri (`player, economy, citizens, buildings, roads, vehicles, companies, stocks, research, quests, achievements, statistics, settings`). v7 ile yoldaki kamyon/tanker/çöp kamyonu/otobüsler kargo ve varış noktalarıyla birlikte kaydedilir.
 
+v9 (1.2.0, Save 3.0) ile kayda `p9` bölümü eklendi: chunk verisi, bölge istatistikleri, komşu şehirler, haneler, trafik (kavşak ayarları, olaylar), toplu taşıma hatları, şebeke/su/kanalizasyon durumu, çevre (rüzgâr, toprak hafızası), aktif afetler, hava, zaman çizelgesi + şehir tarihçesi, meydan okumalar ve timeline dalı. Binalara `cond` (durum) ve inşaat projesi (`cp`: işçi + malzeme) eklendi. Eski kayıtlar açıldığında şehir otomatik olarak Part 9 ağlarını (trafo merkezi, arıtma tesisi, pompa) alır.
+
 v8 (1.1.0) ile kayda `p8` bölümü eklendi: üretilen dünyanın profili (seed, preset, harita tipi, nüfus, bina ve ilçe sayısı, ilçe adları, ekonomi, iklim, üretici sürümü), özel şirketler ve pazar payı hedefleri.
 
-**Migration:** `save.js` içindeki `MIGRATIONS` tablosu v1 → v2 → … → v8 adım adım çalışır. Gelecek sürümler (1.2.0, 2.0.0) yalnızca yeni bir adım (`{ from: 8, to: 9, run: … }`) ekler; eski kayıtlar otomatik yükseltilir. Daha yeni bir sürümün kaydı açılmaya çalışılırsa oyun bunu reddeder ve mevcut kaydı bozmaz.
+**Migration:** `save.js` içindeki `MIGRATIONS` tablosu v1 → v2 → … → v8 adım adım çalışır. 1.2.0 `{ from: 8, to: 9 }` adımını ekledi; gelecek sürümler yine yalnızca yeni bir adım ekler; eski kayıtlar otomatik yükseltilir. Daha yeni bir sürümün kaydı açılmaya çalışılırsa oyun bunu reddeder ve mevcut kaydı bozmaz.
 
 ### Eski tarayıcı kayıtlarını aktarma (IMPORT OLD BROWSER SAVE)
 
@@ -168,7 +176,8 @@ Admin paneli normal oyuncudan gizlidir.
 
 | Kısayol | İşlev |
 |---|---|
-| **F10** | Admin Kontrol Merkezi (aç / kapat) |
+| **F10** | World Control Center / Admin Kontrol Merkezi (aç / kapat) — 1.2.0'dan itibaren önce **ADMIN MODE** açılmalı |
+| **Ctrl+Alt+F10** | Admin modunu onayla açar (ayarlara girmeden) |
 | **Ctrl+F10** | Doğrudan dünya üretici (WORLD kategorisi) |
 | **Ctrl+Shift+F10** | World Debugger (harita üstünde sorunlar) |
 | Ctrl+Shift+A | Admin paneli (eski kısayol) |
@@ -193,7 +202,7 @@ Sonuç ekranı nüfus, bina, yol, şirket, araç ve ilçe sayılarını, **WORLD
 
 - **12 hazır dünya:** Balanced, Mega City, Green, Industrial, Tourist, Financial, Smart City, Dense Metropolis, Mountain, Island, Coastal, Winter.
 - **Custom World:** harita boyutu, arazi, su, dağ, nehir, orman, yol, bina, nüfus, sanayi, turizm, trafik, başlangıç altyapısı, ekonomi gücü, afet sıklığı, hava ve iklim.
-- **Harita boyutları:** SMALL 40, MEDIUM 52, LARGE 64, HUGE 80, MEGA 96. 80 ve üzerinde uyarlanabilir performans otomatik açılır.
+- **Harita boyutları:** SMALL 40, MEDIUM 52, LARGE 64, HUGE 80, MEGA 96, GIGA 128. 80 ve üzerinde uyarlanabilir performans otomatik açılır.
 - **Seed:** aynı `CITY-xxxxxx` seed, aynı ayarlar ve aynı üretici sürümüyle aynı başlangıç dünyasını (yollar, imar, binalar, seviyeler) üretir.
 
 **Doğrulama ve onarım:**
@@ -221,6 +230,57 @@ benchmark · stressTest · duplicateWorld · marketBoom · marketCrash · clear
 
 Her admin işlemi `logs\admin.log` dosyasına yazılır (ör. `[16:21] Admin: Generated world …`). Tarayıcı sürümünde son 300 satır tarayıcı depolamasında tutulur.
 
+## 6c. World Engine ve World Control Center (1.2.0)
+
+**Admin güvenliği:** admin paneli normal oyuncuya yanlışlıkla açılmaz. ⚙️ Ayarlar → **🛡️ ENABLE ADMIN MODE** ya da **Ctrl+Alt+F10** (onay penceresiyle) açıldıktan sonra **F10** çalışır. Kapalıyken F10 yalnızca bir ipucu gösterir.
+
+**Devasa dünya (chunk motoru):**
+- Harita 16×16 karolu **chunk**'lara ve **bölgelere** (Central / North / South / East / West) bölünür. Yeni boyut **GIGA 128×128**; **CREATE NEW REGION** dünyaya her seferinde 16 karoluk bir halka ekler (en fazla 160×160). Nehirler, yollar ve arazi yeni bölgeye kesintisiz devam eder.
+- **Zemin akışı (streaming):** her chunk'ın zemin görüntüsü kamera yaklaşınca yüklenir, harita değişince birkaç chunk/kare hızında yenilenir, uzun süre kullanılmayınca veya bellek bütçesi aşılınca bırakılır. Görüş alanının etrafındaki halka önceden yüklenir, sınır görünmez. Çözünürlük zoom'a göre değişir (LOD).
+- **Simülasyon katmanları:** NEAR (görünen chunk'lar, tam ajan simülasyonu) · MID (çevresi, azaltılmış) · FAR (istatistiksel: ajanlar seyrek güncellenir, uzak trafik tıkanıklık alanında toplanır). Ekonomi ve şehir istatistikleri her zaman tüm dünyayı kapsar.
+- **Bölge istatistikleri:** nüfus, iş, konut, trafik, arazi değeri, mutluluk, eğitim, sağlık, enerji, su, üretim, ticaret, turizm.
+- **Komşu şehirler:** METRO CITY, RIVER CITY, INDUSTRIAL CITY, COASTAL CITY, TECH CITY, OLD TOWN ekonomik olarak simüle edilir (nüfus, GSYH, ilişki). Harita kenarındaki gerçek yol / tren / liman / havaalanı bağlantılarına göre yolcu (iş için gelen-giden), turist, ihracat-ithalat, kargo kamyonları, hammadde ve enerji akar. Haritanın dışında silüetleri ve otoyol bağlantıları görünür.
+
+**Trafik 2.0:** şerit sistemi (küçük 2 · orta 4 · büyük 6 · otoyol 8 şerit), şerit değiştirme (önündeki araç, hız, dönüş öncesi doğru şerit). Kavşaklar: trafik ışığı (korumalı sol dönüş ve yaya fazı), göbekli kavşak, ana yol önceliği, dört yönlü dur. **TRAFFIC LIGHT AI** yeşil süreleri kuyruklara göre ayarlar; acil durum araçları ışıkları kendi yönlerine çevirir. **Traffic AI 2.0** her yolculukta ana yolu alternatifle (en hızlı / en az trafik / en kısa / en ucuz) canlı tıkanıklıkla karşılaştırır. **Trafik olayları** (kaza, yol çalışması, kapalı yol, sel, arıza) yolu kapatır ve etkilenen her araç anında yeniden rotalanır.
+
+**Toplu taşıma ağı (STOP → LINE → ROUTE → VEHICLE → PASSENGER):** Otobüs, Tramvay (yeni Tram Stop), Metro, Tren, Feribot (yeni Ferry Pier) ve Havaalanı Servisi. Hatlar duraklardan otomatik kurulur veya elle eklenir. Vatandaşlar evden durağa yürür, bekler, biner, hedefe en yakın durakta iner ve yürür.
+
+**Şehir yaşamı:** **Haneler** (ev, üyeler, gelir, gider, iş yerleri, ulaşım, ihtiyaçlar, memnuniyet; gençler hafta içi okula gider). **Emlak piyasası:** her karonun arazi değeri ulaşım, hizmet, güvenlik, çevre, eğitim, iş olanakları, turizm ve talebe göre değişir; kira, bina değeri (emlak vergisi), arsa fiyatı ve yatırımcıların nereye inşa ettiği buna bağlıdır. **Construction 2.0:** inşaat projesi (bütçe, işçi, çelik/beton/cam) TEMEL → İSKELET → DIŞ CEPHE → İÇ YAPI → TAMAMLANDI aşamalarıyla görünür; malzeme yoksa ithal edilir, işçi azsa yavaşlar; INSTANT BUILD atlar. **Bakım:** her binanın CONDITION değeri (Excellent → Critical) zamanla düşer; düşük durum verimi, değeri ve hizmet kalitesini azaltır, arıza ihtimalini artırır; bakım şirketleri depolardan ekip gönderir.
+
+**Altyapı 2.0:** güç şebekesi **Santral → Trafo merkezi (yeni Substation) → Trafo (her ilçe) → İlçe → Bina**: üretim / tüketim / rezerv MW cinsinden; trafo veya trafo merkezi kapasitesi aşılırsa **OVERLOAD** ve kesinti. Su ağı: rezervuar (yeni), su tesisi, pompa istasyonu (yeni), yollar boyunca ana borular ve **basınç**; boru patlarsa akış aşağısında basınç düşer, bakım ekibi gider. **Kanalizasyon:** bina → kanal → ilçe borusu → arıtma tesisi (yeni); kapasite aşılırsa **SEWAGE OVERLOAD**.
+
+**Çevre ve hava:** kirlilik rüzgâr yönüyle komşu ilçelere yayılır. Yeni ısı haritaları: Gürültü, Hava Kalitesi, Su Kalitesi, Toprak Kalitesi, Turizm, Kanalizasyon, Acil Durum Kapsaması, Bina Durumu (kirlilik/elektrik/su haritaları artık yeni ağları gösterir). **Weather 2.0:** Güneşli, Bulutlu, Yağmur, Sağanak, Fırtına, Sis, Kar, Sıcak Hava Dalgası, Soğuk Hava Dalgası — trafik, enerji, su, vatandaş davranışı, turizm, tarım ve afet riski (sel, don ile boru patlaması, sıcakta yangın, fırtınada trafo arızası) üzerinde etkili.
+
+**WORLD CONTROL CENTER (F10):** üstte sürekli **WORLD HEALTH** (Roads, Utilities, Economy, Citizens, Traffic, Environment, Emergency; yeşil/sarı/kırmızı) ve 16 büyük hızlı eylem: GENERATE WORLD, REPAIR WORLD, MAX CITY, UNLOCK EVERYTHING, BUILD ALL UTILITIES, FIX TRAFFIC, FIX ECONOMY, REPAIR ALL, CLEAR DISASTERS, MAX HAPPINESS, CLEAR POLLUTION, FILL TREASURY, SPAWN MEGACITY, CREATE NEW REGION, CLONE WORLD, CREATE SNAPSHOT.
+
+| Sekme | İçerik |
+|---|---|
+| WORLD | seed, boyut, iklim, arazi, su, dağ, orman, kaynaklar; chunk haritası (NEAR/MID/FAR), bölge tablosu, komşu şehirler |
+| SIMULATION | duraklat, hız, Freeze Economy / Traffic / Citizens / Weather / Buildings |
+| ECONOMY | para, enflasyon, faiz, talep, fiyat seviyesi, şirket büyümesi, emlak piyasası |
+| CITIZENS | nüfus, mutluluk, iş, gelir, ihtiyaçlar, göç; haneler |
+| TRAFFIC | trafik üret/temizle, çarpan, tıkanıklık, kaza üretici, TRAFFIC LIGHT AI, rota modu, olaylar, toplu taşıma hatları, Emergency AI kaydı |
+| WORLD EVENTS | afetler (komuta merkezi), festival, ekonomik patlama, resesyon, turizm patlaması, tedarik krizi, hava |
+| BUILDINGS | unlock all, instant build, max upgrade, repair all, destroy selected, bakım, inşaat projeleri |
+| UTILITIES | infinite power / water, repair grid, overload grid (test), fix sewage |
+| DEBUG | Entity Inspector, FPS, frame/render/simülasyon süresi, bellek, chunk ve AI sayıları, Validator 2.0 (sürekli) + AUTO FIX |
+| INSPECTOR · WORLD BRUSH · REGIONS · DISASTER CMD · SNAPSHOTS 2.0 · TIMELINE · CHALLENGES · ADVISOR 2.0 | aşağıda |
+
+- **Entity Inspector:** vatandaş, araç, bina, şirket, yol, altyapı veya ilçe seçilir; sağda canlı güncellenen panel açılır (ör. vatandaş: ID, yaş, iş, gelir, ev, iş yeri, hane, ihtiyaçlar, mutluluk, konum, şu anki etkinlik). Yolda kavşak tipi değiştirilebilir, yol kapatılabilir.
+- **World Brush:** Build, Destroy, Upgrade, Repair, Road, Zone, Park, Water, Forest, Terrain, Pollution, Land Value; boyut 1 / 5 / 10 / 25 / 50 / 100.
+- **Region Selector:** haritada dikdörtgen seç → Upgrade All Roads, Repair All Buildings, Build Utilities, Increase Land Value, Add Trees, Remove Pollution.
+- **Disaster Command Center:** Earthquake, Flood, Storm, Fire, Power Failure, Water Failure, Infrastructure Collapse; konum (haritadan seçilebilir), şiddet, süre, yarıçap ve yayılma. Emergency AI 2.0 en uygun birimi mesafe, trafik, yol durumu, istasyon kapasitesi ve önceliğe göre seçer. Önce/sonra otomatik snapshot alınır.
+- **Snapshot 2.0 + dallanma + klonlama:** adlı snapshot'lar (Before Disaster, After Disaster, Mega City Stage …); bir snapshot'tan alternatif dünya (ör. "Flood Avoided") başka bir slota bağımsız kayıt olarak yazılır ve zaman çizelgesi ağacında görünür. **CLONE WORLD** şehri başka slota bağımsız kopyalar.
+- **Timeline ve City History:** şehir kuruluşu, nüfus eşikleri, ilk otoyol, ilk metro hattı, büyük binalar, büyük afetler, Megacity Era, sanayi büyümesi, turizm rekorları otomatik yazılır ve kayda dahil edilir.
+- **World Achievements 2.0:** World Builder, City Master, Megacity, Traffic Master, Economy Master, Green City, Industrial Power, Tourism Capital, Tech Capital, Zero Blackout, Zero Water Shortage, 100% Road Connectivity, 1 / 10 / 100 Million Citizens.
+- **World Challenge Generator:** OBJECTIVE / CONDITION / TIME LIMIT / REWARD (ör. "Reach 64,000 citizens without building a new highway", "Maintain 90% happiness for 6 years", "Survive three disasters", "Become the richest region", "Build a zero-pollution city").
+- **Validator 2.0 (sürekli):** yollar, erişim, elektrik, su, kanalizasyon, iş, konut, gıda, acil durum, trafik rotaları, tedarik zincirleri, ekonomi dengesi, vatandaş yol bulma ve chunk bağlantıları; **AUTO FIX** trafo merkezi, arıtma, pompa, tedarik zinciri ve rota onarımları ekler.
+- **Smart Advisor 2.0:** sorunu analiz eder → NEDEN → ÇÖZÜM → TAHMİNİ MALİYET → BEKLENEN SONUÇ, **APPLY SOLUTION** ile uygular (Ctrl+K → "Smart Advisor 2.0", oyuncular için de açık).
+
+**F3 performans monitörü** artık simülasyon/render süresini, vatandaş/araç/bina sayısını, aktif ve yüklü chunk'ları, AI ve pathfinding görevlerini ve belleği de gösterir.
+
+**Otomatik EXE testi:** `"BLOCK CITY TYCOON.exe" --selftest --selftest-out=rapor.json` 20 adımı çalıştırır (New City, Generate Liveable World, Validator, Auto Fix, Start, 1× / 10× / 100×, trafik, ekonomi, afet, acil durum, Save, **EXE'yi yeniden başlatma**, Load, Snapshot, Clone World, Admin Panel, chunk streaming, performans), ayrı bir geçici kullanıcı klasörü kullanır, `logs\selftest.json` yazar ve 0 / 1 çıkış koduyla kapanır. Windows Release iş akışı bunu her derlemede yeni EXE üzerinde çalıştırır ve raporu sürüme ekler. Tarayıcıda: `index.html?selftest`.
+
 ## 7. Pencere ve ayarlar
 
 - Başlangıç 1280×720, en küçük 1024×600; yeniden boyutlandırma, büyütme, küçültme, tam ekran.
@@ -237,7 +297,7 @@ Her admin işlemi `logs\admin.log` dosyasına yazılır (ör. `[16:21] Admin: Ge
 `electron/updater.js` dört adımı içerir: **Update Checker → Version Check → Download Update → Install Update**. Açmak için `package.json` içindeki `bctUpdate.manifestUrl` alanına https ile yayınlanan bir JSON adresi yazın:
 
 ```json
-{ "version": "1.1.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-1.1.0.exe", "sha256": "…", "notes": "Yeni binalar" }
+{ "version": "1.2.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-1.2.0.exe", "sha256": "…", "notes": "Yeni binalar" }
 ```
 
 Adres boşsa güncelleme kapalıdır. İnternet yoksa oyun sessizce devam eder. İndirilen installer'ın SHA-256 değeri doğrulanır. Kayıtlar kullanıcı klasöründe durduğu için güncellemeden etkilenmez.
@@ -265,6 +325,8 @@ Bu sürümde otomatik olarak (Linux üzerinde Electron + Playwright, Xvfb ile) d
 | 23 | Installer | ✅ NSIS installer oluşturuluyor. Wine altında klasör sayfası (`C:\Program Files\Block City Tycoon`), "Create Desktop Shortcut" sayfası, dosyalar, masaüstü ve Başlat Menüsü kısayolları, Yüklü uygulamalar kaydı doğrulandı |
 | 25 | Dünya üretici (12 preset + custom, SMALL…MEGA) | ✅ hepsi LIVEABLE, sağlık %92–98, 1–4 sn, simülasyon dakikalarca kararlı |
 | 26 | Admin paneli, konsol, snapshot/rollback, stres testi, benchmark, export/import, admin.log | ✅ tarayıcıda ve Electron'da hatasız |
+| 27 | Part 9: chunk motoru, trafik 2.0, toplu taşıma, haneler, emlak, inşaat 2.0, bakım, şebeke/su/kanalizasyon, çevre, Weather 2.0, World Control Center, inspector, fırça, bölge seçici, afet komuta merkezi, snapshot 2.0/dallanma/klon, timeline, meydan okumalar, Validator 2.0, Advisor 2.0 | ✅ tarayıcıda hatasız; GIGA 128×128 dünya 3 sn'de üretiliyor |
+| 28 | Otomatik self-test (20 adım, EXE yeniden başlatma dahil) | ✅ tarayıcıda ve Electron'da 20/20 |
 | 24 | Uninstaller | ✅ Wine altında dosyalar, kısayollar ve kayıt defteri girdisi siliniyor, kayıtlar korunuyor |
 
 Wine altında doğrulanamayanlar gerçek bir Windows PC'de denenmeli:
@@ -276,5 +338,5 @@ Windows'ta son kontrol:
 
 ```text
 npm install → npm run dev → NEW CITY → şehir oluşur → Ctrl+S → pencereyi kapat (EXIT)
-→ npm run build → dist\BLOCK-CITY-TYCOON-Setup-1.1.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
+→ npm run build → dist\BLOCK-CITY-TYCOON-Setup-1.2.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
 ```

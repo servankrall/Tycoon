@@ -50,7 +50,7 @@ function econCycleTick(dt) {
 }
 function interestRate() { return S.p5 ? S.p5.econ.rate : 0.05; }
 /* Cheap money helps businesses grow; expensive money slows them down */
-function businessGrowthMult() { return clamp(1 + (0.05 - interestRate()) * 6, 0.6, 1.3); }
+function businessGrowthMult() { return clamp(1 + (0.05 - interestRate()) * 6, 0.6, 1.3) * (S && S.p9 ? S.p9.econ.growthMult : 1); }
 
 /* --- Part 5 modifiers feeding the Part 4 economy (see globalMods) ----------------- */
 function part5Mods(m) {
@@ -659,10 +659,11 @@ function accidentTick(dt) {
   const p = 0.0009 * dt * (SIM.traffic / 50 + 0.3) * Math.min(2, moving.length / 20) * wx * ddEventMult();
   if (RNG.next() < p) triggerAccident(RNG.pick(moving));
 }
-function triggerAccident(v) {
-  if (!v) { const m = AG.vehicles.filter(function (x) { return !x.siren && x.path; }); v = pick(m); }
+function triggerAccident(v, atTile) {
+  if (!v && atTile === undefined) { const m = AG.vehicles.filter(function (x) { return !x.siren && x.path; }); v = pick(m); }
   let tile;
-  if (v) tile = v.path[Math.min(v.seg, v.path.length - 1)];
+  if (atTile !== undefined && atTile >= 0 && MAP.roads[atTile]) tile = atTile;
+  else if (v) tile = v.path[Math.min(v.seg, v.path.length - 1)];
   else { const roads = []; for (let i = 0; i < MAP.roads.length; i++) if (MAP.roads[i]) roads.push(i); if (!roads.length) return null; tile = pick(roads); }
   if (AG.accidents.some(function (a) { return a.tile === tile; })) return null;
   const c = tileCenter(tile);
@@ -672,9 +673,14 @@ function triggerAccident(v) {
   AG.accidents.push(acc);
   S.p5.stats.accidents++;
   const src = function (type) { const l = S.buildings.list.filter(function (b) { return b.type === type && b._op && b._entry >= 0 && MAP.comp[b._entry] === MAP.comp[tile]; }); return nearestOf(l, c.x, c.y); };
-  const hosp = src('hospital'), pol = src('police');
-  if (hosp) { const e = dispatchToTile('ambulance', hosp, tile); if (e) e.accident = acc; else acc.needAmb = false; } else acc.needAmb = false;
-  if (pol) { const e = dispatchToTile('police', pol, tile); if (e) e.accident = acc; else acc.needPol = false; } else acc.needPol = false;
+  if (S.p9) {          // Emergency AI 2.0: best unit by travel time, congestion, road status and station capacity
+    const e1 = acc.needAmb ? emergencyDispatch('medical', tile, { priority: 3 }) : null; if (e1) e1.accident = acc; else acc.needAmb = false;
+    const e2 = acc.needPol ? emergencyDispatch('police', tile, { priority: 2 }) : null; if (e2) e2.accident = acc; else acc.needPol = false;
+  } else {
+    const hosp = src('hospital'), pol = src('police');
+    if (hosp) { const e = dispatchToTile('ambulance', hosp, tile); if (e) e.accident = acc; else acc.needAmb = false; } else acc.needAmb = false;
+    if (pol) { const e = dispatchToTile('police', pol, tile); if (e) e.accident = acc; else acc.needPol = false; } else acc.needPol = false;
+  }
   notify('🚗💥 Traffic accident! ' + (acc.needAmb || acc.needPol ? (acc.needAmb ? '🚑 ' : '') + (acc.needPol ? '🚓 ' : '') + 'Emergency services are on the way.' : 'No hospital or police nearby — the road stays blocked longer.'), 'bad');
   if (S.settings.screenShake !== false) shake(2);
   return acc;

@@ -8,7 +8,7 @@
     ['economy', 'economy.js'], ['economy', 'economy-market.js'], ['city', 'events.js'], ['citizens', 'citizens.js'], ['city', 'renderer.js'],
     ['city', 'ui.js'], ['city', 'p5-data.js'], ['city', 'p5-profile.js'], ['city', 'p5-systems.js'], ['city', 'city-systems.js'],
     ['engine', 'game.js'], ['city', 'simulation-data.js'], ['city', 'simulation.js'], ['city', 'p5-ui.js'], ['city', 'admin.js'],
-    ['city', 'simulation-ui.js'], ['city', 'worldgen.js'], ['city', 'admin-center.js'], ['city', 'audio.js'], ['city', 'main.js'], ['city', 'platform-ui.js']
+    ['city', 'simulation-ui.js'], ['city', 'worldgen.js'], ['city', 'admin-center.js'], ['world', 'world-engine.js'], ['traffic', 'traffic2.js'], ['citizens', 'citylife.js'], ['city', 'utilities2.js'], ['world', 'world-control.js'], ['city', 'audio.js'], ['city', 'main.js'], ['city', 'platform-ui.js'], ['engine', 'selftest.js']
   ];
   const DEFAULT_TEXT = { engine: 'Loading engine...', city: 'Loading city systems...', economy: 'Loading economy...', citizens: 'Loading citizens...', traffic: 'Loading traffic...', world: 'Loading world...', ui: 'Loading interface...', ready: 'Ready!', failed: 'Loading failed' };
   const ROWS = ['rWorld', 'rBuildings', 'rEconomy', 'rCitizens', 'rTraffic', 'rUI'];

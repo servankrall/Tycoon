@@ -42,6 +42,8 @@ function covGrid(types, radiusFn, weightFn) {
 }
 function computeHeat6(mode) {
   const N = MAP.W * MAP.H;
+  const p9 = p9HeatGrid(mode);            // Part 9: wind-blown pollution, noise, air / water / soil quality, grid, pressure, sewage …
+  if (p9) { HEAT6.grid = p9; HEAT6.mode = mode; HEAT6.at = FX.time; return; }
   let g = new Float32Array(N);
   const L = S.buildings.list;
   const svc = function (t) { return covGrid(function (b) { return BUILDINGS[b.type].service === t && b._road; }, function (b) { return coverRadius(b); }); };
@@ -199,7 +201,7 @@ function renderDebug6() {
     'Memory ' + mem + '\n' +
     'Active events: ' + (ev.join(', ') || 'none') + '\n' +
     'Pathfinding ' + pathReqRate.toFixed(1) + ' req/s  cache ' + MAP.pathCache.size + '  reroutes ' + S.p6.stats.reroutes + '\n' +
-    'RNG state ' + RNG.gen.s;
+    'RNG state ' + RNG.gen.s + p9DebugLines();
 }
 
 /* --- Daily city report --------------------------------------------------------------------------------------- */

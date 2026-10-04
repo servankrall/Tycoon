@@ -223,7 +223,8 @@ function globalSettingsHtml() {
     gsTog('shadows', '🌗 ' + T('shadows')) +
     '<div class="small">👥 ' + T('npc') + '</div>' + gsBtns('npcDensity', pct, pct.map(function (x) { return x + '%'; })) +
     '<div class="small" style="margin-top:6px">🚗 ' + T('traffic2') + '</div>' + gsBtns('trafficDensity', pct, pct.map(function (x) { return x + '%'; })) +
-    gsTog('pauseOnBlur', '⏸️ ' + T('pauseBlur'));
+    gsTog('pauseOnBlur', '⏸️ ' + T('pauseBlur')) +
+    gsTog('adminEnabled', '🛡️ ENABLE ADMIN MODE (F10 World Control Center — single-player developer tool)');
   if (DESKTOP) {
     const mode = GSET.borderless ? 'borderless' : GSET.fullscreen ? 'fullscreen' : 'windowed';
     h += '<div class="small" style="margin-top:6px">' + T('resolution') + '</div>' + gsBtns('resolution', RESOLUTIONS, RESOLUTIONS.map(function (r) { return r.replace('x', '×'); })) +
@@ -272,7 +273,7 @@ function onGsetClick(el) {
     });
     return;
   }
-  const bools = ['autosave', 'shadows', 'pauseOnBlur'], nums = ['autosaveInterval', 'masterVolume', 'npcDensity', 'trafficDensity'];
+  const bools = ['autosave', 'shadows', 'pauseOnBlur', 'adminEnabled'], nums = ['autosaveInterval', 'masterVolume', 'npcDensity', 'trafficDensity'];
   if (bools.indexOf(k) >= 0) GSET[k] = v === '1';
   else if (nums.indexOf(k) >= 0) GSET[k] = +v;
   else GSET[k] = v;
@@ -282,6 +283,7 @@ function onGsetClick(el) {
   if (k === 'particles') { applyGlobalSettingsToGame(); FX.particles.length = 0; }
   if (k === 'resolution') Platform.applyWindow();
   if (k === 'language') applyShellTexts();
+  if (k === 'adminEnabled') { Log.info('Admin mode ' + (GSET.adminEnabled ? 'enabled' : 'disabled') + ' in Settings'); if (!GSET.adminEnabled && typeof exitAdminMode === 'function' && ADM.mode) exitAdminMode(); }
   sfx('click');
   if ($('modalWrap').classList.contains('show')) openSettings();
 }
@@ -345,10 +347,11 @@ function platformBoot() {
   if (migrated && !STARTED) refreshMenuCity(activeSlot());
   const rec = readRecovery();
   if (crashed) Log.warn('Previous session was not closed correctly' + (rec ? ' (recovery snapshot found)' : ''));
-  if (crashed && rec) showRecoveryDialog(rec);
+  const selftest = DESKTOP && BCT.selftest;            // the automatic self-test never waits for first-run prompts
+  if (crashed && rec && !selftest) showRecoveryDialog(rec);
   else {
     if (rec) clearRecovery();
     let any = false; for (let n = 1; n <= SLOT_COUNT; n++) if (slotInfo(n).exists) any = true;
-    if (DESKTOP && !any && !GSET.browserImportPrompted) showBrowserImportPrompt();
+    if (DESKTOP && !any && !GSET.browserImportPrompted && !selftest) showBrowserImportPrompt();
   }
 }

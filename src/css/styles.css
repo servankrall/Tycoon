@@ -492,14 +492,15 @@ body.photo #topbar,body.photo #leftnav,body.photo #leftPanel,body.photo #rightPa
 /* =====================================================================
    PART 8: ADMIN CONTROL CENTER + WORLD GENERATOR
    ===================================================================== */
-#adminCenter{position:fixed;inset:0;z-index:800;background:rgba(9,11,28,.97);display:grid;grid-template-rows:auto auto 1fr auto;color:var(--text);}
+#adminCenter{position:fixed;inset:0;z-index:800;background:rgba(9,11,28,.97);display:grid;grid-template-rows:auto auto auto 1fr auto;color:var(--text);}
 #adminCenter.hidden{display:none;}
 #adminCenter.admGhost{opacity:.15;pointer-events:none;}
 #admTop{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:linear-gradient(90deg,#1b1f40,#12152b);}
 #admBrand{font-weight:900;letter-spacing:2px;color:var(--gold);display:flex;flex-direction:column;min-width:220px;}
 #admBrand small{font-size:10px;letter-spacing:0;color:var(--dim);font-weight:600;margin-top:2px;}
 #admSearch{flex:1;min-width:120px;background:#0f1226;border:1px solid var(--line);border-radius:10px;padding:8px 12px;color:var(--text);font-size:13px;}
-#admHero{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);}
+#admHero{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;padding:8px 14px;border-bottom:1px solid var(--line);}
+#admHero .btn{font-size:11px;padding:7px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #admHero .big{font-size:16px;padding:12px 22px;}
 #admMain{display:grid;grid-template-columns:190px 1fr;min-height:0;}
 #admNavList{overflow-y:auto;border-right:1px solid var(--line);padding:8px 6px;}
@@ -554,3 +555,46 @@ body.photo #topbar,body.photo #leftnav,body.photo #leftPanel,body.photo #rightPa
 body.admOpen #modalWrap{z-index:860;}
 body.admOpen #toasts{z-index:870;}
 body.admOpen #tooltip{z-index:880;}
+
+/* ===================== PART 9 — WORLD CONTROL CENTER ===================== */
+#admWorldStatus{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--line);font-size:11px;font-weight:800;background:rgba(18,21,43,.9);}
+#admWorldStatus .ws,#admWorldStatus .wsMain{padding:3px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);}
+#admWorldStatus .wsMain{font-size:12px;}
+#admWorldStatus .ok{color:#06d6a0;border-color:rgba(6,214,160,.45);}
+#admWorldStatus .warn{color:#ffd166;border-color:rgba(255,209,102,.45);}
+#admWorldStatus .bad{color:#ef476f;border-color:rgba(239,71,111,.55);}
+.admNavGroup{font-size:10px;font-weight:900;letter-spacing:1px;color:var(--gold);padding:10px 8px 4px;opacity:.9;}
+.p9Chunks{display:grid;gap:3px;margin-top:6px;max-width:460px;}
+.p9Chunk{aspect-ratio:1;border:2px solid;border-radius:6px;font-size:9px;color:#fff;min-width:0;padding:0;}
+.p9Chunk.t0{background:rgba(6,214,160,.55);}
+.p9Chunk.t1{background:rgba(255,209,102,.4);}
+.p9Chunk.t2{background:rgba(120,130,170,.25);}
+.p9Tbl{overflow-x:auto;font-size:11px;}
+.p9Th,.p9Tr{display:grid;grid-template-columns:150px repeat(13,minmax(56px,1fr));gap:4px;padding:3px 0;border-bottom:1px solid var(--line);min-width:880px;}
+.p9Th{font-weight:900;color:var(--dim);}
+.p9Bar{display:inline-block;width:90px;height:7px;border-radius:5px;background:var(--panel3);vertical-align:middle;overflow:hidden;}
+.p9Bar i{display:block;height:100%;background:linear-gradient(90deg,#06d6a0,#ffd166);}
+.p9Adv{border-left:4px solid var(--blue);}
+.p9Adv.sev3{border-left-color:var(--red);}
+.p9Adv.sev2{border-left-color:var(--orange);}
+.p9Adv .small{margin-top:3px;}
+.p9Ch.completed{border-left:4px solid var(--green);}
+.p9Ch.failed{border-left:4px solid var(--red);opacity:.75;}
+.p9Ch.active{border-left:4px solid var(--gold);}
+.p9Time{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;}
+.p9Year{border-left:3px solid var(--gold);padding-left:10px;}
+.p9Ev{font-size:12px;padding:2px 0;}
+.p9Hist{padding-left:18px;font-size:12px;line-height:1.6;max-height:60vh;overflow-y:auto;}
+.p9Br{font-size:12px;padding:3px 0;}
+#entityInspector{position:fixed;right:12px;top:calc(var(--top-h) + 10px);width:310px;max-height:calc(100vh - var(--top-h) - 30px);overflow-y:auto;z-index:790;background:rgba(15,18,40,.96);border:1px solid var(--line);border-radius:14px;padding:10px 12px;box-shadow:var(--shadow);color:var(--text);}
+body.admOpen #entityInspector{z-index:890;}
+#entityInspector.hidden{display:none;}
+#entityInspector .eiHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;letter-spacing:.5px;}
+#entityInspector .eiHead span{display:flex;gap:6px;align-items:center;}
+#entityInspector h4{margin:4px 0 6px;font-size:14px;}
+#entityInspector .between{padding:2px 0;border-bottom:1px dashed rgba(140,150,255,.1);}
+#entityInspector .row{margin-top:8px;flex-wrap:wrap;gap:6px;}
+.eiBar{display:grid;grid-template-columns:70px 1fr 28px;gap:6px;align-items:center;font-size:11px;margin:2px 0;}
+.eiBar i{display:block;height:7px;border-radius:5px;background:var(--panel3);overflow:hidden;}
+.eiBar em{display:block;height:100%;}
+@media (max-width:820px){#entityInspector{left:8px;right:8px;width:auto;top:auto;bottom:calc(var(--nav-h) + 8px);max-height:45vh;}#admHero{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));}}

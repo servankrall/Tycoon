@@ -41,11 +41,11 @@ function rivalFor(sector) { const a = AI_DEFS.find(function (x) { return x.kind 
 function aiBuild(aiId, sector, zoneType, product) {
   if (!aiId) return false;
   const ai = S.ai[aiId];
-  const r = unlockedRect(), cands = [];
-  for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) { const i = idx(x, y); if (MAP.zone[i] === zoneType && !MAP.occ[i] && !MAP.roads[i]) cands.push([x, y]); }
+  const cands = freeZoneTiles(zoneType);
   if (!cands.length) return false;
   const tries = Math.min(40, cands.length);
   for (let k = 0; k < tries; k++) { const j = k + Math.floor(Math.random() * (cands.length - k)); const tmp = cands[k]; cands[k] = cands[j]; cands[j] = tmp; }
+  if (S.p9 && PROP.grid) { const top = cands.slice(0, tries).sort(function (a, b) { return landValueTile(b[0], b[1]) - landValueTile(a[0], a[1]); }); for (let k = 0; k < top.length; k++) cands[k] = top[k]; }   // Part 9: investors prefer valuable land
   const opts = AI_BUILD_OPTIONS[sector], bonus = hasTech('c_density') ? 1 : 0;
   const storageFull = SIM.storageCap ? SIM.storageUsed / SIM.storageCap > 0.85 : false;
   for (let k = 0; k < tries; k++) {
@@ -61,14 +61,14 @@ function aiBuild(aiId, sector, zoneType, product) {
     choices.sort(function (a, b) { return b[1] - a[1]; });
     for (let c = 0; c < choices.length; c++) {
       const d = BUILDINGS[choices[c][0]];
-      const land = d.w * d.h * 20 * costMult(), cost = buildCost(d) + land;
+      const land = S.p9 ? landPriceFor(x, y, d) : d.w * d.h * 20 * costMult(), cost = buildCost(d) + land;
       if (ai.cash < cost * 1.05) continue;
       if (!canPlace(d, x, y, true).ok) continue;
       const b = makeBuilding(d.id, x, y);
       b.owner = aiId; b.built = false; b.progress = 0; b.buildTime = buildTimeFor(d.cost) * 1.2;
       if (d.recipes) b.recipe = product && d.recipes.indexOf(product) >= 0 ? product : d.recipes[0];
       ai.cash -= cost; S.budget = Math.min(MONEY_CAP, S.budget + land);
-      addBuildingToMap(b); onMapChanged();
+      addBuildingToMap(b); requestMapChanged();
       if (choices[c][1] >= 2 || d.cost >= 20000) notify(aiDef(aiId).icon + ' ' + aiDef(aiId).name + ' is building a ' + d.name + ' (' + DENSITY_NAMES[Math.min(3, dist ? dist.level : 0)] + ' density).', '');
       return true;
     }
