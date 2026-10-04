@@ -4,17 +4,8 @@
 /* The owner's control room: live diagnostics, economy & world controls, unlocks, cheats,
    entity tools, error log and save tools. Optional PIN protection (stored hashed in the profile). */
 const ADMIN = { tab: 'overview', ok: false };
-function openAdmin() {
-  if (!S) return;
-  if (PROFILE.pin && !ADMIN.ok) {
-    showModal('🛡️ Admin panel — locked', '<p class="small">Enter your admin PIN.</p><input id="admPin" type="password" inputmode="numeric" maxlength="12" class="admInput" autocomplete="off"><div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn green" id="admUnlock">Unlock</button></div>');
-    const go = function () { if (hashPin($('admPin').value) === PROFILE.pin) { ADMIN.ok = true; openAdmin(); } else { toast('❌ Wrong PIN', 'bad'); sfx('error'); } };
-    $('admUnlock').onclick = go; $('admPin').onkeydown = function (e) { if (e.key === 'Enter') go(); };
-    setTimeout(function () { $('admPin').focus(); }, 30);
-    return;
-  }
-  renderAdmin();
-}
+/* F10 / Ctrl+Shift+A / menu: the Part 8 Admin Control Center (classic tools stay available inside it: ⚙ SYSTEM → Classic admin tools) */
+function openAdmin() { openAdminCenter(); }
 function admBtn(act, label, cls, v) { return '<button class="btn small ' + (cls || '') + '" data-adm="' + act + '"' + (v !== undefined ? ' data-v="' + esc(String(v)) + '"' : '') + '>' + label + '</button>'; }
 function admToggle(k, label) { const on = S.p5.admin[k]; return '<div class="between" style="padding:5px 0"><span>' + label + '</span>' + admBtn('toggle', on ? 'ON' : 'OFF', on ? 'green' : '', k) + '</div>'; }
 function admNum(id, label, val, act) { return '<div class="admRow"><span>' + label + '</span><input class="admInput" id="' + id + '" value="' + esc(String(val)) + '">' + admBtn(act, 'Set', 'blue') + '</div>'; }
@@ -88,7 +79,7 @@ function adminAction(a, v) {
     case 'setHour': { const x = admVal('admHour'); if (isFinite(x)) S.clock.gameSec = Math.floor(S.clock.gameSec / 86400) * 86400 + clamp(x, 0, 23.99) * 3600; return re('Time set'); }
     case 'day': S.clock.gameSec += 86400; return re('Day ' + gameDay());
     case 'weekend': { const wd = weekdayIndex(); S.clock.gameSec += ((5 - wd + 7) % 7 || 7) * 86400; S.clock.gameSec = Math.floor(S.clock.gameSec / 86400) * 86400 + 10 * 3600; return re(weekdayName()); }
-    case 'weather': FX.weather = v; FX.weatherUntil = S.clock.runSec + 240; SND.setRain(v === 'rain' || v === 'storm'); return re('Weather: ' + v);
+    case 'weather': setWeather(v, 4); return re('Weather: ' + v);
     case 'world': startWorldEvent(v); return re();
     case 'worldEnd': p.world.ends = S.clock.runSec; worldEventsTick(); return re();
     case 'special': p.week.special = v; return re(SPECIAL_WEEKENDS[v].name + ' scheduled this weekend');

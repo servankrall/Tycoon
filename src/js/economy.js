@@ -94,6 +94,7 @@ function globalMods() {
   if (hasTech('c_tourism')) m.tour *= 1.25;
   part5Mods(m);
   part6Mods(m);
+  part8Mods(m);
   return m;
 }
 

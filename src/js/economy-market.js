@@ -431,7 +431,7 @@ function econTick(dt) {
       o.cap += d.cap * lvlMult(b.level) * b._eff; o.loc += landValue(b); o.n++;
     }
     let tot = 0; const keys = Object.keys(own);
-    keys.forEach(function (k) { const o = own[k], t = ownerTraits(k, s); o.t = t; o.score = o.cap * t.q * Math.pow(t.p, -1.5) * t.rep * t.ad * (o.loc / Math.max(1, o.n)); tot += o.score; });
+    keys.forEach(function (k) { const o = own[k], t = ownerTraits(k, s); o.t = t; o.score = o.cap * t.q * Math.pow(t.p, -1.5) * t.rep * t.ad * (o.loc / Math.max(1, o.n)) * shareBoost(k); tot += o.score; });
     const D = demand[s], Stot = supply[s], served = Math.min(D, Stot);
     let left = served;
     keys.forEach(function (k) { const o = own[k]; o.srv = tot > 0 ? Math.min(o.cap, served * o.score / tot) : 0; left -= o.srv; });
@@ -439,6 +439,7 @@ function econTick(dt) {
     const premium = D > Stot && Stot > 0 ? Math.min(1.5, 1 + (D / Stot - 1) * 0.5) : 1;
     util[s] = {}; SIM.share[s] = {};
     keys.forEach(function (k) { const o = own[k]; util[s][k] = { u: o.cap > 0 ? o.srv / o.cap : 0, prem: premium * o.t.p }; SIM.share[s][k] = served > 0 ? o.srv / served : 0; });
+    shareTargetTick(s);
   });
 
   // --- 10. Revenue & costs per building, attributed to owners ------------------

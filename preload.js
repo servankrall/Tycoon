@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('bct', {
     remove: function (key) { return ipcRenderer.sendSync('store:remove', str(key)); }
   },
   log: function (level, msg) { ipcRenderer.send('log:write', str(level), str(msg)); },
+  adminLog: function (line) { ipcRenderer.send('log:admin', str(line)); },
   files: {
     saveText: function (o) { return ipcRenderer.invoke('files:saveText', { defaultName: str(o && o.defaultName), text: str(o && o.text), filters: (o && o.filters) || [] }); },
     openText: function (o) { return ipcRenderer.invoke('files:openText', { filters: (o && o.filters) || [] }); },

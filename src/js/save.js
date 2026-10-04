@@ -72,8 +72,8 @@ function defaultState(meta, settings, achievements, lifetime, opts) {
   meta = meta || newMeta();
   opts = opts || {};
   const diffId = DIFFICULTIES[opts.difficulty] ? opts.difficulty : 'NORMAL';
-  let size = [40, 52, 64].indexOf(opts.size) >= 0 ? opts.size : 40;
-  if (meta.ngLevel >= 1) size = size === 40 ? 48 : 64;     // New Game+ brings a bigger map
+  let size = [40, 52, 64, 80, 96].indexOf(opts.size) >= 0 ? opts.size : 40;
+  if (meta.ngLevel >= 1 && size <= 64) size = size === 40 ? 48 : 64;     // New Game+ brings a bigger map
   const st = {
     version: SAVE_VERSION,
     meta: meta,
@@ -116,6 +116,7 @@ function defaultState(meta, settings, achievements, lifetime, opts) {
     lastSaveTime: Date.now()
   };
   st.p6 = newP6(st.city.seed);
+  st.p8 = newP8();
   NPC_STOCKS.forEach(function (s) { st.companies.stocks[s.id] = { price: s.base, hist: [s.base] }; });
   PRODUCT_IDS.forEach(function (p) { st.economy.inventory[p] = 0; st.economy.prices[p] = PRODUCTS[p].base; st.trade.mode[p] = 'auto'; });
   MARKET_SECTORS.forEach(function (m) { st.market.price[m] = 1; });
@@ -174,7 +175,7 @@ function saveHeader() {
     sections: {
       player: ['money', 'meta', 'p5.score'], economy: ['budget', 'economy', 'market', 'trade', 'bank', 'p6.econ'], citizens: ['citizens'], buildings: ['buildings'],
       roads: ['city.roads'], vehicles: ['vehicles'], companies: ['companies', 'ai'], stocks: ['companies.stocks', 'p6.stocks'], research: ['research', 'technology', 'p6.future'],
-      quests: ['quests', 'p6.dq', 'p5.challenges'], achievements: ['achievements'], statistics: ['statistics', 'p6.reports'], settings: ['settings']
+      quests: ['quests', 'p6.dq', 'p5.challenges'], achievements: ['achievements'], statistics: ['statistics', 'p6.reports'], settings: ['settings'], world: ['p8.world']
     }
   };
 }
@@ -216,6 +217,7 @@ function validateSaveObject(o) {
   else o.buildings.list.forEach(function (b, i) { if (!BUILDINGS[b.type] || !isFinite(b.x) || !isFinite(b.y)) errs.push('building#' + i); });
   if (!o.p5 || typeof o.p5 !== 'object') errs.push('p5');
   if (!o.p6 || typeof o.p6 !== 'object') errs.push('p6');
+  if (!o.p8 || typeof o.p8 !== 'object') errs.push('p8');
   if (!Array.isArray(o.citizens)) errs.push('citizens');
   if (!Array.isArray(o.vehicles)) errs.push('vehicles');
   if (!o.header || o.header.saveVersion !== SAVE_VERSION) errs.push('header');
@@ -260,7 +262,8 @@ const MIGRATIONS = [
   { from: 3, to: 4, run: function (d) { return migrateV3toV4(d); } },
   { from: 4, to: 5, run: function (d) { return migrateV4toV5(d); } },
   { from: 5, to: 6, run: function (d) { return migrateV5toV6(d); } },
-  { from: 6, to: 7, run: function (d) { return migrateV6toV7(d); } }
+  { from: 6, to: 7, run: function (d) { return migrateV6toV7(d); } },
+  { from: 7, to: 8, run: function (d) { return migrateV7toV8(d); } }
 ];
 function migrateSave(d) {
   if (!d || typeof d !== 'object' || Array.isArray(d)) throw new Error('Invalid save');
@@ -278,6 +281,13 @@ function migrateSave(d) {
 }
 /* v4 = ULTRA CITY SIMULATION (Part 4). v5 adds Part 5 systems (story, score, challenges…) */
 /* v6 = MASTER SIMULATION ENGINE: inflation, road types, stock market, dynamic quests, citizens in the save */
+/* v8 = ADMIN PANEL + WORLD GENERATOR: world profile, custom companies, market-share targets */
+function migrateV7toV8(o) {
+  o.version = 8;
+  o.p8 = newP8();
+  if (o.header && typeof o.header === 'object') { o.header.version = 8; o.header.saveVersion = 8; }
+  return o;
+}
 /* v7 = DESKTOP EDITION 1.0.0: Save 2.0 header gains saveVersion / gameVersion / citySeed / cityName, vehicles in transit are stored */
 function migrateV6toV7(o) {
   o.version = 7;
@@ -339,6 +349,7 @@ function migrateV3toV4(o) {
 
 /* --- Validation: repair anything that could break the game -------------- */
 function sanitizeState(d) {
+  registerCustomCompanies(d && d.p8);
   const meta = Object.assign(newMeta(), d.meta || {});
   meta.ngLevel = num(meta.ngLevel, 0, 0, 20) | 0;
   meta.prestigeCount = num(meta.prestigeCount, 0, 0, 1e4) | 0;
@@ -356,7 +367,7 @@ function sanitizeState(d) {
 
   // City
   const c = d.city || {};
-  st.city.size = [40, 48, 52, 64].indexOf(c.size) >= 0 ? c.size : (meta.ngLevel >= 1 ? 48 : 40);
+  st.city.size = [40, 48, 52, 64, 80, 96].indexOf(c.size) >= 0 ? c.size : (meta.ngLevel >= 1 ? 48 : 40);
   st.city.seed = num(c.seed, st.city.seed) | 0;
   st.city.population = num(c.population, 5, 0, 1e7);
   st.city.peakPop = num(c.peakPop, st.city.population, 0, 1e7);
@@ -529,6 +540,7 @@ function sanitizeState(d) {
   // --- Part 5 systems ---
   st.p5 = sanitizeP5(d.p5);
   st.p6 = sanitizeP6(d.p6, st.city.seed);
+  st.p8 = sanitizeP8(d.p8);
   st.city.mapType = MAP_TYPES[c.mapType] ? c.mapType : 'standard';
   st._rawCitizens = Array.isArray(d.citizens) ? d.citizens.slice(0, 400) : null;
   st._rawVehicles = Array.isArray(d.vehicles) && d.vehicles.length ? d.vehicles.slice(0, 300) : null;
@@ -655,7 +667,7 @@ function exportSaveJSON() { try { return JSON.stringify(buildSaveObject(), null,
 /* IMPORT VALIDATION: version, data types, negative values, unknown properties and maximum values */
 const SAVE_TOP_KEYS = ['version', 'meta', 'money', 'budget', 'city', 'buildings', 'workers', 'research', 'technology', 'companies', 'bank', 'transport', 'economy', 'market', 'ai', 'trade',
   'diplomacy', 'contracts', 'investors', 'space', 'events', 'statistics', 'achievements', 'quests', 'tutorial', 'settings', 'clock', 'p5', 'lastNet', 'lastBudgetNet', 'lastSaveTime', 'slot',
-  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
+  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'p8', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
 function validateImport(d) {
   const errs = [];
   if (!d || typeof d !== 'object' || Array.isArray(d)) return ['The save is not a JSON object.'];

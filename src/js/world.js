@@ -357,7 +357,7 @@ function hasTech(id) { return S.technology.unlocked.indexOf(id) >= 0; }
 /* Unlock requirements → {ok, reason} */
 function unlockStatus(d) {
   if (d.hidden) return { ok: false, reason: 'Cannot be built' };
-  if (S.debugUnlockAll || (S.city.sandbox && sandboxCreative())) return (d.unique && countAny(d.id) > 0) ? { ok: false, reason: 'Already built' } : { ok: true };
+  if (S.debugUnlockAll || (S.p8 && S.p8.unlockAll) || (S.city.sandbox && sandboxCreative())) return (d.unique && countAny(d.id) > 0) ? { ok: false, reason: 'Already built' } : { ok: true };
   const u = d.unlock;
   if (u.ng && S.meta.ngLevel < u.ng) return { ok: false, reason: 'New Game+ ' + u.ng };
   if (u.tech && !hasTech(u.tech)) return { ok: false, reason: '🔬 ' + TECHS[u.tech].name };

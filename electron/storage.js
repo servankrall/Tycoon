@@ -6,6 +6,8 @@
      bct_recovery            → saves/recovery.json         bct_active_slot       → saves/active_slot.txt
      bct_settings            → settings.json               bct_profile           → profile.json
      anything else           → data/<key>.dat
+     bct_snap_001 …          → snapshots/snapshot_001.json  bct_snap_index → snapshots/index.json
+     bct_admin_presets       → admin-presets.json
    Writes never touch the real file first: <file>.tmp is written, flushed, read back and verified, then renamed over the old file. */
 const fs = require('fs');
 const path = require('path');
@@ -21,6 +23,9 @@ function createStorage(root, log) {
     if (key === 'bct_pro_save_backup') return 'saves/city_01.backup.json';
     if ((m = /^bct_pro_save_(\d{1,2})$/.exec(key))) return 'saves/city_' + pad(m[1]) + '.json';
     if ((m = /^bct_pro_save_(\d{1,2})_backup$/.exec(key))) return 'saves/city_' + pad(m[1]) + '.backup.json';
+    if ((m = /^bct_snap_(\d{3})$/.exec(key))) return 'snapshots/snapshot_' + m[1] + '.json';
+    if (key === 'bct_snap_index') return 'snapshots/index.json';
+    if (key === 'bct_admin_presets') return 'admin-presets.json';
     if (key === 'bct_recovery') return 'saves/recovery.json';
     if (key === 'bct_active_slot') return 'saves/active_slot.txt';
     if (key === 'bct_settings') return 'settings.json';
@@ -32,6 +37,9 @@ function createStorage(root, log) {
     let m;
     if ((m = /^saves\/city_(\d{2})\.json$/.exec(rel))) return +m[1] === 1 ? 'bct_pro_save' : 'bct_pro_save_' + (+m[1]);
     if ((m = /^saves\/city_(\d{2})\.backup\.json$/.exec(rel))) return +m[1] === 1 ? 'bct_pro_save_backup' : 'bct_pro_save_' + (+m[1]) + '_backup';
+    if ((m = /^snapshots\/snapshot_(\d{3})\.json$/.exec(rel))) return 'bct_snap_' + m[1];
+    if (rel === 'snapshots/index.json') return 'bct_snap_index';
+    if (rel === 'admin-presets.json') return 'bct_admin_presets';
     if (rel === 'saves/recovery.json') return 'bct_recovery';
     if (rel === 'saves/active_slot.txt') return 'bct_active_slot';
     if (rel === 'settings.json') return 'bct_settings';
@@ -50,7 +58,7 @@ function createStorage(root, log) {
     throw last;
   }
 
-  function ensureDirs() { ['saves', 'data'].forEach(function (d) { fs.mkdirSync(abs(d), { recursive: true }); }); }
+  function ensureDirs() { ['saves', 'data', 'snapshots'].forEach(function (d) { fs.mkdirSync(abs(d), { recursive: true }); }); }
 
   /* Read every known file once at startup (sent synchronously to the renderer's Store cache) */
   function loadAll() {
@@ -60,8 +68,8 @@ function createStorage(root, log) {
       const key = relToKey(rel); if (!key) return;
       try { out[key] = fs.readFileSync(abs(rel), 'utf8'); } catch (e) { log.warn('Could not read ' + rel + ': ' + e.message); }
     };
-    ['settings.json', 'profile.json'].forEach(function (f) { if (fs.existsSync(abs(f))) add(f); });
-    ['saves', 'data'].forEach(function (dir) {
+    ['settings.json', 'profile.json', 'admin-presets.json'].forEach(function (f) { if (fs.existsSync(abs(f))) add(f); });
+    ['saves', 'data', 'snapshots'].forEach(function (dir) {
       fs.readdirSync(abs(dir)).forEach(function (f) { if (!/\.tmp$/.test(f)) add(dir + '/' + f); });
     });
     return out;
@@ -96,7 +104,7 @@ function createStorage(root, log) {
   /* Leftover .tmp files mean a write was interrupted: the real file is still the last good version, so they are removed */
   function cleanupTemp() {
     let n = 0;
-    ['saves', 'data', '.'].forEach(function (dir) {
+    ['saves', 'data', 'snapshots', '.'].forEach(function (dir) {
       try { fs.readdirSync(abs(dir)).forEach(function (f) { if (/\.tmp$/.test(f)) { fs.unlinkSync(abs(path.join(dir, f))); n++; } }); } catch (e) { /* folder missing */ }
     });
     if (n) log.warn('Removed ' + n + ' unfinished temporary save file(s) from an interrupted write');

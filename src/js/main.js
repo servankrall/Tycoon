@@ -21,6 +21,7 @@ function pickBuilding(wx, wy) {
   return null;
 }
 function handleTap(sx, sy) {
+  if (ADM.pick && adminPickAt(sx, sy)) return;          // admin inspector: pick a citizen / vehicle
   const t = tileAtScreen(sx, sy);
   UI.idleTimer = 0;
   if (!inMap(t.x, t.y) && UI.tool !== 'select') return;
@@ -485,7 +486,7 @@ function loop(ts) {
     logError('Loop', err);
     if (!FX.errShown) { FX.errShown = true; toast('⚠️ Recovered from an error: ' + err.message, 'bad'); setTimeout(function () { FX.errShown = false; }, 15000); }
   }
-  if (!document.hidden) { try { withInterpolation(alpha, render); } catch (err) { logError('Render', err); } }   // minimized: simulate, don't draw
+  if (!document.hidden) { const tr = performance.now(); try { withInterpolation(alpha, render); } catch (err) { logError('Render', err); } PERF.renderMs = (PERF.renderMs || 0) * 0.9 + (performance.now() - tr) * 0.1; }   // minimized: simulate, don't draw
   PERF.frameMs = (PERF.frameMs || 0) * 0.9 + (performance.now() - tWork) * 0.1;   // CPU time per frame (F3)
   PERF.frames++; PERF.acc += dt;
   if (PERF.acc >= 1) { PERF.fps = PERF.frames / PERF.acc; PERF.frames = 0; PERF.acc = 0; adaptivePerformance(); updateHud(); }

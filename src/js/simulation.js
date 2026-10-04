@@ -74,6 +74,8 @@ function speedLabel(s) { return s === 0 ? '⏸ Paused' : (s < 1 ? '🐢 ' + s + 
 /* --- WORLD SYSTEM: named districts & streets ----------------------------------------------- */
 function computeDistrictNames() {
   if (!MAP.districts.length) return;
+  const gen = S.p8 && S.p8.world && S.p8.world.cellNames;            // generated worlds keep their district names
+  if (Array.isArray(gen) && gen.length === MAP.districts.length) { MAP.dnames = gen.slice(); return; }
   const n = MAP.dN, c = MAP.W / 2, rnd = mulberry32((S.city.seed | 0) + 4242);
   const used = {}, names = new Array(MAP.districts.length);
   const shared = ['Downtown', 'Airport District', 'Harbor District', 'Industrial Park', 'Business Park'];
@@ -696,7 +698,8 @@ function citizenProfile(c) {
   c.car = !c.tourist && r() < 0.35 + e * 0.3;
 }
 function citizenJob(c) {
-  const w = citizenBuilding(c.work); if (!w) return { title: c.tourist ? 'Tourist' : (c.age >= 67 ? 'Retired' : 'Unemployed'), income: 0 };
+  const w = citizenBuilding(c.work); if (!w) return { title: c.tourist ? 'Tourist' : (c.age >= 67 ? 'Retired' : 'Unemployed'), income: c.incomeOverride || 0 };
+  if (c.incomeOverride !== undefined) return { title: (JOB_TITLES[BUILDINGS[w.type].sector] || 'Worker') + ' @ ' + BUILDINGS[w.type].name, income: c.incomeOverride };
   const d = BUILDINGS[w.type];
   const inc = Math.round((d.sal || 0.2) * (1 + 0.15 * c.edu) * wageLevel() * SECONDS_PER_MONTH / 30);
   return { title: (JOB_TITLES[d.sector] || 'Worker') + ' @ ' + d.name, income: inc };

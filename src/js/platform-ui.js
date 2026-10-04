@@ -339,6 +339,7 @@ function platformBoot() {
   const ib = $('menuImportOld'); if (ib) ib.onclick = importAnyFile;
   const eb = $('menuExportAll'); if (eb) eb.onclick = exportAllSaves;
   document.body.classList.toggle('desktop', DESKTOP);
+  bindAdminCenter();
   applyShellTexts();
   const migrated = migrateLocalStorageToDisk();
   if (migrated && !STARTED) refreshMenuCity(activeSlot());

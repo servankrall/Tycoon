@@ -67,7 +67,7 @@ function nightFactor() {
 
 /* --- Static ground layer (terrain + roads), redrawn only when needed ----------- */
 function drawGroundLayer() {
-  const g = GROUND.canvas, s = GROUND.scale, T = TILE;
+  const g = GROUND.canvas, s = MAP.W > 64 ? (MAP.W > 80 ? 0.75 : 1) : GROUND.scale, T = TILE;   // big maps: lighter ground cache
   g.width = MAP.W * T * s; g.height = MAP.H * T * s;
   const c = g.getContext('2d');
   c.setTransform(s, 0, 0, s, 0, 0);
@@ -292,14 +292,17 @@ function updateWeather(dt) {
   const storm = activeEvent('storm');
   let w = FX.weather;
   if (storm) w = 'storm';
+  else if (FX.lock && S.clock.gameSec < FX.weatherUntil) w = FX.lock;            // weather chosen by the admin / world climate
   else if (S.clock.gameSec >= FX.weatherUntil || w === 'storm') {
+    FX.lock = null;
     const season = currentSeason().id;
     const r = Math.random();
     w = season === 'winter' ? (r < 0.45 ? 'snow' : 'clear') : (r < (season === 'autumn' ? 0.35 : season === 'summer' ? 0.12 : 0.25) ? 'rain' : 'clear');
     FX.weatherUntil = S.clock.gameSec + rand(2, 5) * 3600;
   }
   if (w !== FX.weather) { FX.weather = w; FX.drops = []; if (w !== 'clear') sfx('weather'); }
-  const want = FX.weather === 'clear' ? 0 : Math.floor((FX.weather === 'snow' ? 140 : FX.weather === 'storm' ? 320 : 200) * perf().weather * PERF.scale);
+  const precip = FX.weather === 'rain' || FX.weather === 'storm' || FX.weather === 'snow';
+  const want = !precip ? 0 : Math.floor((FX.weather === 'snow' ? 140 : FX.weather === 'storm' ? 320 : 200) * perf().weather * PERF.scale);
   while (FX.drops.length < want) FX.drops.push({ x: Math.random() * CW, y: Math.random() * CH, s: rand(0.6, 1.2), o: Math.random() * 6 });
   if (FX.drops.length > want) FX.drops.length = want;
   const snow = FX.weather === 'snow';
@@ -851,12 +854,15 @@ function render() {
   // Part 5 world overlays: accident scenes, problem highlights, citizen speech bubbles
   applyWorldTransform(sx, sy);
   drawDistrictLabels();
+  drawWorldDebug();
   drawAccidents();
   drawHighlights();
   drawBubbles(v);
   // Screen-space weather & flash
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  if (FX.weather !== 'clear') {
+  if (FX.weather === 'cloudy') { ctx.fillStyle = 'rgba(70,80,100,.2)'; ctx.fillRect(0, 0, CW, CH); }
+  else if (FX.weather === 'fog') { ctx.fillStyle = 'rgba(215,222,232,.38)'; ctx.fillRect(0, 0, CW, CH); }
+  else if (FX.weather !== 'clear' && FX.weather !== 'heatwave') {
     if (FX.weather === 'snow') { ctx.fillStyle = 'rgba(255,255,255,.9)'; FX.drops.forEach(function (d) { ctx.fillRect(d.x, d.y, 2.5 * d.s, 2.5 * d.s); }); }
     else {
       ctx.strokeStyle = 'rgba(180,200,255,.45)'; ctx.lineWidth = 1; ctx.beginPath();

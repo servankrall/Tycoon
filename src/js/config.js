@@ -22,7 +22,7 @@
 
 /* ============================== 1. CONFIG ============================== */
 const DEBUG = /[?&]debug\b/.test(location.search);   // open with ?debug for the debug HUD + dev console functions
-const SAVE_VERSION = 7;
+const SAVE_VERSION = 8;
 const SAVE_KEY = 'bct_pro_save';
 const SAVE_BACKUP_KEY = 'bct_pro_save_backup';
 const LEGACY_SAVE_KEYS = ['blockCityTycoonSave_v1'];
@@ -65,9 +65,9 @@ const CITY_TIERS = [
   { pop: 25000, name: 'Mega City' }
 ];
 // Unlocked square sizes per expansion level, per map size (40 = Small, 48 = NG+, 52 = Medium, 64 = Large)
-const EXPANSION_TABLE = { 40: [14, 22, 30, 40], 48: [14, 22, 30, 40, 48], 52: [18, 28, 38, 46, 52], 64: [22, 34, 46, 56, 64] };
+const EXPANSION_TABLE = { 40: [14, 22, 30, 40], 48: [14, 22, 30, 40, 48], 52: [18, 28, 38, 46, 52], 64: [22, 34, 46, 56, 64], 80: [26, 40, 54, 68, 80], 96: [30, 48, 64, 80, 96] };
 const EXPANSION_COSTS = [0, 5000, 60000, 800000, 12000000];
-const MAP_SIZES = [{ id: 40, name: 'Small (40×40)' }, { id: 52, name: 'Medium (52×52)' }, { id: 64, name: 'Large (64×64)' }];
+const MAP_SIZES = [{ id: 40, name: 'Small (40×40)' }, { id: 52, name: 'Medium (52×52)' }, { id: 64, name: 'Large (64×64)' }, { id: 80, name: 'Huge (80×80)' }, { id: 96, name: 'Mega (96×96)' }];
 
 /* =============================== 2. DATA =============================== */
 const CATEGORIES = [

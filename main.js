@@ -219,6 +219,10 @@ function registerIpc() {
     const l = ['info', 'warning', 'error', 'debug'].indexOf(level) >= 0 ? level : 'info';
     log.write(l, '[game] ' + String(msg).slice(0, 4000));
   });
+  ipcMain.on('log:admin', function (e, line) {          // logs/admin.log — every admin action
+    if (!trusted(e)) return;
+    try { fs.appendFileSync(path.join(log.dir, 'admin.log'), String(line).replace(/[\r\n]+/g, ' ').slice(0, 2000) + '\n', 'utf8'); } catch (err) { log.warn('admin.log: ' + err.message); }
+  });
   ipcMain.on('app:close-handler-ready', function (e) { if (trusted(e)) closeHandlerReady = true; });
   ipcMain.on('app:close-ack', function (e) { if (trusted(e)) closeAck = true; });
 
@@ -294,7 +298,7 @@ function registerIpc() {
   /* app */
   ipcMain.handle('app:openFolder', async function (e, kind) {
     if (!trusted(e)) return { ok: false };
-    const dir = kind === 'screenshots' ? picturesDir() : kind === 'logs' ? log.dir : storage.savesDir;
+    const dir = kind === 'screenshots' ? picturesDir() : kind === 'logs' ? log.dir : kind === 'snapshots' ? path.join(storage.root, 'snapshots') : storage.savesDir;
     fs.mkdirSync(dir, { recursive: true });
     const err = await shell.openPath(dir);
     return { ok: !err, error: err || undefined, path: dir };

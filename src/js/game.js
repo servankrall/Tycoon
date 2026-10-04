@@ -62,7 +62,13 @@ const Game = {
     { name: 'Population', tick: function (dt) { syncCitizens(); updateCitizens(dt); } },
     { name: 'Transportation', tick: function (dt) { updateTraffic(dt); updateShips(dt); } }
   ],
-  safe: function (s, dt) { try { s.tick(dt); } catch (e) { this.errors++; recoverSystem(s.name, e); } },
+  prof: {},
+  safe: function (s, dt) {
+    const t0 = performance.now();
+    try { s.tick(dt); } catch (e) { this.errors++; recoverSystem(s.name, e); }
+    const ms = performance.now() - t0, p = this.prof[s.name] || (this.prof[s.name] = { ms: 0, max: 0, n: 0 });   // per-system timing (benchmark, F3)
+    p.ms = p.ms * 0.9 + ms * 0.1; p.n++; if (ms > p.max) p.max = ms;
+  },
   step: function (simDt) {
     if (simDt <= 0) return;
     const self = this;
