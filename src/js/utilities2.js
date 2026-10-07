@@ -329,6 +329,8 @@ HEATMAPS.push(
 /* Returns a heat grid for the Part 9 maps (or null for the classic ones) */
 function p9HeatGrid(mode) {
   if (!S.p9) return null;
+  if (S.p11 && mode === 'RISK') return p11RiskGrid();            // Part 11: city risk map
+  if (S.p11 && mode === 'WALKABILITY') return walkGrid();
   const N = MAP.W * MAP.H;
   if (['POLLUTION', 'NOISE', 'AIR QUALITY', 'WATER QUALITY', 'SOIL QUALITY'].indexOf(mode) >= 0) envTick(!envReady());
   if (mode === 'POLLUTION') return ENV.air.slice();

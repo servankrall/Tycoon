@@ -119,6 +119,7 @@ function sigRetime(tile, st) {
   st.dur[1] = q.NSL ? clamp(0.6 + q.NSL * 0.5, 0.8, 2.4) : 0.35; st.dur[4] = q.EWL ? clamp(0.6 + q.EWL * 0.5, 0.8, 2.4) : 0.35;
   st.dur[6] = pedestriansNear(tile) ? 1.1 : 0.25;
   st.q = q;
+  if (typeof p11Retime === 'function') p11Retime(tile, st);        // Part 11: Traffic Light AI 2.0 (rush hour, direction share, transit priority)
 }
 function pedestriansNear(tile) {
   const c = tileCenter(tile); let n = 0;
@@ -179,7 +180,7 @@ function junctionRule(v, node, remaining, H, dt) {
   if (remaining <= TILE * 0.32) return 2;
   const turn = turnOf(prev, node, next);
   if (type === 'signal') return signalGreen(node, axis, turn) ? 2 : 1;
-  if (type === 'roundabout') return boxOccupied(node, v, H) ? 1 : 2;
+  if (type === 'roundabout') return S.p11 ? p11RoundaboutRule(v, node, prev, H) : (boxOccupied(node, v, H) ? 1 : 2);   // Part 11: roundabout AI
   if (type === 'stop') {
     if (v._stopAt !== node) { v._stopAt = node; v._stopT = 0.45; }
     if (v._stopT > 0) { v._stopT -= dt; return 1; }
@@ -513,7 +514,7 @@ function transitPods(dt) {
     const p = TRANSIT.pods[k], L = lineById(p.line); if (!L) { TRANSIT.pods.splice(k, 1); continue; }
     if (p.dwell > 0) { p.dwell -= dt; continue; }
     const leg = transitLeg(L, p.i); if (!leg) { p.i = (p.i + 1) % L.stops.length; continue; }
-    p.d += TRANSIT_MODES[L.mode].speed * dt;
+    p.d += TRANSIT_MODES[L.mode].speed * dt * (S.p11 ? p11LineSpeed(L) : 1);
     if (p.d >= leg.len) {
       p.d = 0; p.i = (p.i + 1) % L.stops.length; p.dwell = 1.6;
       const stop = MAP.byId.get(L.stops[p.i]); if (stop) { const c = buildingCenter(stop); p.x = c.x; p.y = c.y; transitStopEvent(L, stop, p); }
@@ -550,6 +551,7 @@ function transitStopEvent(L, stop, veh) {
     const c = AG.citizens.find(function (z) { return z.id === id; });
     if (!c || !c.transit) return;
     if (c.transit.b !== stop.id) { stay.push(id); return; }
+    if (c.transit.next && S.p11 && p11TransferLeg(c, door)) return;      // Part 11: planned transfer to the next line
     const tgt = citizenBuilding(c.transit.target);
     c.driving = false; c.transit = null; c.x = door.x; c.y = door.y;
     if (tgt) goTo(c, tgt, true); else { c.state = 'IDLE'; c.pending = true; }
@@ -560,6 +562,7 @@ function transitStopEvent(L, stop, veh) {
   for (let i = 0; i < AG.citizens.length && veh.pax.length < cap; i++) {
     const c = AG.citizens[i];
     if (!c.transit || c.transit.phase !== 'wait' || c.transit.line !== L.id || c.transit.a !== stop.id) continue;
+    if (S.p11 && L.mode === 'train' && trainType(L) === 'cargo') break;            // cargo trains carry freight, not passengers
     c.transit.phase = 'ride'; c.driving = true; veh.pax.push(c.id);
     L.boardings++; S.p9.transit.boardings++;
   }

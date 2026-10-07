@@ -659,9 +659,9 @@ function renderBottomInfo() {
   if (d.rp) s.push('Research <b>' + (d.rp * lvlMult(b.level) * (b._eff || 0)).toFixed(2) + ' RP/s</b>');
   if (dist) s.push('District <b>' + DENSITY_NAMES[dist.level] + ' density</b> · Land ×' + landValue(b).toFixed(2));
   const cid = b.owner === 'player' ? companyForSector(d.sector) : null; if (cid) s.push('🏢 ' + companyDef(cid).name);
-  const ex = bottomInfoExtras(b), ex6 = bottomInfoExtras6(b);
-  ex.stats.concat(ex6.stats).forEach(function (x) { s.push(x); });
-  ex.actions = ex6.actions.concat(ex.actions);
+  const ex = bottomInfoExtras(b), ex6 = bottomInfoExtras6(b), ex11 = typeof bottomInfoExtras11 === 'function' ? bottomInfoExtras11(b) : { stats: [], actions: [] };
+  ex.stats.concat(ex6.stats, ex11.stats).forEach(function (x) { s.push(x); });
+  ex.actions = ex6.actions.concat(ex11.actions, ex.actions);
   $('biStats').innerHTML = s.map(function (x) { return '<span>' + x + '</span>'; }).join('');
   let a = ex.actions.join('');
   if (d.id === 'townhall') a += '<button class="btn small gold" data-act="cityhall">🏛️ City Hall</button>';

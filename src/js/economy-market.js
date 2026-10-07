@@ -67,8 +67,8 @@ function supplyChainTick(dt, mods, list) {
     const b = list[i], d = bdef(b);
     b._prodRev = 0; b._impCost = 0; b._inputCost = 0; b._prod = 0; b._fuelRev = 0;
     if (!b._op) continue;
-    if (d.storage) cap += d.storage * lvlMult(b.level) * (hasTech('b_supply') ? 1.2 : 1);
-    if (d.trucks) trucks += d.trucks * lvlMult(b.level) * (0.5 + 0.5 * Math.min(1, b._eff));
+    if (d.storage) cap += d.storage * lvlMult(b.level) * (hasTech('b_supply') ? 1.2 : 1) * (b.u ? logisticsUp(b) : 1);
+    if (d.trucks) trucks += d.trucks * lvlMult(b.level) * (0.5 + 0.5 * Math.min(1, b._eff)) * (b.u ? logisticsUp(b) : 1);
     if (d.goods) cap += d.goods * lvlMult(b.level) * 30;
     if (d.evCharge) chargers += lvlMult(b.level) * b._eff;
   }
@@ -297,6 +297,7 @@ function econTick(dt) {
     } else b._gen = 0;
   }
   gen += city.emergencyPower + (SIM.p9PowerImport || 0) + (S.p9 && S.p9.util.infinitePower ? 1e7 : 0);
+  if (S.p11) gen += p11GridDischarge(gen, dt);                 // Part 11: battery storage covers the forecast deficit
   const useMult = season.power * (hasTech('e_grid') ? 0.9 : 1) * Wx.powerDemand * mods.powerDemand;
   const consumers = [];
   for (let i = 0; i < list.length; i++) {
@@ -309,18 +310,19 @@ function econTick(dt) {
   consumers.sort(function (a, b) { return pv(a) - pv(b) || a.id - b.id; });
   let powerDemand = (SIM.evDemand || 0) * useMult;
   const imported = S.events.active.some(function (a) { return a.id === 'energyshortage' && a.choice === 'import'; });
-  let needTotal = powerDemand; for (let i = 0; i < consumers.length; i++) needTotal += -bdef(consumers[i]).power * lvlMult(consumers[i].level) * useMult;
+  let needTotal = powerDemand; for (let i = 0; i < consumers.length; i++) needTotal += -bdef(consumers[i]).power * lvlMult(consumers[i].level) * useMult * (S.p11 ? p11UseMult(consumers[i], 'power') : 1);
   if (imported) gen += needTotal * 0.3;
   let remaining = gen - powerDemand;
   for (let i = 0; i < consumers.length; i++) {
     const b = consumers[i];
-    const need = -bdef(b).power * lvlMult(b.level) * useMult;
+    const need = -bdef(b).power * lvlMult(b.level) * useMult * (S.p11 ? p11UseMult(b, 'power') : 1);   // Part 11: opening hours, energy upgrades, Smart Buildings
     powerDemand += need; b._pneed = need;
     if (remaining >= need) remaining -= need; else b._powered = false;
   }
   if (S.p9) gridPass(consumers);                 // Part 9 power grid: substations, district transformers, brownouts
   const powerRatio = powerDemand > 0 ? Math.min(1, gen / powerDemand) : 1;
   SIM.powerGen = gen; SIM.powerUse = powerDemand; SIM.powerRatio = powerRatio;
+  if (S.p11) p11GridCharge(gen - powerDemand, dt);            // Part 11: surplus charges the batteries
 
   // --- 3. Water ------------------------------------------------------------
   let wgen = 0, wuse = 0;
@@ -329,7 +331,7 @@ function econTick(dt) {
     const b = list[i], d = bdef(b);
     if (!b._op) continue;
     if (d.water > 0) wgen += d.water * lvlMult(b.level) * b._weff * (b._powered ? 1 : 0.3) * (b.damaged ? 0.5 : 1) * (season.id === 'summer' && FX.weather === 'heatwave' ? 0.85 : 1) * mods.waterProd;
-    else if (d.water < 0) wuse += -d.water * lvlMult(b.level) * wMult * mods.waterUse;
+    else if (d.water < 0) wuse += -d.water * lvlMult(b.level) * wMult * mods.waterUse * (S.p11 ? p11UseMult(b, 'water') : 1);
   }
   wgen += (SIM.p9WaterBoost || 0) + (S.p9 && S.p9.util.infiniteWater ? 1e7 : 0);          // reservoirs release stored water
   const waterRatio = wuse > 0 ? Math.min(1, wgen / wuse) : 1;
@@ -346,6 +348,7 @@ function econTick(dt) {
     if (d.water < 0 && d.sector !== 'HOUSING') e *= 0.7 + 0.3 * waterRatio;
     if (S.p9) e *= condMult(b) * (d.water < 0 ? waterPressureMult(b) : 1) * (b._sewerBack ? 0.85 : 1);   // condition, water pressure, sewage
     if (S.p10) e *= skillFit(d) * shockBoost(b);          // Part 10: skilled workers for skilled jobs, emergency production during supply shocks
+    if (S.p11 && b.u) e *= p11EffMult(b);                      // Part 11: productivity / automation upgrades
     b._eff = e;
   }
 
@@ -355,7 +358,7 @@ function econTick(dt) {
   for (let i = 0; i < list.length; i++) {
     const b = list[i], d = bdef(b);
     if (!d.housing || !b._op) { b._hcap = 0; continue; }
-    const hc = d.housing * lvlMult(b.level) * housingBonus * (b._powered ? 1 : 0.5) * (0.5 + 0.5 * waterRatio) * (b.damaged ? 0.7 : 1);
+    const hc = d.housing * lvlMult(b.level) * (S.p11 ? p11CapMult(b) : 1) * housingBonus * (b._powered ? 1 : 0.5) * (0.5 + 0.5 * waterRatio) * (b.damaged ? 0.7 : 1);
     b._hcap = hc; housingCap += hc; if (d.quality <= 50) affordableCap += hc;
   }
   SIM.housingCap = housingCap;
@@ -386,7 +389,7 @@ function econTick(dt) {
   let transitCap = 0, businessCount = 0;
   for (let i = 0; i < list.length; i++) {
     const b = list[i], d = bdef(b);
-    if (d.transit) transitCap += d.transit * lvlMult(b.level) * b._eff * (hasTech('ng_hyperloop') ? 1.5 : 1) * mods.transit;
+    if (d.transit) transitCap += d.transit * lvlMult(b.level) * b._eff * (hasTech('ng_hyperloop') ? 1.5 : 1) * mods.transit * (b._stOver ? 0.85 : 1);   // Part 11: overloaded stations lose throughput
     if (d.rev && b._op) businessCount++;
   }
   const noise = S.economy.noise;
@@ -410,7 +413,7 @@ function econTick(dt) {
   const supply = { FOOD: 0, SHOPPING: 0, ENTERTAINMENT: 0, TRANSPORT: transitCap, HOUSING: housingCap, ENERGY: gen, FINANCE: 0, TECHNOLOGY: 0 };
   for (let i = 0; i < list.length; i++) {
     const b = list[i], d = bdef(b);
-    if (d.cap && supply[d.sector] !== undefined && d.sector !== 'TRANSPORT') supply[d.sector] += d.cap * lvlMult(b.level) * b._eff;
+    if (d.cap && supply[d.sector] !== undefined && d.sector !== 'TRANSPORT') supply[d.sector] += d.cap * lvlMult(b.level) * b._eff * (S.p11 ? p11CapMult(b) : 1);
   }
   SECTORS.forEach(function (s) {
     const dd = demand[s], ss = supply[s];
@@ -571,7 +574,7 @@ function econTick(dt) {
   // --- 12. Traffic -------------------------------------------------------------------
   const rush = (hour >= 7 && hour < 9.5) || (hour >= 16.5 && hour < 19) ? 1.3 : (hour < 5 ? 0.4 : 0.9);
   const roadCap = (MAP.roadCapSum || MAP.roadCount * 7) * (hasTech('t_roads') ? 1.25 : 1) * mods.roadCap;
-  const carTrips = Math.max(0, trips - riders) * rush + SIM.goodsProd * 0.3;
+  const carTrips = Math.max(0, trips - riders) * rush * (S.p11 ? 1 - 0.5 * clamp(SIM.p11ActiveShare || 0, 0, 0.6) : 1) + SIM.goodsProd * 0.3;   // Part 11: walking & biking trips leave the roads
   let trafficT = 100 * carTrips / (roadCap + 20) * (hasTech('t_lights') ? 0.85 : 1) * (hasTech('ng_hyperloop') ? 0.7 : 1) * Wx.traffic * (1 - 0.05 * ppLevel('traffic')) * mods.traffic;
   if (pop > 150) trafficT *= 1 + (1 - (SIM.fuelRatio === undefined ? 1 : SIM.fuelRatio)) * 0.1;
   if (AG.vehicles.length >= 6) trafficT = trafficT * 0.8 + SIM.visualStopRatio * 100 * 0.2;
@@ -646,6 +649,7 @@ function econTick(dt) {
   h += add('Education', city.education * 0.04);
   h += add('Season & weather', season.hap + Wx.hap);
   if (S.p10) h += add('Healthcare', p10HealthHap());
+  if (S.p11) h += add('Parking', p11ParkingHap());
   h += add('Salary policy', pol.hap);
   h += add('Landmarks & events', mods.hap);
   h += add('Civic pride (legacy)', 2 * ppLevel('happy'));

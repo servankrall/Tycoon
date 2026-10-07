@@ -166,6 +166,7 @@ function currentRoadTile(c) {
   return -1;
 }
 function goTo(c, target, noTransit) {
+  if (!noTransit && !c.driving && S.p11 && p11Route(c, target)) return;   // Part 11: multi-modal routing (walk · bike · car · transit · transfer · park & ride)
   if (!noTransit && !c.driving && transitPlan(c, target)) return;     // Part 9: walk → stop → ride → stop → walk
   c.target = target.id;
   const from = currentRoadTile(c);
@@ -186,6 +187,8 @@ function arrive(c) {
   const b = citizenBuilding(c.target);
   const gs = S.clock.gameSec, h = gameHour();
   c.path = null; c.driving = false;
+  if (c.biking && c.baseSpeed) { c.speed = c.baseSpeed; c.biking = false; }
+  if (c.mmNext && S.p11 && p11ContinueTrip(c)) return;                 // Part 11: park & ride — continue by transit
   if (!b) { c.state = 'IDLE'; c.thinkAt = gs + 600; return; }
   c.lastB = b.id;
   rememberVisit(c, b);

@@ -132,6 +132,7 @@ function p9MapReset() {
   WE.w = 0; WE.regions = []; ADV2.list = [];
   EI.ref = null; if (EI.open) closeInspector(); RS.rect = null; RS.drag = null; WB.on = false;
   if (typeof p10MapReset === 'function') p10MapReset();
+  if (typeof p11MapReset === 'function') p11MapReset();
 }
 function markP9First(k) { if (S.p9.firsts[k]) return false; S.p9.firsts[k] = 1; return true; }
 
@@ -757,9 +758,10 @@ function applyBrush(tx, ty) {
       case 'terrain': if (!MAP.occ[i] && MAP.nature[i] !== 2) { const t = MAP.terrain[i]; MAP.terrain[i] = WB.terrainOp === 'flatten' ? TERRAIN.GRASS : WB.terrainOp === 'lower' ? (t === TERRAIN.ROCK ? TERRAIN.HILL : TERRAIN.GRASS) : (t === TERRAIN.GRASS || t === TERRAIN.SAND ? TERRAIN.HILL : TERRAIN.ROCK); n++; } break;
       case 'pollution': { const pb = S.p9.env.polBrush; pb[i] = clamp((pb[i] || 0) + 0.6 * WB.sign, -5, 20); if (Math.abs(pb[i]) < 0.01) delete pb[i]; if (WB.sign < 0 && envReady()) ENV.c[i] *= 0.3; n++; } break;
       case 'landvalue': propBrush(i, 0.15 * WB.sign); n++; break;
+      default: if (typeof p11BrushTile === 'function') n += p11BrushTile(WB.mode, x, y, i, seen);          // Part 11 brushes (utility, demolish, sidewalks, plazas, bike lanes)
     }
   });
-  if (n) { WB.dirty = true; WB.applied += n; if (['build', 'park', 'destroy', 'road', 'water', 'upgrade'].indexOf(WB.mode) >= 0) onMapChanged(); else MAP.groundDirty = true; if (WB.mode === 'water') computeSea(); if (WB.mode === 'landvalue') propTick(true); if (WB.mode === 'pollution') envTick(true); }
+  if (n) { WB.dirty = true; WB.applied += n; if (['build', 'park', 'destroy', 'road', 'water', 'upgrade', 'demolish'].indexOf(WB.mode) >= 0) onMapChanged(); else MAP.groundDirty = true; if (WB.mode === 'water') computeSea(); if (WB.mode === 'landvalue') propTick(true); if (WB.mode === 'pollution') envTick(true); }
   return n;
 }
 function brushStrokeEnd() { if (!WB.dirty) return; WB.dirty = false; onMapChanged(); if (ADM.mode) adminLog('World brush ' + WB.mode + ' size ' + WB.size + ': ' + WB.applied + ' tile(s)'); WB.applied = 0; WB.last = ''; }
@@ -1123,6 +1125,7 @@ function p9PointerUp() {
 function p9TapHook(sx, sy) {
   if (!S || !S.p9) return false;
   if (typeof p10TapHook === 'function' && p10TapHook(sx, sy)) return true;
+  if (typeof p11TapHook === 'function' && p11TapHook(sx, sy)) return true;
   if (ADM.disPick) { ADM.disPick = false; const t = tileAtScreen(sx, sy); if (inMap(t.x, t.y)) { ADM.dis.x = t.x; ADM.dis.y = t.y; } openAdminCenter('wc_disaster'); return true; }
   if (EI.pick) { EI.pick = false; inspectorPickAt(sx, sy); return true; }
   return false;

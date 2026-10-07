@@ -72,7 +72,8 @@ function stepSpeed(dir) { const i = clamp(speedIndex() + dir, 1, SIM_SPEEDS.leng
 function speedLabel(s) { return s === 0 ? '⏸ Paused' : (s < 1 ? '🐢 ' + s + '×' : s + '×'); }
 
 /* --- WORLD SYSTEM: named districts & streets ----------------------------------------------- */
-function computeDistrictNames() {
+function computeDistrictNames() { computeDistrictNames0(); if (typeof p11ApplyDistrictNames === 'function') p11ApplyDistrictNames(); }   // Part 11: districts renamed in the editor keep their names
+function computeDistrictNames0() {
   if (!MAP.districts.length) return;
   const gen = S.p8 && S.p8.world && S.p8.world.cellNames;            // generated worlds keep their district names
   if (Array.isArray(gen) && gen.length === MAP.districts.length) { MAP.dnames = gen.slice(); return; }

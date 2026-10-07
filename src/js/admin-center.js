@@ -344,7 +344,8 @@ function countBridges() { let n = 0; for (let i = 0; i < MAP.roads.length; i++) 
 function adminSearchHtml(q) {
   q = q.toLowerCase();
   const out = [];
-  if (typeof p10SearchHtml === 'function') Array.prototype.push.apply(out, p10SearchHtml(q));      // Part 10: feature search (e.g. "traffic")
+  if (typeof p10SearchHtml === 'function') Array.prototype.push.apply(out, p10SearchHtml(q));
+  if (typeof p11EntitySearch === 'function') Array.prototype.push.apply(out, p11EntitySearch(q));     // Part 11: live entity search      // Part 10: feature search (e.g. "traffic")
   Object.keys(ADM_COMMANDS).filter(function (k) { return k.toLowerCase().indexOf(q) >= 0; }).slice(0, 12).forEach(function (k) { out.push('<button class="admLi" data-ac="runCmd" data-v="' + k + '">⌨ ' + k + ' — ' + esc(ADM_COMMANDS[k].help) + '</button>'); });
   ADM_CATS.filter(function (c) { return c[2].toLowerCase().indexOf(q) >= 0; }).forEach(function (c) { out.push('<button class="admLi" data-acat="' + c[0] + '">' + c[1] + ' ' + c[2] + '</button>'); });
   Object.values(BUILDINGS).filter(function (d) { return !d.hidden && d.name.toLowerCase().indexOf(q) >= 0; }).slice(0, 12).forEach(function (d) { out.push('<button class="admLi" data-ac="adminPlace" data-v="' + d.id + '">🏗 Build ' + d.icon + ' ' + esc(d.name) + '</button>'); });

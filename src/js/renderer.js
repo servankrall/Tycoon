@@ -857,6 +857,7 @@ function render() {
   drawIncidents();
   if (typeof drawP9Overlays === 'function') drawP9Overlays();
   if (typeof drawP10Overlays === 'function') drawP10Overlays();
+  if (typeof drawP11Overlays === 'function') drawP11Overlays();
   drawHighlights();
   drawBubbles(v);
   // Screen-space weather & flash

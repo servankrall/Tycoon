@@ -18,6 +18,21 @@
 ## Eski tarayıcı kayıtları
 Oyunu Chrome/Edge'de oynadıysanız: tarayıcıda Ayarlar → **📦 Export all saves** (veya **⬇️ Download .json**), sonra EXE'de **📦 Import old browser save** ile dosyayı seçin.
 
+## 1.4.0 — Part 11: Gelişmiş şehir simülasyonu, ulaşım AI ve derin ekonomi
+- **Birleşik ulaşım motoru** ve **çok modlu rota:** vatandaşlar yürüme, bisiklet, araba (otopark arama), toplu taşıma, aktarma ve park & ride arasında süre/maliyet/trafik/aktarma/konfora göre seçim yapar.
+- **Traffic Light AI 2.0**, **acil durum koridoru**, **göbekli kavşak AI** (ROUNDABOUT CONGESTION), yol olayları ve yeniden rota, **oyuncu yol çalışmaları** (şerit kapatma → kapasite artışı).
+- **Metro motoru** + **metro hat oluşturucu** (A → B, önerilen güzergâh, düzenlenebilir) + **STATION OVERLOAD**; **tren ağı** (yolcu, kargo, yüksek hızlı) ve komşu şehirlere **bölgesel trenler**.
+- **Dinamik ticaret rotaları** (karayolu/demiryolu/deniz/hava) ve **ticaret sözleşmeleri** (RENEW / CANCEL).
+- **Company Finance 2.0**, **şirket borcu + BANKRUPTCY RISK**, **banka sistemi** (mevduat, kredi, mortgage, faiz), **faiz motoru** (INTEREST RATE ≥ %1 korunur).
+- **Mortgage**, **konut / kira / ticari piyasa**, **piyasa fiyatları**, **gıda ağı**, **şehir tüketimi**, oyuncudan etkilenen **ekonomik döngüler**.
+- **City Budget 2.0**, **5 yıllık bütçe tahmini**, **FINANCIAL HEALTH 0–100**.
+- **Bina iç mekânları**, **aktivite programları**, **bina enerji AI + SMART BUILDINGS**, **Building Upgrades 2.0** (9 kol).
+- **Otopark**, **yaya ağı**, **bisiklet ağı**, ilçe başına **WALKABILITY SCORE**.
+- **Akıllı şehir sensör ağı + veri merkezi**, **tahmin sistemi**, **kestirimci bakım**, **RISK MAP**.
+- **Yangın yayılımı**, **sel simülasyonu**, **iklim uyumu**, **yeşil şehir**, **enerji depolama**, **akıllı şebeke**, **atık yönetimi** ve **geri dönüşüm ekonomisi**.
+- **Admin:** 13 yeni bölüm; ulaşım, ekonomi, bina ve vatandaş komutları; **WORLD PAINTER** fırçaları; **Ctrl çoklu seçim editörü**; kamerayı uçuran **canlı varlık araması**; **CITY BOOK**.
+- **Kayıt v11:** v10 kayıtlar otomatik yükseltilir. Self-test 40 adım (Part 11 final dünya testi dahil).
+
 ## 1.3.0 — Part 10: Living World, gelişmiş ekonomi ve Advanced Simulation
 - **Living World Engine:** şehir kendi kendine yaşar — yeni şirketler, mağaza açılış/kapanışları, iş değiştiren vatandaşlar, taşınan haneler, yeni mahalleler, değişen arazi fiyatları, trafik, turizm ve ticaret.
 - **Yaşam döngüsü** (sabah/öğle/akşam/gece/hafta sonu, gece vardiyası) ve **dinamik nüfus** (doğum, ölüm, MIGRATION IN/OUT).

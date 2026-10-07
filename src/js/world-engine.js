@@ -291,7 +291,7 @@ function neighborLinks(d) {
   const rail = MAP.lists.trains.some(function (b) { return b._op; });
   const sea = !!d.sea && MAP.lists.ports.some(function (b) { return b._op; });
   const air = S.buildings.list.some(function (b) { return b.type === 'airport' && b._op; });
-  const k = (road ? 0.45 : 0) + (rail ? 0.25 : 0) + (sea ? 0.18 : 0) + (air ? 0.12 : 0);
+  const k = (road ? 0.45 : 0) + (rail ? 0.25 : 0) + (sea ? 0.18 : 0) + (air ? 0.12 : 0) + (S.p11 && rail ? p11RegionalBonus(d.id) : 0);   // Part 11: regional trains
   return { road: road, rail: rail, sea: sea, air: air, k: k };
 }
 /* Flows (every 5 s of simulated time). Effects reach the economy through SIM.p9* values read by econTick. */

@@ -57,7 +57,9 @@ const Game = {
     { name: 'Evolution', every: 20, acc: 0, tick: function () { if (!(S.p9 && S.p9.freeze.buildings)) evolutionTick(); } },
     { name: 'Districts6', every: 10, acc: 0, tick: function () { computeDistrictNames(); } },
     { name: 'World', every: 1, acc: 0, tick: function (dt) { part9Tick(dt); } },
-    { name: 'Living', every: 1, acc: 0, tick: function (dt) { part10Tick(dt); } }          // Part 9: regions, neighbours, grid, water, sewage, environment, households, property, maintenance, incidents, disasters, validator
+    { name: 'Living', every: 1, acc: 0, tick: function (dt) { part10Tick(dt); } },
+    { name: 'Corridor', every: 0.25, acc: 0, tick: function () { if (S.p11) emergencyCorridorTick(); } },   // Part 11: emergency priority corridors
+    { name: 'Part11', every: 1, acc: 0, tick: function (dt) { part11Tick(dt); } }           // Part 11: transport engine, deep economy, smart city          // Part 9: regions, neighbours, grid, water, sewage, environment, households, property, maintenance, incidents, disasters, validator
   ],
   /* fixed-rate (20 TPS) systems */
   tickSystems: [

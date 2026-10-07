@@ -40,10 +40,10 @@ function econCycleTick(dt) {
   else if (t >= e.until) {
     let nxt = econPhase().next;
     if (S.p5.world.active === 'recession' && nxt.indexOf('RECESSION') >= 0) nxt = ['RECESSION'];
-    forceEconPhase(RNG.pick(nxt));
+    forceEconPhase(S.p11 ? p11NextPhase(nxt) : RNG.pick(nxt));          // Part 11: the city's indicators weigh the next phase
   }
   // Taylor-style rule: the central bank also reacts to inflation (Part 6 economy engine)
-  let target = econPhase().rate + (S.p6 ? 1.2 * (S.p6.econ.infl - 0.02) : 0) + (S.p5.world.active === 'recession' ? -0.01 : 0) + (S.city.difficulty === 'HARD' || S.city.difficulty === 'EXTREME' ? 0.005 : 0);
+  let target = econPhase().rate + (S.p6 ? 1.2 * (S.p6.econ.infl - 0.02) : 0) + (S.p5.world.active === 'recession' ? -0.01 : 0) + (S.city.difficulty === 'HARD' || S.city.difficulty === 'EXTREME' ? 0.005 : 0) + (S.p11 ? p11RateAdjust() : 0);   // Part 11: growth & bank liquidity
   e.rate = clamp(e.rate + (target - e.rate) * 0.012 * dt, 0.01, 0.15);
   e._h = (e._h || 0) + dt;
   if (e._h >= 10) { e._h = 0; e.hist.push(+(e.rate * 100).toFixed(2)); if (e.hist.length > 60) e.hist.shift(); }

@@ -4,7 +4,7 @@
    freshly built EXE) or in a browser with  index.html?selftest . It plays through the 20 checks of the release test plan,
    restarts the EXE in the middle (save → restart → load) and writes a JSON report to logs/selftest.json (and <file>).
    The self-test uses its own temporary user-data folder, so it never touches real cities. */
-const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 30 };
+const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 40 };
 function stPhase() {
   if (DESKTOP && BCT.selftest && BCT.selftest.phase) return BCT.selftest.phase;
   const m = /[?&]selftest(?:=(\d))?/.exec(location.search); if (!m) return 0;
@@ -194,7 +194,63 @@ async function runSelfTest() {
     openAdminCenter('wc_living'); let adm = 0; ['wc_living', 'wc_incidents', 'wc_lab', 'wc_whatif', 'wc_tm', 'wc_factory', 'wc_projects', 'wc_health'].forEach(function (c) { ADM.cat = c; renderAdminCenter(); if ($('admBody').innerHTML.indexOf('Panel error') < 0) adm++; }); closeAdminCenter();
     return { ok: ok === HUB_TABS.length && dash && obs && pal && adm === 8, detail: ok + '/' + HUB_TABS.length + ' hub tabs · dashboard ' + dash + ' · observatory ' + obs + ' · palette 2.0 ' + pal + ' · ' + adm + '/8 admin tabs' };
   });
-  await stStep(30, 'Generate Mega World', async function () {
+  // ---------------- Part 11: Advanced city simulation, transport AI & deep economy ----------------
+  await stStep(30, 'Build metro', function () {
+    S.p8.unlockAll = true; S.budget = Math.max(S.budget, 5e8);
+    const l0 = metroEngine().lines.length; adminCmd11('aBuildMetro'); const E = metroEngine();
+    return { ok: E.lines.length > l0 && E.stations.length >= 2 && E.lines.every(function (l) { return isFinite(l.cap) && l.cap > 0; }), detail: E.lines.length + ' metro line(s) · ' + E.stations.length + ' stations · ' + E.lines.map(function (l) { return l.name + ' ' + l.stations + ' st, headway ' + l.headway.toFixed(1) + ' min'; }).join(' · ') };
+  });
+  await stStep(31, 'Build railway & regional trains', function () {
+    adminCmd11('aRailway'); const R = regionalRail(), on = R.filter(function (r) { return r.on; }).length;
+    const tr = S.p9.transit.lines.filter(function (l) { return l.mode === 'train'; });
+    return { ok: tr.length > 0 && on > 0, detail: tr.length + ' rail line(s) · regional trains to ' + on + '/' + R.length + ' neighbour cities · ' + fmt(Math.round(R.reduce(function (a, r) { return a + r.pax; }, 0))) + ' passengers/day' };
+  });
+  await stStep(32, 'Trade route & contract', function () {
+    const T = tradeRoutes(), best = T.filter(function (r) { return r.best; });
+    const c = signContract('player', contractPartners()[0].id, 'food', 'sell', 300, 1);
+    tradeContractsTick(5);
+    return { ok: best.length > 0 && c.ok && isFinite(SIM.p11TradeCost || 0), detail: best.length + ' trade routes · ' + best.slice(0, 2).map(function (r) { return r.name + ' via ' + r.best.mode; }).join(', ') + ' · ' + (c.ok ? c.msg : c.reason) };
+  });
+  await stStep(33, 'Company, bank & loan', function () {
+    adminCmd11('aBank'); adminCmd11('aSpawnCo');
+    const co = AI_DEFS.find(function (a) { return S.ai[a.id] && !S.ai[a.id].acquired; }).id;
+    const r = companyBorrow(co, 50000, 10), B = bankPass(); loansTick(1);
+    return { ok: r.ok && B.banks.length > 0 && interestRate() >= 0.01 && isFinite(bankruptcyRisk(co)), detail: (r.ok ? r.msg : r.reason) + ' · ' + B.banks.length + ' bank(s), liquidity ' + Math.round(B.liquidity * 100) + '% · interest ' + (interestRate() * 100).toFixed(2) + '% · bankruptcy risk ' + Math.round(bankruptcyRisk(co) * 100) + '%' };
+  });
+  await stStep(34, 'Housing market & mortgages', function () {
+    householdsTick(true); const M = mortgagePass(), H = housingMarket(), R = rentalByRegion(), C = commercialMarket();
+    return { ok: M.owners + M.renters > 0 && H.length > 0 && isFinite(M.avgPrice), detail: Math.round(M.ownerShare * 100) + '% owners · avg price ' + money(M.avgPrice) + ' · mortgage ' + money(M.avgPayment) + '/month · ' + H.length + ' housing districts · ' + R.length + ' rental regions · ' + C.length + ' commercial units' };
+  });
+  await stStep(35, 'Utility grid, storage & smart grid', function () {
+    adminCmd11('uBattery'); adminCmd11('uFill'); adminCmd11('uSensors'); sensorTick();
+    const G = smartGrid(), N = sensorNet(), W = wasteFlows();
+    return { ok: G.cap > 0 && N.hubs.length > 0 && isFinite(G.gen), detail: 'storage ' + Math.round(G.stored) + '/' + Math.round(G.cap) + ' MWh · ' + N.hubs.length + ' sensor hubs (' + Math.round(N.coverage * 100) + '% coverage) · green share ' + Math.round(greenShare() * 100) + '% · waste ' + fmt(Math.round(W.total || 0)) + ' t' };
+  });
+  await stStep(36, 'Predictive maintenance & risk map', function () {
+    predSample(); predSample(); const P = predictions(), M = maintenancePredictions(), RG = p11RiskGrid('fire');
+    return { ok: Array.isArray(P) && Array.isArray(M) && RG && RG.length === MAP.W * MAP.H, detail: P.length + ' predictions · ' + M.length + ' maintenance forecasts' + (P[0] ? ' · "' + P[0].text + '"' : '') };
+  });
+  await stStep(37, 'Transport AI 2.0', async function () {
+    const L = S.p11.lights, r0 = L.retimes; adminCmd11('aSpawnEm'); adminCmd11('aOptimize'); adminCmd11('aRecalc');
+    setSpeed(10); await stWait(3000); setSpeed(1);
+    const m = S.p11.modal;
+    return { ok: L.retimes > r0 && m.trips >= 0 && isFinite(m.car), detail: (L.retimes - r0) + ' signal retimes · ' + L.transitPrio + ' transit priorities · ' + L.corridors + ' emergency corridors · modal split walk ' + Math.round(m.walk * 100) + '% / bike ' + Math.round(m.bike * 100) + '% / car ' + Math.round(m.car * 100) + '% / transit ' + Math.round(m.transit * 100) + '% · walkability ' + Math.round(walkPass().avg) };
+  });
+  await stStep(38, 'Budget 2.0, forecast & financial health', function () {
+    const b = budget2(), f = budgetForecast(), h = financialHealth();
+    return { ok: isFinite(b.net) && isFinite(f.in5) && h.score >= 0 && h.score <= 100, detail: 'income ' + money(b.totalIn) + '/s · expenses ' + money(b.totalOut) + '/s · 5-year forecast ' + money(f.in5) + ' (risk ' + f.risk + ') · FINANCIAL HEALTH ' + h.score + '/100' };
+  });
+  await stStep(39, 'Part 11 UI', async function () {
+    let hub = 0; const tabs = ['transport3', 'finance', 'budget2', 'smart', 'buildings3', 'green'];
+    tabs.forEach(function (t) { openHub(t); if (hubVisible() && !/class="neg">⚠️/.test($('modalBody').innerHTML)) hub++; }); closeModal();
+    const cats = ['wc_tr', 'wc_ec', 'wc_bc', 'wc_uc', 'wc_cc', 'wc_co', 'wc_tu', 'wc_sc', 'wc_dc', 'wc_cl', 'wc_td', 'wc_fi', 'wc_wd'];
+    openAdminCenter('wc_tr'); let adm = 0; cats.forEach(function (c) { ADM.cat = c; renderAdminCenter(); if ($('admBody').innerHTML.indexOf('Panel error') < 0) adm++; }); closeAdminCenter();
+    let book = 0; BOOK_CH.forEach(function (c) { openCityBook(c[0]); if ($('modalBody').innerText.length > 30) book++; }); closeModal();
+    const found = p11EntitySearch('hospital').length;
+    const o = buildSaveObject(), errs = validateSaveObject(o);
+    return { ok: hub === tabs.length && adm === cats.length && book === BOOK_CH.length && !errs.length && !!o.p11, detail: hub + '/' + tabs.length + ' hub tabs · ' + adm + '/' + cats.length + ' admin sections · City Book ' + book + '/' + BOOK_CH.length + ' chapters · search "hospital" → ' + found + ' · save v' + o.version + ' valid' };
+  });
+  await stStep(40, 'Generate Mega World', async function () {
     const res = await generateMegaWorld('tinyisland', { seed: 31337, name: 'SELFTEST ISLAND', slot: 3 });
     closeModal(); clearDialogues();
     const sc = S.p10 && S.p10.genScore;

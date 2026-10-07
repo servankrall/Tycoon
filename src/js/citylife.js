@@ -70,7 +70,7 @@ function propTick(force) {
 }
 function landValueTile(x, y) { return propReady() && inMap(x, y) ? PROP.grid[idx(x, y)] : 40 * costMult(); }
 function landPriceFor(x, y, d) { if (!propReady()) return d.w * d.h * 20 * costMult(); let s = 0; for (let yy = y; yy < y + d.h; yy++) for (let xx = x; xx < x + d.w; xx++) s += landValueTile(xx, yy); return s * 0.5; }
-function rentMult(b) { return S.p9 ? 0.7 + 0.3 * (b._lvF || 1) : 1; }
+function rentMult(b) { return S.p9 ? (0.7 + 0.3 * (b._lvF || 1)) * (b.u && b.u.appearance ? 1 + 0.04 * b.u.appearance : 1) : 1; }
 function propertyValueMult(b) { return S.p9 ? (0.6 + 0.4 * (b._lvF || 1)) * (0.5 + 0.5 * (b.cond === undefined ? 100 : b.cond) / 100) : 1; }
 function propBrush(i, delta) { const b = S.p9.prop.brush; b[i] = clamp((b[i] || 0) + delta, -0.8, 3); if (Math.abs(b[i]) < 0.01) delete b[i]; const keys = Object.keys(b); if (keys.length > 6000) delete b[keys[0]]; }
 

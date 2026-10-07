@@ -221,7 +221,7 @@ function maintCat(d) {
 function p10DecayMult(b) {
   if (!S.p10) return 1;
   const d = bdef(b), bud = S.p10.maint[maintCat(d)], age = b.born ? Math.max(0, gameDay() - b.born) : 0;
-  return (1.6 - 0.6 * bud) * (1 + age / 80) * Math.pow(0.75, b.grade || 0) * (1 - 0.03 * Math.min(8, researchLevel('engineering')));
+  return (1.6 - 0.6 * bud) * (1 + age / 80) * Math.pow(0.75, b.grade || 0) * (1 - 0.03 * Math.min(8, researchLevel('engineering'))) * (b.u && b.u.safety ? 1 - 0.1 * b.u.safety : 1);
 }
 /* Hook from econTick: city maintenance costs scale with the budget */
 function p10MaintCostMult(b) { return S.p10 ? 0.4 + 0.6 * S.p10.maint[maintCat(bdef(b))] : 1; }

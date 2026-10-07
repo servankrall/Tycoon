@@ -357,7 +357,7 @@ function companyAI2Tick(dt) {
     m.hist.push(st.assets || 0); if (m.hist.length > 24) m.hist.shift();
     m.growth = m.hist.length >= 6 && m.hist[m.hist.length - 6] > 0 ? (st.assets || 0) / m.hist[m.hist.length - 6] - 1 : 0;
     brandTick(a, st, m);
-    if (m.debt > 0) { const interest = m.debt * 0.0006 * dt; st.cash = Math.max(0, st.cash - interest); if (st.cash > m.debt * 1.5) { st.cash -= m.debt * 0.25; m.debt *= 0.75; if (m.debt < 100) m.debt = 0; } }
+    if (m.debt > 0 && !S.p11) { const interest = m.debt * 0.0006 * dt; st.cash = Math.max(0, st.cash - interest); if (st.cash > m.debt * 1.5) { st.cash -= m.debt * 0.25; m.debt *= 0.75; if (m.debt < 100) m.debt = 0; } }
     if (m.lw && (st.count || 0) === 0 && st.cash < 3000 && day - m.founded >= 2) { lwDissolve(a.id); return; }
     corpDecide(a, st, m);
     if (m.openedDay !== day) { if (m.opened >= 3) storesNews(a, m.opened); m.opened = 0; m.openedDay = day; }
@@ -379,7 +379,7 @@ function corpDecide(a, st, m) {
       const reg = corpWeakRegion(a.id);
       const ok = reg >= 0 && Math.random() < 0.5 ? lwPlaceStore(a.id, sec, a.zone, reg) : aiBuild(a.id, sec, a.zone, null);
       if (ok) { m.opened++; S.p10.lw.opened++; act('🏪', reg >= 0 ? 'opened a store in the ' + REGION_DEFS[reg].name + ' region' : 'opened a new ' + (sec === 'INDUSTRY' ? 'plant' : 'store')); }
-      else if (profit > 0 && m.debt < (st.assets || 0) * 0.4) { const loan = expandCost * 2; m.debt += loan; st.cash += loan; act('🏦', 'borrowed ' + money(loan) + ' to finance expansion'); }
+      else if (profit > 0 && m.debt < (st.assets || 0) * 0.4) { const loan = expandCost * 2; if (S.p11) { const r = companyBorrow(a.id, loan, 10); if (r.ok) act('🏦', 'borrowed ' + money(loan) + ' from the bank at ' + (r.l.rate * 100).toFixed(1) + '%'); } else { m.debt += loan; st.cash += loan; act('🏦', 'borrowed ' + money(loan) + ' to finance expansion'); } }
       // vertical integration: shops that run short of goods build their own factory
       if (d0GoodsShort(sec) && st.cash > expandCost * 2 && aiBuild(a.id, 'INDUSTRY', 3, null)) act('🏭', 'built its own factory (goods supply ' + Math.round((SIM.goodsRatio || 0) * 100) + '%)');
       corpHire(a, m, 0.1);

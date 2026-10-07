@@ -647,3 +647,6 @@ table.p10T .p9Bar{width:70px;display:inline-block;vertical-align:middle;}
 .p10DX{position:absolute;top:8px;right:310px;pointer-events:auto;}
 body.p10DashOn #topbar,body.p10DashOn #rightPanel,body.p10DashOn #rightToggle{visibility:hidden;}
 @media (max-width:900px){#p10Dash{grid-template-columns:1fr;grid-template-rows:auto 1fr auto auto;}#p10Dash .p10DB{grid-column:1;grid-template-columns:repeat(2,1fr);}.p10DX{right:8px;}}
+/* ===================== PART 11 ===================== */
+#p11Multi{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:115;display:none;gap:4px;align-items:center;flex-wrap:wrap;max-width:94vw;background:rgba(12,15,36,.94);border:1px solid var(--accent);border-radius:12px;padding:6px 10px;color:var(--text);}
+#p11Multi.show{display:flex;}

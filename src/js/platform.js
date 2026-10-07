@@ -6,7 +6,7 @@
 const BCT = (typeof window !== 'undefined' && window.bct) ? window.bct : null;   // exposed by preload.js (desktop only)
 const DESKTOP = !!(BCT && BCT.isDesktop);
 const DEV_MODE = !!(BCT && BCT.dev);
-const GAME_VERSION = (BCT && BCT.version) || '1.3.0';
+const GAME_VERSION = (BCT && BCT.version) || '1.4.0';
 
 /* --- Storage: same interface as localStorage. Desktop: every key is a file in %APPDATA%\Block City Tycoon\ (atomic writes) --- */
 const Store = (function () {
