@@ -1,10 +1,10 @@
 'use strict';
-/* BLOCK CITY TYCOON — AUTOMATIC SELF-TEST (Part 9)
+/* BLOCK CITY TYCOON — AUTOMATIC SELF-TEST (Part 9, extended with the Part 10 Living World checks 21–30)
    Started with  "BLOCK CITY TYCOON.exe --selftest [--selftest-out=<file>]"  (the Windows release workflow runs it on the
    freshly built EXE) or in a browser with  index.html?selftest . It plays through the 20 checks of the release test plan,
    restarts the EXE in the middle (save → restart → load) and writes a JSON report to logs/selftest.json (and <file>).
    The self-test uses its own temporary user-data folder, so it never touches real cities. */
-const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest' };
+const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 30 };
 function stPhase() {
   if (DESKTOP && BCT.selftest && BCT.selftest.phase) return BCT.selftest.phase;
   const m = /[?&]selftest(?:=(\d))?/.exec(location.search); if (!m) return 0;
@@ -24,9 +24,9 @@ async function stStep(n, name, fn) {
   return ok;
 }
 function stDone() {
-  const ok = SELFTEST.steps.length === 20 && SELFTEST.steps.every(function (s) { return s.ok; });
-  const rep = { ok: ok, version: GAME_VERSION, saveVersion: SAVE_VERSION, platform: DESKTOP ? 'desktop' : 'browser', finished: new Date().toISOString(), seconds: Math.round((Date.now() - SELFTEST.t0) / 1000), passed: SELFTEST.steps.filter(function (s) { return s.ok; }).length, total: 20, steps: SELFTEST.steps, errors: ERRLOG.slice(0, 20) };
-  Log.info('[selftest] FINISHED: ' + rep.passed + '/20 passed' + (ok ? ' — ALL OK' : ' — FAILURES'));
+  const ok = SELFTEST.steps.length === SELFTEST.total && SELFTEST.steps.every(function (s) { return s.ok; });
+  const rep = { ok: ok, version: GAME_VERSION, saveVersion: SAVE_VERSION, platform: DESKTOP ? 'desktop' : 'browser', finished: new Date().toISOString(), seconds: Math.round((Date.now() - SELFTEST.t0) / 1000), passed: SELFTEST.steps.filter(function (s) { return s.ok; }).length, total: SELFTEST.total, steps: SELFTEST.steps, errors: ERRLOG.slice(0, 20) };
+  Log.info('[selftest] FINISHED: ' + rep.passed + '/' + SELFTEST.total + ' passed' + (ok ? ' — ALL OK' : ' — FAILURES'));
   try { Store.removeItem(SELFTEST.key); } catch (e) { /* storage */ }
   window.__selftest = rep;
   if (DESKTOP && BCT.selftest) BCT.selftest.report(JSON.stringify(rep, null, 2));
@@ -126,6 +126,79 @@ async function runSelfTest() {
     await stWait(3000);
     const fps = PERF.fps, tps = Game.tpsMeasured, sim = simMsTotal(); setSpeed(1);
     return { ok: fps >= 5 && tps >= 20, detail: 'FPS ' + Math.round(fps) + ' · TPS ' + tps.toFixed(0) + ' at 10× · render ' + (PERF.renderMs || 0).toFixed(1) + ' ms · simulation ' + sim.toFixed(1) + ' ms · ' + S.buildings.list.length + ' buildings · ' + AG.vehicles.length + ' vehicles' };
+  });
+  // ---------------- Part 10: Living World ----------------
+  await stStep(21, 'Living World', async function () {
+    const n0 = S.p10.news.length, b0 = S.p10.pop.births; setSpeed(10); await stWait(3000); setSpeed(1);
+    const L = lifeStats(), R = SIM.p10Rates || {};
+    const ok = S.p10.pop.births > b0 && isFinite(S.p10.rep) && S.p10.rep >= 0 && S.p10.rep <= 1000 && L.n > 0 && isFinite(R.migIn);
+    return { ok: ok, detail: LIFE_PHASES[L.phase].name + ' · ' + L.work + ' at work / ' + L.home + ' at home · births ' + fmt(Math.round(S.p10.pop.births - b0)) + ' · reputation ' + Math.round(S.p10.rep) + ' · ' + (S.p10.news.length - n0) + ' news · ' + S.p10.lw.jobChanges + ' job changes' };
+  });
+  await stStep(22, 'Company AI 2.0 & Stock Market 2.0', function () {
+    companyAI2Tick(20);
+    const ids = AI_DEFS.filter(function (a) { return S.ai[a.id] && !S.ai[a.id].acquired; }).map(function (a) { return a.id; });
+    const fair = ids.map(function (id) { return p10FairValue(id, S.ai[id]); });
+    const strat = ids.filter(function (id) { return corpMeta(id).strategy; }).length;
+    const founded = lwFoundCompany('TECHNOLOGY', true);
+    return { ok: fair.every(isFinite) && strat === ids.length && fair.length > 0, detail: ids.length + ' companies with a strategy · fair values ' + fair.slice(0, 3).map(function (v) { return '$' + v.toFixed(2); }).join(', ') + (founded ? ' · founded ' + aiDef(founded).name : '') };
+  });
+  await stStep(23, 'Education, research & healthcare', function () {
+    const E = educationPass(), R = researchPass(1), H = healthPass(1);
+    const amb = AG.citizens.find(function (c) { return !c.tourist && !c.inside; });
+    let route = 'no free citizen';
+    if (amb) { const tile = currentRoadTile(amb), h = tile >= 0 ? nearestHospital(tile) : null, v = h ? emergencyDispatch('medical', tile, { priority: 2 }) : null; if (v) { v.patient = { stage: 1, cid: amb.id, t0: S.clock.runSec, hosp: h.id, tile: tile }; route = 'ambulance → ' + BUILDINGS[h.type].name; } }
+    return { ok: isFinite(E.cov[1]) && isFinite(H.load) && H.list.length > 0 && isFinite(R.perDay.engineering), detail: 'coverage ' + E.cov.slice(1).map(function (v) { return Math.round(v * 100) + '%'; }).join('/') + ' · ' + H.list.length + ' health facilities, load ' + Math.round(H.load * 100) + '% · engineering +' + Math.round(R.perDay.engineering) + '/day · ' + route };
+  });
+  await stStep(24, 'Tourism, airport, port, rail & logistics', function () {
+    const T = tourismBreakdown(S.city.tourists), A = airportPass(1), P = portPass(1), R = railPass(1), L = logisticsPass();
+    return { ok: isFinite(T.hotels) && isFinite(A.cap) && isFinite(P.cap) && isFinite(R.cap) && L.stages.length === 6 && L.eff > 0, detail: fmt(Math.round(S.city.tourists)) + ' tourists · ' + attractionList().length + ' attractions · airport ' + fmt(A.cap) + ' seats · port ' + fmt(Math.round(P.cap)) + ' TEU · rail ' + fmt(Math.round(R.cap)) + ' t/day · logistics ' + Math.round(L.eff * 100) + '%' };
+  });
+  await stStep(25, 'Supply shock', function () {
+    S.p10.shocks = []; const s = startShock('steel'); if (!s) return { ok: false, detail: 'shock not started' };
+    const pm = shockPriceMult('metal'), bm = shockBuildMult(); S.money += 1e7; const r = shockRespond(s.id, 'import'), r2 = shockRespond(s.id, 'domestic');
+    S.p10.shocks = [];
+    return { ok: pm > 1.3 && bm > 1.1 && r.ok && r2.ok, detail: 'STEEL SHORTAGE: metal ×' + pm.toFixed(2) + ', construction ×' + bm.toFixed(2) + ' · ' + r.msg };
+  });
+  await stStep(26, 'Megaproject', async function () {
+    S.p8.unlockAll = true; S.budget = Math.max(S.budget, 5e8);
+    const r = startMegaProject('grandpark');
+    if (!r.ok) return { ok: false, detail: r.reason };
+    setSpeed(100); await stWait(2500); setSpeed(1);
+    const q = r.q, prog = q.progress, crew = q.crew;
+    finishMegaProject(q);
+    const b = S.buildings.list.find(function (x) { return x.type === 'grandpark'; });
+    return { ok: prog > 0 && !!b && b.built, detail: 'Grand Park progress ' + (prog * 100).toFixed(1) + '% with ' + fmt(crew) + ' workers, ' + money(q.spent) + ' spent → completed' };
+  });
+  await stStep(27, 'Incident Center', async function () {
+    const r0 = S.p10.incidents.resolved.length;
+    const made = ['breakdown', 'utility', 'traffic'].map(function (t) { return createP10Incident(t); }).filter(Boolean);
+    setSpeed(10); await stWait(3000); setSpeed(1);
+    S.p10.incidents.active.slice().forEach(function (x) { if (x.status === 'on site') resolveP10Incident(x, 'resolved'); });
+    return { ok: made.length >= 2 && S.p10.incidents.resolved.length > r0, detail: made.length + ' incidents (' + made.map(function (x) { return x.name; }).join(', ') + ') · ' + (S.p10.incidents.resolved.length - r0) + ' resolved' };
+  });
+  await stStep(28, 'Simulation Lab, What-If & Time Machine', function () {
+    const tax = S.city.tax, money0 = S.money, n0 = S.buildings.list.length;
+    const L = runSimulationLab({ pop: 50, traffic: 100, tax: -20, industry: 80, tourism: 200 });
+    const W = runWhatIf('taxdown');
+    const unchanged = S.city.tax === tax && S.buildings.list.length === n0 && Math.abs(S.money - money0) < 1e-6;
+    const tm = timeMachineCapture(gameYear());
+    return { ok: !L.error && !W.error && unchanged && !!tm, detail: 'lab ' + Math.round(L.ms) + ' ms (traffic ' + L.rows.find(function (r) { return r.id === 'traffic'; }).pct.toFixed(0) + '%) · what-if tax −2% → happiness ' + W.rows.find(function (r) { return r.id === 'happiness'; }).delta.toFixed(2) + ' · live world unchanged · time machine ' + tm.id };
+  });
+  await stStep(29, 'Living City UI', async function () {
+    let ok = 0;
+    for (let i = 0; i < HUB_TABS.length; i++) { openHub(HUB_TABS[i][0]); if (hubVisible() && !/class="neg">⚠️/.test($('modalBody').innerHTML)) ok++; }
+    closeModal();
+    toggleDash(true); const dash = $('p10Dash').innerText.length > 100; toggleDash(false);
+    openObservatory('POLLUTION'); const obs = $('p10Obs').width > 0; closeModal();
+    openPalette2(); const pal = PAL.items.length >= 11; closePalette();
+    openAdminCenter('wc_living'); let adm = 0; ['wc_living', 'wc_incidents', 'wc_lab', 'wc_whatif', 'wc_tm', 'wc_factory', 'wc_projects', 'wc_health'].forEach(function (c) { ADM.cat = c; renderAdminCenter(); if ($('admBody').innerHTML.indexOf('Panel error') < 0) adm++; }); closeAdminCenter();
+    return { ok: ok === HUB_TABS.length && dash && obs && pal && adm === 8, detail: ok + '/' + HUB_TABS.length + ' hub tabs · dashboard ' + dash + ' · observatory ' + obs + ' · palette 2.0 ' + pal + ' · ' + adm + '/8 admin tabs' };
+  });
+  await stStep(30, 'Generate Mega World', async function () {
+    const res = await generateMegaWorld('tinyisland', { seed: 31337, name: 'SELFTEST ISLAND', slot: 3 });
+    closeModal(); clearDialogues();
+    const sc = S.p10 && S.p10.genScore;
+    return { ok: !!res && res.steps === 22 && !!sc && sc.overall >= 60 && STARTED, detail: res ? res.steps + '-step pipeline · ' + fmt(res.population) + ' citizens · ' + res.buildings + ' buildings · score ' + (sc ? sc.overall : '?') + '/100 · ' + res.seconds.toFixed(1) + ' s' : 'generation failed' };
   });
   stDone();
 }

@@ -225,7 +225,7 @@ function companyMarketStep(a, dt, ph) {
     let s = stockOf(a.id);
     if (!isFinite(st.cash) || !isFinite(s.price) || !Array.isArray(s.hist)) { repairCompany(a.id, new Error('invalid numbers')); st = S.ai[a.id]; s = stockOf(a.id); }
     if (st.acquired) { s.price = Math.max(0.05, s.price); return; }
-    const fund = Math.max(0.5, ((st.assets || 0) * 0.6 + st.cash * 0.4 + Math.max(-(st.assets || 0) * 0.3, (st.profit || 0) * 900)) / 2000);
+    const fund = S.p10 ? p10FairValue(a.id, st) : Math.max(0.5, ((st.assets || 0) * 0.6 + st.cash * 0.4 + Math.max(-(st.assets || 0) * 0.3, (st.profit || 0) * 900)) / 2000);   // Part 10: Stock Market 2.0
     const noise = 1 + gauss() * 0.02 * difficulty().vol * (ph.id === 'RECESSION' ? 1.5 : 1);
     s.price = +clamp(lerp(s.price, fund * ph.rev, 0.06) * noise, 0.05, 1e6).toFixed(3);
     s.hist.push(s.price); if (s.hist.length > 120) s.hist.shift();
@@ -457,6 +457,7 @@ function evolveBuilding(b, auto) {
   return true;
 }
 function evolutionTick() {
+  if (S.p10 && !S.p10.auto.development) return;          // Part 10: AUTO DEVELOPMENT switched off
   const cand = S.buildings.list.filter(function (b) { return b.built && !b.upg && EVOLVE[b.type] && (isAI(b) || (b.owner === 'player' && S.settings.autoEvolve)); });
   if (!cand.length) return;
   const b = RNG.pick(cand), sec = BUILDINGS[b.type].sector;
@@ -473,6 +474,7 @@ function zoneAllows(z, d) {
   return (Z.cats && Z.cats.indexOf(d.cat) >= 0) || (Z.ids && Z.ids.indexOf(d.id) >= 0);
 }
 function zoneDevelopTick() {
+  if (S.p10 && !S.p10.auto.development) return;
   for (let z = 5; z <= 9; z++) {
     const cands = freeZoneTiles(z);
     if (!cands.length) continue;

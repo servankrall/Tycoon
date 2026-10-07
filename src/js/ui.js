@@ -39,6 +39,7 @@ function flashBig(html) {
 /* --- Modal & confirm ---------------------------------------------------------------- */
 let modalOnClose = null;
 function showModal(title, html, onClose) {
+  $('modal').classList.remove('p10Wide');
   $('modalTitle').innerHTML = title; $('modalBody').innerHTML = html;
   $('modalWrap').classList.add('show');
   modalOnClose = onClose || null;

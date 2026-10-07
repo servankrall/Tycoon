@@ -53,7 +53,7 @@ jobs:
       - name: Build installer + portable EXE
         run: npm run dist
 
-      - name: Self-test the built EXE (20 steps, including a restart)
+      - name: Self-test the built EXE (30 steps, including a restart)
         shell: pwsh
         timeout-minutes: 12
         run: |

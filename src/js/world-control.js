@@ -131,6 +131,7 @@ function p9MapReset() {
   TRANSIT.pods = []; TRANSIT.legs.clear(); TRANSIT.ver = -1; JX.types.clear(); JX.sig.clear(); JX.ver = -1;
   WE.w = 0; WE.regions = []; ADV2.list = [];
   EI.ref = null; if (EI.open) closeInspector(); RS.rect = null; RS.drag = null; WB.on = false;
+  if (typeof p10MapReset === 'function') p10MapReset();
 }
 function markP9First(k) { if (S.p9.firsts[k]) return false; S.p9.firsts[k] = 1; return true; }
 
@@ -1121,11 +1122,12 @@ function p9PointerUp() {
 /* Clicks: entity inspector picker and disaster location picker */
 function p9TapHook(sx, sy) {
   if (!S || !S.p9) return false;
+  if (typeof p10TapHook === 'function' && p10TapHook(sx, sy)) return true;
   if (ADM.disPick) { ADM.disPick = false; const t = tileAtScreen(sx, sy); if (inMap(t.x, t.y)) { ADM.dis.x = t.x; ADM.dis.y = t.y; } openAdminCenter('wc_disaster'); return true; }
   if (EI.pick) { EI.pick = false; inspectorPickAt(sx, sy); return true; }
   return false;
 }
-function p9CancelTools() { let any = false; if (WB.on) { WB.on = false; any = true; } if (RS.on) { RS.on = false; RS.drag = null; any = true; } if (EI.pick || ADM.disPick) { EI.pick = false; ADM.disPick = false; any = true; } if (any) toast('Tool stopped', ''); return any; }
+function p9CancelTools() { let any = false; if (WB.on) { WB.on = false; any = true; } if (RS.on) { RS.on = false; RS.drag = null; any = true; } if (EI.pick || ADM.disPick) { EI.pick = false; ADM.disPick = false; any = true; } if (typeof P10 !== 'undefined' && P10.pickMega) { P10.pickMega = null; any = true; } if (any) toast('Tool stopped', ''); return any; }
 
 /* ===================================== ADMIN SECURITY ===================================== */
 function adminModeEnabled() { return !!(GSET && GSET.adminEnabled); }

@@ -1,6 +1,6 @@
 # 🏙️ BLOCK CITY TYCOON — Windows Desktop Edition
 
-**Build. Manage. Expand.** · Sürüm **1.2.0** · Kayıt formatı **v9**
+**Build. Manage. Expand.** · Sürüm **1.3.0** · Kayıt formatı **v10**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
 `BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
@@ -32,8 +32,8 @@ npm run icon       # icon.svg'den icon.ico / icon.png'yi yeniden üret (isteğe 
 
 ```text
 dist/
-├── BLOCK-CITY-TYCOON-Setup-1.2.0.exe      ← kurulum sihirbazı
-├── BLOCK-CITY-TYCOON-Portable-1.2.0.exe   ← kurulumsuz, çift tıkla çalışır
+├── BLOCK-CITY-TYCOON-Setup-1.3.0.exe      ← kurulum sihirbazı
+├── BLOCK-CITY-TYCOON-Portable-1.3.0.exe   ← kurulumsuz, çift tıkla çalışır
 └── win-unpacked/BLOCK CITY TYCOON.exe     ← paketlenmiş uygulamanın kendisi
 ```
 
@@ -98,7 +98,11 @@ BLOCK-CITY-TYCOON/
         ├── citylife.js         Part 9: haneler, emlak piyasası (arazi değeri), Construction 2.0, bina bakımı (condition)
         ├── utilities2.js       Part 9: güç şebekesi (santral→trafo merkezi→trafo→bölge→bina), su basıncı ağı, kanalizasyon, çevre (rüzgârla kirlilik, gürültü, su/toprak), Weather 2.0
         ├── world-control.js    Part 9: World Control Center, Entity Inspector, World Brush, bölge seçici, Disaster Command Center, Snapshot 2.0 + dallanma, klonlama, zaman çizelgesi, meydan okumalar, Validator 2.0, Smart Advisor 2.0
-        ├── selftest.js         Part 9: otomatik 20 adımlı EXE testi (--selftest)
+        ├── living-world.js     Part 10: Living World Engine, şehir yaşam döngüsü, dinamik nüfus (doğum/ölüm/göç), Company AI 2.0, dinamik markalar, Stock Market 2.0, City News (gerçek etkiler), itibar 0–1000, dünya sıralaması, bölgesel rekabet, arazi gelişimi, akıllı otomasyon
+        ├── services2.js        Part 10: eğitim hattı (ilkokul → lise → kolej → üniversite → araştırma), araştırma alanları, hastane sistemi + HEALTHCARE OVERLOAD + ambulans rotası, Tourism 2.0 + cazibe merkezleri, havaalanı, liman (TEU), demiryolu yükü + Rail Hub, lojistik ağı, tedarik şokları
+        ├── projects-lab.js     Part 10: megaprojeler + kilometre taşları, bakım bütçeleri, altyapı yaşlanması, Incident Center, vatandaş görüşleri/dilekçeleri, uzun vadeli hedefler, dinamik görevler, AI Assistant, canlı grafikler, Time Machine, Simulation Lab, What-If, World Factory, Presets 2.0, GENERATE MEGA WORLD (22 adım), World Generation Score
+        ├── p10-ui.js           Part 10: Living City hub (J), tam ekran City Dashboard (U), World Observatory (O), Command Palette 2.0 (Ctrl+Shift+P), World Control Center Part 10 sekmeleri, admin arama 2.0
+        ├── selftest.js         Part 9/10: otomatik 30 adımlı EXE testi (--selftest)
         ├── main.js             döngü, girdi, menüler, açılış adımları
         └── platform-ui.js      çıkış onayı, çökme kurtarma, eski kayıt aktarımı, masaüstü ayarları, kısayollar
 ```
@@ -133,11 +137,13 @@ BLOCK CITY TYCOON\
 
 Her kayıt `header` bölümü taşır: `saveVersion, gameVersion, timestamp, citySeed, cityName, slot, playSec, population` ve her bölümün JSON içindeki yeri (`player, economy, citizens, buildings, roads, vehicles, companies, stocks, research, quests, achievements, statistics, settings`). v7 ile yoldaki kamyon/tanker/çöp kamyonu/otobüsler kargo ve varış noktalarıyla birlikte kaydedilir.
 
+v10 (1.3.0) ile kayda `p10` bölümü eklendi: Living World (şirket meta verileri, markalar, borç, haberler ve aktif etkileri, itibar, yıllık sıralamalar, nüfus geçmişi), eğitim/araştırma/sağlık durumu, havaalanı/liman/demiryolu toplamları, tedarik şokları, megaprojeler, bakım bütçeleri, altyapı varlıkları (yaş, durum, seviye), olaylar, dilekçeler, hedefler, canlı grafikler, Time Machine anlık görüntüleri ve otomasyon anahtarları. Binalara `born` (yapım günü), `grade` (yükseltme seviyesi) ve `mega` (megaproje inşaatı) eklendi. v9 kayıtları açıldığında şehir eksik liseleri/klinikleri otomatik alır.
+
 v9 (1.2.0, Save 3.0) ile kayda `p9` bölümü eklendi: chunk verisi, bölge istatistikleri, komşu şehirler, haneler, trafik (kavşak ayarları, olaylar), toplu taşıma hatları, şebeke/su/kanalizasyon durumu, çevre (rüzgâr, toprak hafızası), aktif afetler, hava, zaman çizelgesi + şehir tarihçesi, meydan okumalar ve timeline dalı. Binalara `cond` (durum) ve inşaat projesi (`cp`: işçi + malzeme) eklendi. Eski kayıtlar açıldığında şehir otomatik olarak Part 9 ağlarını (trafo merkezi, arıtma tesisi, pompa) alır.
 
 v8 (1.1.0) ile kayda `p8` bölümü eklendi: üretilen dünyanın profili (seed, preset, harita tipi, nüfus, bina ve ilçe sayısı, ilçe adları, ekonomi, iklim, üretici sürümü), özel şirketler ve pazar payı hedefleri.
 
-**Migration:** `save.js` içindeki `MIGRATIONS` tablosu v1 → v2 → … → v8 adım adım çalışır. 1.2.0 `{ from: 8, to: 9 }` adımını ekledi; gelecek sürümler yine yalnızca yeni bir adım ekler; eski kayıtlar otomatik yükseltilir. Daha yeni bir sürümün kaydı açılmaya çalışılırsa oyun bunu reddeder ve mevcut kaydı bozmaz.
+**Migration:** `save.js` içindeki `MIGRATIONS` tablosu v1 → v2 → … → v10 adım adım çalışır. 1.2.0 `{ from: 8, to: 9 }`, 1.3.0 `{ from: 9, to: 10 }` adımını ekledi; gelecek sürümler yine yalnızca yeni bir adım ekler; eski kayıtlar otomatik yükseltilir. Daha yeni bir sürümün kaydı açılmaya çalışılırsa oyun bunu reddeder ve mevcut kaydı bozmaz.
 
 ### Eski tarayıcı kayıtlarını aktarma (IMPORT OLD BROWSER SAVE)
 
@@ -160,6 +166,10 @@ Tarayıcı kayıtları tarayıcının içinde (localStorage) durduğu için EXE 
 | G | İstatistik merkezi |
 | F3 | Debug paneli (FPS, frame time, entity/vatandaş/araç/bina sayıları, simülasyon tick'i, aktif olaylar, pathfinding) |
 | Ctrl+K | Komut paleti |
+| Ctrl+Shift+P | Command Palette 2.0 (Generate World, Repair World, Snapshot, Clone, Disaster, Clear Traffic, Unlock, Mega Project, Economy, Citizen Analytics) |
+| J | Living City hub (haberler, şirketler, eğitim/sağlık, turizm, ulaşım, şoklar, Project Manager, altyapı, olaylar, dilekçeler, hedefler, AI Assistant, What-If, otomasyon, grafikler) |
+| U | Tam ekran CITY DASHBOARD (Esc kapatır) |
+| O | WORLD OBSERVATORY (tüm harita, 13 görünüm) |
 | Ctrl+S | Kaydet |
 | F11 | Tam ekran ⇄ pencere |
 | F12 | Ekran görüntüsü → Resimler\BLOCK CITY TYCOON |
@@ -279,7 +289,34 @@ Her admin işlemi `logs\admin.log` dosyasına yazılır (ör. `[16:21] Admin: Ge
 
 **F3 performans monitörü** artık simülasyon/render süresini, vatandaş/araç/bina sayısını, aktif ve yüklü chunk'ları, AI ve pathfinding görevlerini ve belleği de gösterir.
 
-**Otomatik EXE testi:** `"BLOCK CITY TYCOON.exe" --selftest --selftest-out=rapor.json` 20 adımı çalıştırır (New City, Generate Liveable World, Validator, Auto Fix, Start, 1× / 10× / 100×, trafik, ekonomi, afet, acil durum, Save, **EXE'yi yeniden başlatma**, Load, Snapshot, Clone World, Admin Panel, chunk streaming, performans), ayrı bir geçici kullanıcı klasörü kullanır, `logs\selftest.json` yazar ve 0 / 1 çıkış koduyla kapanır. Windows Release iş akışı bunu her derlemede yeni EXE üzerinde çalıştırır ve raporu sürüme ekler. Tarayıcıda: `index.html?selftest`.
+**Otomatik EXE testi:** `"BLOCK CITY TYCOON.exe" --selftest --selftest-out=rapor.json` 30 adımı çalıştırır (New City, Generate Liveable World, Validator, Auto Fix, Start, 1× / 10× / 100×, trafik, ekonomi, afet, acil durum, Save, **EXE'yi yeniden başlatma**, Load, Snapshot, Clone World, Admin Panel, chunk streaming, performans; 1.3.0 ile Living World, Company AI 2.0 & Stock Market 2.0, eğitim/sağlık, turizm/ulaşım/lojistik, tedarik şoku, megaproje, Incident Center, Simulation Lab/What-If/Time Machine, Living City UI ve GENERATE MEGA WORLD), ayrı bir geçici kullanıcı klasörü kullanır, `logs\selftest.json` yazar ve 0 / 1 çıkış koduyla kapanır. Windows Release iş akışı bunu her derlemede yeni EXE üzerinde çalıştırır ve raporu sürüme ekler. Tarayıcıda: `index.html?selftest`.
+
+## 6d. Living World, gelişmiş ekonomi ve Advanced Simulation (1.3.0)
+
+Şehir artık oyuncu hiçbir şey yapmasa da kendi kendine yaşar. Bütün sonuçlar gerçek oyun verilerinden hesaplanır ve mevcut ekonomi / vatandaş / trafik / altyapı sistemlerine bağlıdır.
+
+- **Living World Engine:** yeni şirketler kurulur (karşılanmayan talep, itibar), şirketler büyür/küçülür, mağaza açar/kapatır, bakımsız ve zarar eden binalar kapanır, vatandaşlar daha iyi maaşlı işlere geçer, kirası yükselen haneler taşınır (bölgeler arası göç), yeni mahalleler oluşur; arazi fiyatları, trafik, turizm ve ticaret günlük olarak izlenir.
+- **Şehir yaşam döngüsü:** Sabah / Öğle / Akşam / Gece / Hafta sonu fazları; 24 saat çalışan iş yerlerinde **gece vardiyası**, hafta sonu turistik yerler. Hub'da anlık etkinlik dağılımı gösterilir.
+- **Dinamik nüfus:** doğum, ölüm (sağlık erişimi, kirlilik), göç (iş, konut fiyatı, eğitim, mutluluk, işsizlik, itibar) — **MIGRATION IN / MIGRATION OUT** haberleri, yıllık nüfus tablosu.
+- **Eğitim hattı:** İlkokul → **Lise** → **Kolej** → Üniversite → Araştırma Merkezi; zincirleme kapsama, işgücü eğitim dağılımı; eğitim → beceri → nitelikli iş verimi → gelir → vergi/ekonomi.
+- **Araştırma alanları:** AI, Medicine, Engineering, Energy, Environment, Economics (üniversite örn. AI +12, Medicine +8, Engineering +20 / gün); seviyeler gerçek bonus verir, Research Center teknoloji ağacına RP ekler.
+- **Hastane sistemi:** **Klinik, Hastane, Medical Center, University Hospital** — yatak, acil yatak, personel, tedavi verimi, erişim; **HEALTHCARE OVERLOAD** (bekleme süresi, mutluluk düşüşü); gerçek ambulans rotası vatandaş → ambulans → hastane. Admin: **HEAL ALL CITIZENS**, **MAX HEALTHCARE**.
+- **Tourism 2.0:** turistler karayolu, tren, havaalanı, deniz/kruvaziyer ve komşu şehirlerden gelir (her yolun gerçek kapasitesi); otel/restoran/alışveriş/cazibe/eğlence harcaması; yeni cazibe merkezleri **Landmark Monument, Aquarium, Observation Tower, Convention Center, Beach Resort, Historic District** (+ müze, stadyum, tema parkı) — her birinin TOURISM VALUE'su.
+- **Havaalanı lojistik merkezi:** yolcu, kargo, uçuş, iş; **AIRPORT CONGESTION**; yeni **Airport Terminal**. **Liman:** TEU kapasitesi, ithalat/ihracat, gemiler, **Container Terminal**, **Cruise Terminal**. **Demiryolu:** çelik, tahıl, elektronik, sanayi ürünü yükü, **Rail Hub**. **Lojistik ağı:** fabrika → depo → kamyon/tren/gemi → **Distribution Center** → mağaza → müşteri (mesafe, trafik, yakıt, gecikme, kapasite, darboğaz).
+- **Tedarik şokları:** STEEL / GRAIN / CHIP / CONCRETE SHORTAGE, FUEL CRISIS — fiyat artışı (örn. çelik +%35, elektronik +%12, inşaat +%18) gerçek piyasa fiyatlarına ve bina maliyetlerine yansır; çözümler: yerli üretim, ithalat, yeni fabrika, alternatif kaynak.
+- **Company AI 2.0 + rekabet:** genişleme, bölgeye giriş, kendi fabrikası, kredi, fiyat savaşı, premium, işe alım/işten çıkarma, ürün geliştirme; fiyat · kalite · konum · pazarlama · itibar tablosu. **Dinamik markalar:** CITY MART → CITY MART GROUP → HOLDINGS → GLOBAL; iflastan sonra yeni şirket doğar.
+- **Stock Market 2.0:** değer = gelir, kâr, büyüme, borç, itibar, pazar payı + haber etkisi (örn. "… opens 5 new stores" → hisse +%).
+- **City News:** gerçek verilerden manşetler; haberlerin gerçek etkileri (turizm, talep, üretim, hisse) ve "Major Factory Opens" gibi haberlerde 60 sn sonra **ölçülen** etki (iş, trafik, kirlilik, üretim).
+- **City Reputation 0–1000**, **yıllık World City Ranking** (Economy, Tourism, Education, Healthcare, Green City, Transport, Quality of Life), **bölgesel rekabet** (GDP, nüfus, mutluluk, turizm, eğitim, güvenlik, çevre).
+- **Dinamik arazi gelişimi:** boş arazi → küçük → orta → yüksek bina → megaproje; **AUTO DEVELOPMENT** kapatılabilir.
+- **Megaprojeler:** Mega Airport, Central Railway Hub, Arcology Prime, Super Stadium, Financial Tower, Space Center, Mega Port, Mega Tech Campus, Grand Park — para, zaman, işçi, malzeme (çelik/beton/cam); %0 Planning · %25 Foundation · %50 Structure · %75 Exterior · %100 Complete görsel aşamaları; **PROJECT MANAGER**.
+- **Bakım bütçeleri** (yollar, binalar, enerji, su, raylı sistem) ve **altyapı yaşlanması** (köprüler, yol ağları, tesisler): REPAIR / UPGRADE / REPLACE.
+- **Rastgele olaylar + INCIDENT CENTER:** araç arızası, küçük kaza, altyapı arızası, inşaat gecikmesi, depo sorunu, trafik olayı — gerçek acil araçlar, müdahale süresi, etkilenen ilçe.
+- **Vatandaş görüşleri ve dilekçeler** (ACCEPT / IGNORE), **uzun vadeli hedefler** (1M nüfus, #1 turizm, %95 mutluluk, 5 metro hattı, $1B GDP …), **dinamik görevler**.
+- **Akıllı otomasyon:** AUTO TRAFFIC, AUTO PUBLIC TRANSPORT, AUTO BUILD, AUTO REPAIR, AUTO ECONOMY, AUTO ZONING, AUTO EMERGENCY, AUTO UTILITY BALANCE, AUTO DEVELOPMENT (bütçeden ödenir).
+- **City AI Assistant:** PROBLEM → NEDEN → SEÇENEKLER (maliyetli) → BEKLENEN SONUÇ (motor tarafından hesaplanır).
+- **WORLD OBSERVATORY** (O), **canlı grafikler** (13 seri), tam ekran **CITY DASHBOARD** (U).
+- **Admin (World Control Center):** LIVING WORLD, INCIDENT CENTER, **SIMULATION LAB** (nüfus/trafik/vergi/sanayi/turizm deneyi — gerçek motor, dünyanın kopyasında), **WHAT-IF** (APPLY / DISCARD), **TIME MACHINE** (Yıl 1/5/10/25/50/100), **WORLD FACTORY** + **World Presets 2.0** (13 yeni preset), **GENERATE MEGA WORLD** (22 adım) + **WORLD GENERATION SCORE** ve AUTO FIX, MEGAPROJECTS, HEALTH & EDUCATION; admin arama 2.0 (örn. "traffic").
 
 ## 7. Pencere ve ayarlar
 
@@ -297,7 +334,7 @@ Her admin işlemi `logs\admin.log` dosyasına yazılır (ör. `[16:21] Admin: Ge
 `electron/updater.js` dört adımı içerir: **Update Checker → Version Check → Download Update → Install Update**. Açmak için `package.json` içindeki `bctUpdate.manifestUrl` alanına https ile yayınlanan bir JSON adresi yazın:
 
 ```json
-{ "version": "1.2.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-1.2.0.exe", "sha256": "…", "notes": "Yeni binalar" }
+{ "version": "1.3.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-1.3.0.exe", "sha256": "…", "notes": "Yeni binalar" }
 ```
 
 Adres boşsa güncelleme kapalıdır. İnternet yoksa oyun sessizce devam eder. İndirilen installer'ın SHA-256 değeri doğrulanır. Kayıtlar kullanıcı klasöründe durduğu için güncellemeden etkilenmez.
@@ -326,7 +363,8 @@ Bu sürümde otomatik olarak (Linux üzerinde Electron + Playwright, Xvfb ile) d
 | 25 | Dünya üretici (12 preset + custom, SMALL…MEGA) | ✅ hepsi LIVEABLE, sağlık %92–98, 1–4 sn, simülasyon dakikalarca kararlı |
 | 26 | Admin paneli, konsol, snapshot/rollback, stres testi, benchmark, export/import, admin.log | ✅ tarayıcıda ve Electron'da hatasız |
 | 27 | Part 9: chunk motoru, trafik 2.0, toplu taşıma, haneler, emlak, inşaat 2.0, bakım, şebeke/su/kanalizasyon, çevre, Weather 2.0, World Control Center, inspector, fırça, bölge seçici, afet komuta merkezi, snapshot 2.0/dallanma/klon, timeline, meydan okumalar, Validator 2.0, Advisor 2.0 | ✅ tarayıcıda hatasız; GIGA 128×128 dünya 3 sn'de üretiliyor |
-| 28 | Otomatik self-test (20 adım, EXE yeniden başlatma dahil) | ✅ tarayıcıda ve Electron'da 20/20 |
+| 28 | Otomatik self-test (30 adım, EXE yeniden başlatma dahil) | ✅ tarayıcıda ve Electron'da 30/30 |
+| 29 | Part 10: Living World, yaşam döngüsü, nüfus, Company AI 2.0, markalar, Stock Market 2.0, haberler, itibar, sıralama, eğitim/araştırma/sağlık, Tourism 2.0, havaalanı/liman/demiryolu/lojistik, şoklar, megaprojeler, bakım/yaşlanma, olaylar, dilekçeler, hedefler, otomasyon, Assistant, Observatory, grafikler, Time Machine, Simulation Lab, What-If, World Factory, 22 adımlı GENERATE MEGA WORLD | ✅ tarayıcıda hatasız; v9 → v10 migration; aynı seed aynı dünya; GIGA mega dünya 7 sn, skor 94/100 |
 | 24 | Uninstaller | ✅ Wine altında dosyalar, kısayollar ve kayıt defteri girdisi siliniyor, kayıtlar korunuyor |
 
 Wine altında doğrulanamayanlar gerçek bir Windows PC'de denenmeli:
@@ -338,5 +376,5 @@ Windows'ta son kontrol:
 
 ```text
 npm install → npm run dev → NEW CITY → şehir oluşur → Ctrl+S → pencereyi kapat (EXIT)
-→ npm run build → dist\BLOCK-CITY-TYCOON-Setup-1.2.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
+→ npm run build → dist\BLOCK-CITY-TYCOON-Setup-1.3.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
 ```

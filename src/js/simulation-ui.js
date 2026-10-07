@@ -201,7 +201,7 @@ function renderDebug6() {
     'Memory ' + mem + '\n' +
     'Active events: ' + (ev.join(', ') || 'none') + '\n' +
     'Pathfinding ' + pathReqRate.toFixed(1) + ' req/s  cache ' + MAP.pathCache.size + '  reroutes ' + S.p6.stats.reroutes + '\n' +
-    'RNG state ' + RNG.gen.s + p9DebugLines();
+    'RNG state ' + RNG.gen.s + p9DebugLines() + (S.p10 && typeof p10DebugLines === 'function' ? '\n' + p10DebugLines() : '');
 }
 
 /* --- Daily city report --------------------------------------------------------------------------------------- */

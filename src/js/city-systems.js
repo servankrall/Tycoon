@@ -88,11 +88,11 @@ function aiTick(dt) {
     const sec = a.sectors[0];
     const sh = SIM.share && SIM.share[sec] ? (SIM.share[sec][a.id] || 0) : 0;
     const psh = SIM.share && SIM.share[sec] ? (SIM.share[sec].player || 0) : 0;
-    st.price = clamp(lerp(st.price, psh > sh + 0.15 ? 0.85 : sh < 0.2 ? 0.9 : sh > 0.5 ? 1.15 : 1.0, 0.1), 0.75, 1.35);   // undercut a dominant player
+    st.price = clamp(lerp(st.price, (psh > sh + 0.15 ? 0.85 : sh < 0.2 ? 0.9 : sh > 0.5 ? 1.15 : 1.0) + (S.p10 ? corpPriceBias(a.id) : 0), 0.1), 0.75, 1.35);   // Part 10: Company AI 2.0 price strategy   // undercut a dominant player
     if (st.cash > 15000 * costMult() && Math.random() < 0.03 && !(st.adUntil > t)) { st.cash -= 5000 * costMult(); st.adUntil = t + 150; }
     st.rep = clamp(lerp(st.rep, 40 + st.quality * 20 + (st.adUntil > t ? 5 : 0), 0.02), 0, 100);
   });
-  if ((SIM.housingDemandRatio || 0) > 1.02 && (SIM.attract || 0) > -0.2) aiBuild(pickAI('dev'), 'HOUSING', 1);
+  if ((SIM.housingDemandRatio || 0) > 1.02 && (SIM.attract || 0) > -0.2 && (!S.p10 || S.p10.auto.development)) aiBuild(pickAI('dev'), 'HOUSING', 1);
   let best = null, br = 1.1;
   ['FOOD', 'SHOPPING', 'ENTERTAINMENT', 'FINANCE', 'TECHNOLOGY'].forEach(function (s) {
     const r = (SIM.demand[s] || 0) / Math.max(1, SIM.supply[s] || 0);

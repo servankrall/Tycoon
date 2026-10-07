@@ -344,6 +344,7 @@ function countBridges() { let n = 0; for (let i = 0; i < MAP.roads.length; i++) 
 function adminSearchHtml(q) {
   q = q.toLowerCase();
   const out = [];
+  if (typeof p10SearchHtml === 'function') Array.prototype.push.apply(out, p10SearchHtml(q));      // Part 10: feature search (e.g. "traffic")
   Object.keys(ADM_COMMANDS).filter(function (k) { return k.toLowerCase().indexOf(q) >= 0; }).slice(0, 12).forEach(function (k) { out.push('<button class="admLi" data-ac="runCmd" data-v="' + k + '">⌨ ' + k + ' — ' + esc(ADM_COMMANDS[k].help) + '</button>'); });
   ADM_CATS.filter(function (c) { return c[2].toLowerCase().indexOf(q) >= 0; }).forEach(function (c) { out.push('<button class="admLi" data-acat="' + c[0] + '">' + c[1] + ' ' + c[2] + '</button>'); });
   Object.values(BUILDINGS).filter(function (d) { return !d.hidden && d.name.toLowerCase().indexOf(q) >= 0; }).slice(0, 12).forEach(function (d) { out.push('<button class="admLi" data-ac="adminPlace" data-v="' + d.id + '">🏗 Build ' + d.icon + ' ' + esc(d.name) + '</button>'); });
@@ -645,7 +646,9 @@ function duplicateWorld() {
 const SNAP_INDEX = 'bct_snap_index', SNAP_MAX = 20;
 function snapshotIndex() { try { const a = JSON.parse(Store.getItem(SNAP_INDEX) || '[]'); return Array.isArray(a) ? a.filter(function (s) { return s && /^snapshot_\d{3}$/.test(s.id); }) : []; } catch (e) { return []; } }
 function snapKey(id) { return 'bct_snap_' + id.slice(9); }
-function createSnapshot(name, silent) {
+/* Time Machine snapshots (meta.tm) are kept when old snapshots make room */
+function snapEvict(idx) { let k = idx.findIndex(function (s) { return !s.tm; }); if (k < 0) k = 0; return idx.splice(k, 1)[0]; }
+function createSnapshot(name, silent, extra) {
   const idx0 = snapshotIndex();
   let n = 1; idx0.forEach(function (s) { n = Math.max(n, (+s.id.slice(9)) + 1); }); if (n > 999) n = 1;
   const id = 'snapshot_' + String(n).padStart(3, '0');
@@ -660,14 +663,15 @@ function createSnapshot(name, silent) {
     try { Store.setItem(snapKey(id), json); break; }
     catch (e) {
       if (!idx0.length || tries > 20) { if (!silent) admRe('Snapshot failed: storage full (' + e.message + ')', 'bad'); return null; }
-      const old = idx0.shift(); Store.removeItem(snapKey(old.id));
+      const old = snapEvict(idx0); Store.removeItem(snapKey(old.id));
     }
   }
-  if (!DESKTOP) while (idx0.length > 7) { const old = idx0.shift(); Store.removeItem(snapKey(old.id)); }
+  if (!DESKTOP) while (idx0.length > 7) { const old = snapEvict(idx0); Store.removeItem(snapKey(old.id)); }
   const meta = { id: id, name: String(name || id).replace(/[<>]/g, '').slice(0, 48), created: Date.now(), city: S.city.name, pop: Math.floor(S.city.population), seed: seedLabel(), slot: S.slot || 1,
     timeline: S.p9 ? S.p9.branch.name : 'Original Timeline', branchId: S.p9 ? S.p9.branch.id : 'original', year: typeof gameYear === 'function' ? gameYear() : 1 };
   idx0.push(meta);
-  while (idx0.length > SNAP_MAX) { const old = idx0.shift(); Store.removeItem(snapKey(old.id)); }
+  if (extra) Object.assign(meta, extra);
+  while (idx0.length > SNAP_MAX) { const old = snapEvict(idx0); Store.removeItem(snapKey(old.id)); }
   Store.setItem(SNAP_INDEX, JSON.stringify(idx0));
   return meta;
 }

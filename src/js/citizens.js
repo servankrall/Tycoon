@@ -100,12 +100,13 @@ function decide(c) {
   } else {
     const workStart = c.pers === 'WORKAHOLIC' ? 7 : 8, workEnd = c.pers === 'WORKAHOLIC' ? 19 : 17;
     const worksToday = !weekend || (c.pers === 'WORKAHOLIC' && (c.id % 2 === 0));
-    push('GO_HOME_SLEEP', night ? 95 + (100 - c.energy) * 0.3 : (c.energy < 20 ? 92 : 0), null);
-    if (c.work) push('GO_WORK', (worksToday && h >= workStart - 1.5 && h < workEnd - 1 && c.lastWorkDay !== today) ? (82 + (c.money < 100 ? 20 : 0)) * P.work : 0, null);
+    const ns = S.p10 && p10NightShift(c);                        // Part 10: night shift at 24-hour workplaces (sleeps by day)
+    push('GO_HOME_SLEEP', ns ? (h >= 8 && h < 16 ? 95 : (c.energy < 20 ? 92 : 0)) : night ? 95 + (100 - c.energy) * 0.3 : (c.energy < 20 ? 92 : 0), null);
+    if (c.work) push('GO_WORK', ns ? ((h >= 21 || h < 3) && c.lastWorkDay !== today ? 88 : 0) : (worksToday && h >= workStart - 1.5 && h < workEnd - 1 && c.lastWorkDay !== today) ? (82 + (c.money < 100 ? 20 : 0)) * P.work : 0, null);
     else push('FIND_WORK', (c.money < 100 && h >= 7 && h < 16) ? 78 : (h >= 8 && h < 15 && !weekend ? 25 : 0), MAP.lists.jobs, function (b) { return b.workers > 0 && bdef(b).sector !== 'HOUSING' && !b.closed; });
     const spend = P.spend || 1;
     if (c.money >= 12) push('GO_RESTAURANT', (100 - c.needs.food) * 1.1 + (c.needs.food < 30 ? 40 : 0) + ((h >= 12 && h < 13.5) ? 35 : (h >= 19 && h < 21) ? 20 : 0), MAP.lists.FOOD);
-    if (c.money >= 15) push('GO_ENTERTAINMENT', ((100 - c.needs.fun) * 0.9 + (c.needs.fun < 30 ? 30 : 0) + (h >= 19 && h < 22 ? 30 : 0) + (weekend ? 15 : 0)) * P.fun, MAP.lists.ENTERTAINMENT.concat(P.tech ? MAP.lists.commercial.filter(function (b) { return bdef(b).sector === 'TECHNOLOGY'; }) : []));
+    if (c.money >= 15) push('GO_ENTERTAINMENT', ((100 - c.needs.fun) * 0.9 + (c.needs.fun < 30 ? 30 : 0) + (h >= 19 && h < 22 ? 30 : 0) + (weekend ? 15 : 0)) * P.fun, MAP.lists.ENTERTAINMENT.concat(P.tech ? MAP.lists.commercial.filter(function (b) { return bdef(b).sector === 'TECHNOLOGY'; }) : [], weekend && S.p10 ? MAP.lists.tourism : []));
     if (c.money >= 20 / spend) push('GO_SHOPPING', ((100 - c.needs.shopping) * 0.7 + (h >= 17 && h < 19 ? 30 : h >= 11 && h < 17 ? 10 : 0) + (weekend ? 12 : 0)) * P.shop, MAP.lists.SHOPPING);
     push('GO_PARK', ((100 - c.needs.fun) * 0.6 + (h >= 9 && h < 20 ? 10 : 0) + (weekend ? 15 : 0)) * (P.park || 1) * (({ winter: 0.45, summer: 1.25 })[currentSeason().id] || 1) * (S.p9 ? weatherOutdoor() : 1), MAP.lists.parks);
     // Part 9 households: young citizens study on weekdays (schools, colleges, universities)
@@ -493,6 +494,8 @@ function arriveVehicle(i) {
   const v = AG.vehicles[i];
   if (v.line && transitVehicleArrive(v)) return;
   if (v.incident) onIncidentCrew(v);
+  if (v.patient && p10PatientArrive(v)) return;         // Part 10: ambulance picked the patient up → drives on to the hospital
+  if (v.p10inc) p10IncidentArrive(v);                   // Part 10: incident center unit on site
   if (v.type === 'bus') {
     const stops = busRouteStops();
     if (stops.length >= 2) {

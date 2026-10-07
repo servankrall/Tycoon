@@ -194,7 +194,7 @@ function supplyChainTick(dt, mods, list) {
   PRODUCT_IDS.forEach(function (p) {
     const sup = R.prod[p] + R.imp[p] + 1, dem = R.dem[p] + R.del[p] * 0.5 + R.exp[p] + 1;
     const pl = priceLevel();
-    const target = PRODUCTS[p].base * pl * clamp(Math.sqrt(dem / sup), 0.6, 1.8) * (1 + gauss() * 0.01 * vol);
+    const target = PRODUCTS[p].base * pl * clamp(Math.sqrt(dem / sup), 0.6, 1.8) * (1 + gauss() * 0.01 * vol) * (S.p10 ? shockPriceMult(p) : 1);   // Part 10: supply shocks
     price[p] = clamp(lerp(price[p], target, 0.04 * dt * (difficulty().dynamic ? 1.8 : 1)), PRODUCTS[p].base * 0.3 * pl, PRODUCTS[p].base * 4 * pl);
     if (!isFinite(inv[p]) || inv[p] < 0) inv[p] = 0;
   });
@@ -271,6 +271,7 @@ function econTick(dt) {
     if (b.built && d.id !== 'tree') builtTiles += d.w * d.h;
     if (b._op) jobs += b.workers;
   }
+  if (S.p10) jobs += p10ProjectJobs();                     // Part 10: megaproject construction crews
   const effJobs = jobs * mods.jobs;
   const labor = Math.floor(pop * 0.55) + Math.round(SIM.p9InCommuters || 0);          // Part 9: commuters from neighbouring cities
   const staffRatio = jobs > 0 ? Math.min(1, labor / jobs) : 1;
@@ -344,6 +345,7 @@ function econTick(dt) {
     if (SIM.flood && b._nearWater) e *= 0.6;
     if (d.water < 0 && d.sector !== 'HOUSING') e *= 0.7 + 0.3 * waterRatio;
     if (S.p9) e *= condMult(b) * (d.water < 0 ? waterPressureMult(b) : 1) * (b._sewerBack ? 0.85 : 1);   // condition, water pressure, sewage
+    if (S.p10) e *= skillFit(d) * shockBoost(b);          // Part 10: skilled workers for skilled jobs, emergency production during supply shocks
     b._eff = e;
   }
 
@@ -499,7 +501,7 @@ function econTick(dt) {
     }
     // costs
     const sal = b._actW * d.sal * pol.sal * mods.wage;
-    const mt = b.closed ? 0 : d.maint * lvlMult(b.level) * diff.maint;
+    const mt = b.closed ? 0 : d.maint * lvlMult(b.level) * diff.maint * (S.p10 && b.owner === 'city' ? p10MaintCostMult(b) : 1);
     let cost = sal + mt + (d.fuel ? b._gen * d.fuel * mods.electricity : 0) + (b._inputCost || 0) + (b._impCost || 0);
     if (b.owner !== 'city') {
       // private owners pay taxes and utility bills to the city
@@ -522,7 +524,7 @@ function econTick(dt) {
   B.tourism += tourists * TOURIST_SPEND * 0.1;          // tourist tax
   if (S.space.stage >= 3) B.space = 2000 * (1 + 0.1 * ppLevel('spacebonus'));
   if (S.space.stage >= 3) S.economy.inventory.rare += 4 * dt;
-  BE.roads = MAP.roadCount * 0.004 * (1 - (SIM.evShare || 0) * 0.3) * diff.maint;
+  BE.roads = MAP.roadCount * 0.004 * (1 - (SIM.evShare || 0) * 0.3) * diff.maint * (S.p10 ? 0.4 + 0.6 * S.p10.maint.roads : 1);
   B.grant = 1.5 * clamp(1 - pop / 1500, 0, 1) / diff.maint * mods.grant;      // state grant for small towns
   // Player companies: dividends to outside shareholders
   for (const cid in compStats) {
@@ -605,7 +607,7 @@ function econTick(dt) {
   const children = pop * 0.18;
   const primary = children > 1 ? Math.min(1, schoolSeats / children) : (schoolSeats > 0 ? 1 : 0);
   const higher = Math.min(1, uniSeats / (pop * 0.05 + 1));
-  const eduT = clamp(100 * (0.6 * primary + 0.4 * higher) + (hasTech('s_edu') ? 15 : 0) + mods.eduBonus, 0, 100);
+  const eduT = S.p10 ? p10EduTarget(mods) : clamp(100 * (0.6 * primary + 0.4 * higher) + (hasTech('s_edu') ? 15 : 0) + mods.eduBonus, 0, 100);   // Part 10: education pipeline
   city.education = clamp(lerp(city.education, eduT, 0.03 * dt), 0, 100);
   city.skill = clamp(lerp(city.skill, 25 + city.education * 0.7, (hasTech('s_edu') ? 0.02 : 0.01) * dt), 0, 100);
   SIM.schoolSeats = schoolSeats; SIM.uniSeats = uniSeats; SIM.children = children;
@@ -643,6 +645,7 @@ function econTick(dt) {
   if (pop > 150) h += add('Fuel availability', -(1 - SIM.fuelRatio) * 6);
   h += add('Education', city.education * 0.04);
   h += add('Season & weather', season.hap + Wx.hap);
+  if (S.p10) h += add('Healthcare', p10HealthHap());
   h += add('Salary policy', pol.hap);
   h += add('Landmarks & events', mods.hap);
   h += add('Civic pride (legacy)', 2 * ppLevel('happy'));
@@ -672,6 +675,7 @@ function econTick(dt) {
     const attraction = tourWeight + pop * 0.03;
     touristsT = attraction * 0.2 * (1 - city.pollution / 150) * (1 - city.crime / 200) * (0.6 + city.happiness / 250) * (0.6 + city.reputation / 125) * season.tour * mods.tour * (1 + 0.08 * partners);
   }
+  if (city.tourismUnlocked && S.p10) touristsT = p10TourismArrivals(touristsT);      // Part 10: visitors arrive by road, rail, air and sea (real capacities)
   if (city.tourismUnlocked) touristsT += SIM.p9Tourists || 0;                       // visitors from neighbouring cities
   city.tourists = Math.max(0, lerp(city.tourists, touristsT, 0.05 * dt));
 
@@ -683,10 +687,13 @@ function econTick(dt) {
   const A = (city.happiness - 50) / 50 + jobsFactor - Math.max(0, city.tax - 10) * 0.035 - city.pollution * 0.004 + Math.min(0.3, metroBonus) + (city.reputation - 50) / 250;
   const gmult = mods.growth * season.growth;
   let p = pop;
-  if (A > 0 && p < housingCap) p += Math.min(housingCap - p, (p * 0.006 + 0.3) * A * gmult * dt);
-  if (A < 0) p -= p * 0.003 * (-A) * dt;
-  if (city.tax > 22 && city.happiness < 45) p -= p * 0.002 * dt;
-  if (p > housingCap) p -= Math.min(p - housingCap, (p - housingCap) * 0.04 * dt + 0.05);
+  if (S.p10) p = p10PopulationStep(p, dt, housingCap, A, gmult);          // Part 10: births, deaths, migration in / out
+  else {
+    if (A > 0 && p < housingCap) p += Math.min(housingCap - p, (p * 0.006 + 0.3) * A * gmult * dt);
+    if (A < 0) p -= p * 0.003 * (-A) * dt;
+    if (city.tax > 22 && city.happiness < 45) p -= p * 0.002 * dt;
+    if (p > housingCap) p -= Math.min(p - housingCap, (p - housingCap) * 0.04 * dt + 0.05);
+  }
   city.population = Math.max(0, p);
   city.peakPop = Math.max(city.peakPop, city.population);
   S.meta.bestPop = Math.max(S.meta.bestPop, city.population);

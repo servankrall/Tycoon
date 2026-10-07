@@ -90,11 +90,12 @@ async function generateWorld(presetId, overrides) {
   try {
     STARTED = false;
     clearDialogues(); resetAgents();
-    for (let i = 0; i < WG_STAGES.length; i++) {
-      const id = WG_STAGES[i][0];
+    const stages = wgStageList(cfg);              // classic 18 steps, or the 22-step GENERATE MEGA WORLD pipeline (Part 10)
+    for (let i = 0; i < stages.length; i++) {
+      const id = stages[i][0];
       wgSetProgress(id, 0);
       await wgFrame(); ctx.t = performance.now();
-      await WG_RUN[id](ctx, cfg, prevSlot);
+      for (let j = 0; j < stages[i][2].length; j++) { const f = stages[i][2][j]; await (WG_RUN[f] || MEGA_RUN[f])(ctx, cfg, prevSlot); }
       wgSetProgress(id, 1);
     }
     const res = ctx.result;
@@ -526,6 +527,7 @@ const WG_RUN = {
     if (!countAny('university') && ctx.plan.pop > 3000) wgPlaceAnywhere(ctx, 'university', { districts: ['TECHNOLOGY', 'DOWNTOWN', 'RESIDENTIAL'] });
     if (ctx.plan.pop >= 5000 && !countAny('cityhall')) wgPlaceAnywhere(ctx, 'cityhall', { districts: ['DOWNTOWN'], clearLocal: true });
     wgAddWaste(ctx);
+    if (S.p10) { const r = p10WorldgenServices(); if (r) ctx.log.push('🎓 ' + r); }       // Part 10: high schools, colleges, clinics
     await ctx.tick('services', 1);
   },
   /* --- 13. Economy: utilities sized to the real demand, starting money, stocks, taxes; settle the simulation --- */
@@ -617,8 +619,10 @@ const WG_RUN = {
     startGame({ isNew: true, notes: ['🌍 World "' + S.city.name + '" generated (' + (WORLD_PRESETS[cfg.preset] ? WORLD_PRESETS[cfg.preset].name : 'Custom world') + ', ' + seedLabel() + ').'] });
     ctx.result = {
       name: S.city.name, seed: seedLabel(), preset: cfg.preset, size: MAP.W, population: Math.floor(S.city.population), buildings: S.buildings.list.length, roads: MAP.roadCount,
-      companies: companies, vehicles: AG.vehicles.length, districts: ctx.seeds.length, report: r, health: h, fixes: ctx.fixLog || [], seconds: (performance.now() - WG.t0) / 1000
+      companies: companies, vehicles: AG.vehicles.length, districts: ctx.seeds.length, report: r, health: h, fixes: ctx.fixLog || [], seconds: (performance.now() - WG.t0) / 1000,
+      p10score: ctx.p10score || null, mega: !!cfg.mega, steps: wgStageList(cfg).length
     };
+    if (S.p10 && ctx.p10score) S.p10.genScore = ctx.p10score;
   }
 };
 
@@ -1270,10 +1274,11 @@ function drawWorldDebug() {
 }
 
 /* ===================================== PROGRESS & RESULT UI ===================================== */
+function wgStageList(cfg) { return cfg && cfg.mega && typeof MEGA_STAGES !== 'undefined' ? MEGA_STAGES : WG_STAGES.map(function (s) { return [s[0], s[1], [s[0]]]; }); }
 function showWgProgress(cfg) {
   const el = $('wgProgress');
-  WG.stages = WG_STAGES.map(function (s) { return { id: s[0], name: s[1], p: 0 }; });
-  $('wgTitle').textContent = '🌍 GENERATING WORLD — ' + (WORLD_PRESETS[cfg.preset] ? WORLD_PRESETS[cfg.preset].name : '🛠 Custom world') + ' · ' + seedLabel(cfg.seed) + ' · ' + cfg.size;
+  WG.stages = wgStageList(cfg).map(function (s) { return { id: s[0], name: s[1], p: 0 }; });
+  $('wgTitle').textContent = (cfg.mega ? '🌐 GENERATE MEGA WORLD — ' : '🌍 GENERATING WORLD — ') + (WORLD_PRESETS[cfg.preset] ? WORLD_PRESETS[cfg.preset].name : '🛠 Custom world') + ' · ' + seedLabel(cfg.seed) + ' · ' + cfg.size;
   el.classList.remove('hidden');
   wgRenderProgress();
 }
@@ -1304,6 +1309,7 @@ function showWorldResult(res) {
   const html = '<div class="grid2"><div class="card"><h3>🌍 WORLD GENERATED</h3>' + row('City', esc(res.name)) + row('Seed', res.seed) + row('Map', res.size + '×' + res.size) +
     row('Population', fmt(res.population)) + row('Buildings', fmt(res.buildings)) + row('Roads', fmt(res.roads) + ' tiles') + row('Companies', fmt(res.companies)) + row('Vehicles', fmt(res.vehicles)) + row('Districts', res.districts) +
     row('Generated in', res.seconds.toFixed(1) + ' s') + '</div><div class="card"><h3>❤️ WORLD HEALTH</h3>' + healthHtml(h) + '</div></div>' +
-    '<div class="card"><h3>✅ WORLD VALIDATION</h3>' + validationHtml(r) + (res.fixes.length ? '<p class="small" style="margin-top:6px"><b>Auto-fix:</b> ' + res.fixes.map(esc).join(' · ') + '</p>' : '') + '</div>';
-  showModal('🌍 World generated', html);
+    '<div class="card"><h3>✅ WORLD VALIDATION</h3>' + validationHtml(r) + (res.fixes.length ? '<p class="small" style="margin-top:6px"><b>Auto-fix:</b> ' + res.fixes.map(esc).join(' · ') + '</p>' : '') + '</div>' +
+    (res.p10score && typeof scoreHtml === 'function' ? '<div class="card"><h3>🏆 WORLD GENERATION SCORE (' + res.steps + '-step pipeline)</h3>' + scoreHtml(res.p10score) + '</div>' : '');
+  showModal(res.mega ? '🌐 Mega world generated' : '🌍 World generated', html);
 }

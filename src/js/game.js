@@ -56,7 +56,8 @@ const Game = {
     { name: 'ZoneDevelop', every: 6, acc: 0, tick: function () { if (!(S.p9 && S.p9.freeze.buildings)) zoneDevelopTick(); } },
     { name: 'Evolution', every: 20, acc: 0, tick: function () { if (!(S.p9 && S.p9.freeze.buildings)) evolutionTick(); } },
     { name: 'Districts6', every: 10, acc: 0, tick: function () { computeDistrictNames(); } },
-    { name: 'World', every: 1, acc: 0, tick: function (dt) { part9Tick(dt); } }          // Part 9: regions, neighbours, grid, water, sewage, environment, households, property, maintenance, incidents, disasters, validator
+    { name: 'World', every: 1, acc: 0, tick: function (dt) { part9Tick(dt); } },
+    { name: 'Living', every: 1, acc: 0, tick: function (dt) { part10Tick(dt); } }          // Part 9: regions, neighbours, grid, water, sewage, environment, households, property, maintenance, incidents, disasters, validator
   ],
   /* fixed-rate (20 TPS) systems */
   tickSystems: [

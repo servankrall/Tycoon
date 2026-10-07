@@ -344,7 +344,7 @@ function removeBuilding(b) {
 }
 function buildingAtTile(x, y) { if (!inMap(x, y)) return null; const id = MAP.occ[idx(x, y)]; return id ? MAP.byId.get(id) || null : null; }
 function lvlMult(l) { return 1 + 0.6 * (l - 1); }
-function buildCost(d) { return Math.round(d.cost * costMult()); }
+function buildCost(d) { return Math.round(d.cost * costMult() * (S && S.p10 ? shockBuildMult() : 1)); }   // Part 10: supply shocks raise construction costs
 function buildingValue(b) { return bdef(b).cost * lvlMult(b.level) * costMult() * propertyValueMult(b); }   // land value & condition (Part 9)
 function upgradeCost(b) { const d = bdef(b); return Math.round(d.cost * 0.9 * Math.pow(1.85, b.level - 1) * costMult()); }
 function buildTimeFor(cost) { return clamp(3 + Math.sqrt(cost) * 0.08, 3, 90) / (1 + 0.1 * ppLevel('build')); }
@@ -393,6 +393,7 @@ function canPlace(d, x, y, forAI) {
   if (!resOk) return { ok: false, reason: 'TERRAIN NOT SUITABLE — needs a ' + RESOURCE_TYPES[d.extract.type].name + ' deposit (Resources layer)', code: 'terrain' };
   if (d.needsWater && !adjacentWater(d, x, y, false)) return { ok: false, reason: 'TERRAIN NOT SUITABLE — must touch a river or lake', code: 'terrain' };
   if (d.needsSea && !adjacentWater(d, x, y, true)) return { ok: false, reason: 'TERRAIN NOT SUITABLE — must touch sea-connected water', code: 'terrain' };
+  if (d.needsAirport && !S.buildings.list.some(function (b) { return (b.type === 'airport' || b.type === 'megaairport') && Math.abs(b.x - x) <= 10 + 6 && Math.abs(b.y - y) <= 10 + 4; })) return { ok: false, reason: 'MUST BE WITHIN 10 TILES OF THE INTERNATIONAL AIRPORT', code: 'terrain' };
   const road = hasRoadNext(d, x, y);
   if (forAI) return { ok: road || d.noRoad };
   const st = unlockStatus(d);

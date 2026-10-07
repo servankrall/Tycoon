@@ -17,7 +17,7 @@ const { createUpdater } = require('./electron/updater');
 const pkg = require('./package.json');
 
 const DEV = process.argv.includes('--dev') || process.env.BCT_DEV === '1';
-/* Automatic self-test (Part 9): "BLOCK CITY TYCOON.exe --selftest [--selftest-out=<file>]" plays the 20-step release test plan,
+/* Automatic self-test (Part 9): "BLOCK CITY TYCOON.exe --selftest [--selftest-out=<file>]" plays the 30-step release test plan (20 core + 10 Living World checks),
    restarts itself once (phase 2), writes logs/selftest.json and exits with code 0 (all passed) or 1. */
 const SELFTEST = process.argv.includes('--selftest');
 const SELFTEST_PHASE = SELFTEST ? (process.argv.includes('--selftest-phase=2') ? 2 : 1) : 0;

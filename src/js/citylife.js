@@ -218,9 +218,9 @@ function maintenanceTick(dt) {
       if (!b.built || b.type === 'tree') return;
       if (b.cond === undefined) b.cond = 100;
       const d = BUILDINGS[b.type];
-      let r = base * (d.cat === 'Industry' || d.cat === 'Resources' ? 1.5 : d.cat === 'Utilities' ? 1.25 : 1) * (storm ? 2 : 1) * (1 + (envReady() ? ENV.air[idx(b.x, b.y)] * 0.5 : 0)) * (b._gridOver ? 1.5 : 1);
+      let r = base * (d.cat === 'Industry' || d.cat === 'Resources' ? 1.5 : d.cat === 'Utilities' ? 1.25 : 1) * (storm ? 2 : 1) * (1 + (envReady() ? ENV.air[idx(b.x, b.y)] * 0.5 : 0)) * (b._gridOver ? 1.5 : 1) * (S.p10 ? p10DecayMult(b) : 1);   // Part 10: maintenance budget per network, age, upgrades
       b.cond = Math.max(0, b.cond - r * dt);
-      if (b.cond < 40 && !b.damaged && RNG.next() < (40 - b.cond) / 40 * 0.0004 * dt) { damageBuilding(b); M.failures++; if (b.owner !== 'city' && !isAI(b)) toast('🔧 ' + d.name + ' broke down (condition ' + Math.round(b.cond) + '%) — maintenance needed', 'bad'); }
+      if (b.cond < 40 && !b.damaged && RNG.next() < (40 - b.cond) / 40 * 0.0004 * dt * (S.p10 ? 1.6 - 0.6 * S.p10.maint[maintCat(d)] : 1)) { damageBuilding(b); M.failures++; if (b.owner !== 'city' && !isAI(b)) toast('🔧 ' + d.name + ' broke down (condition ' + Math.round(b.cond) + '%) — maintenance needed', 'bad'); }
     });
     // maintenance budget (city): scales with the number of buildings
     S.budget = Math.max(0, S.budget - fund * 0.0015 * S.buildings.list.length * dt);

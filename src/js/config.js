@@ -22,7 +22,7 @@
 
 /* ============================== 1. CONFIG ============================== */
 const DEBUG = /[?&]debug\b/.test(location.search);   // open with ?debug for the debug HUD + dev console functions
-const SAVE_VERSION = 9;
+const SAVE_VERSION = 10;
 const SAVE_KEY = 'bct_pro_save';
 const SAVE_BACKUP_KEY = 'bct_pro_save_backup';
 const LEGACY_SAVE_KEYS = ['blockCityTycoonSave_v1'];

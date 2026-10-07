@@ -6,6 +6,8 @@ function constructionTick(dt) {
   S.buildings.list.forEach(function (b) {
     const d = bdef(b);
     if (!b.built) {
+      if (b.mega && S.p10) return;                                    // Part 10: megaprojects advance in projectsTick (crews, materials, funding)
+      if (b.p10Delay && b.p10Delay > S.clock.runSec) return;          // Part 10: construction delay incident
       const f9 = S.p9 && !(S.p5 && S.p5.admin.instant) ? constructionFactor(b, dt) : 1;    // Construction 2.0: crews + materials
       b.progress = Math.min(1, b.progress + dt * speed * f9 * (b.cp ? 1 : (0.5 + 0.5 * (SIM.fulfill && SIM.fulfill.materials !== undefined ? SIM.fulfill.materials : 1))) / b.buildTime);   // construction materials speed up building
       if (Math.random() < 0.5) { const c = buildingCenter(b); spawnParticles(c.x + rand(-10, 10), c.y + rand(-6, 6), Math.random() < 0.5 ? 'dust' : 'spark', 1); }
@@ -14,6 +16,7 @@ function constructionTick(dt) {
         if (b.cp) delete b.cp;
         S.statistics.totals.built++;
         if (S.p9) p9OnBuilt(b);
+        if (S.p10) p10OnBuilt(b);
         const c = buildingCenter(b);
         spawnParticles(c.x, c.y - 10, 'confetti', 26);
         sfx('complete');

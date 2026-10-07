@@ -598,3 +598,52 @@ body.admOpen #entityInspector{z-index:890;}
 .eiBar i{display:block;height:7px;border-radius:5px;background:var(--panel3);overflow:hidden;}
 .eiBar em{display:block;height:100%;}
 @media (max-width:820px){#entityInspector{left:8px;right:8px;width:auto;top:auto;bottom:calc(var(--nav-h) + 8px);max-height:45vh;}#admHero{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));}}
+/* ===================== PART 10 — LIVING CITY ===================== */
+#modal.p10Wide{max-width:1180px;}
+.p10Tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;align-items:center;}
+.p10Tab{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12px;color:var(--text);cursor:pointer;}
+.p10Tab.on{background:var(--accent);color:#1b1f40;font-weight:800;}
+.p10TabsR{margin-left:auto;display:flex;gap:4px;}
+.p10Body .card,.p10Card{margin-bottom:8px;}
+.p10Body h4{margin:8px 0 4px;}
+.p10Wrap{overflow-x:auto;max-width:100%;}
+table.p10T{width:100%;border-collapse:collapse;font-size:12px;}
+table.p10T th{text-align:left;color:var(--muted,#9aa3c7);font-weight:700;padding:3px 6px;border-bottom:1px solid var(--line);white-space:nowrap;}
+table.p10T td{padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle;}
+table.p10T td .btn{margin:1px;}
+table.p10T .p9Bar{width:70px;display:inline-block;vertical-align:middle;}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+.grid5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;}
+@media (max-width:760px){.grid4,.grid5{grid-template-columns:repeat(2,minmax(0,1fr));}}
+.p10Log{max-height:220px;overflow:auto;font-size:12px;margin-top:6px;}
+.p10Log>div{padding:2px 0;border-bottom:1px solid rgba(255,255,255,.05);}
+.p10News{padding:6px 0;border-bottom:1px solid var(--line);}
+.p10Op{padding:4px 0;font-size:13px;}
+.p10Opt{padding:6px;margin:6px 0;border:1px solid var(--line);border-radius:10px;}
+.p10WI{margin-top:6px;}
+.p10Miles{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0;}
+.p10Miles span{font-size:11px;padding:2px 6px;border-radius:6px;background:var(--panel2);opacity:.6;}
+.p10Miles span.on{background:var(--accent);color:#1b1f40;opacity:1;font-weight:700;}
+.p10Svg{display:block;background:rgba(0,0,0,.18);border-radius:6px;}
+.p10MiniGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;}
+.p10Mini{cursor:pointer;padding:4px;border:1px solid var(--line);border-radius:8px;}
+.p10ObsWrap{overflow:auto;max-height:70vh;margin-top:6px;text-align:center;}
+#p10Obs{image-rendering:pixelated;cursor:crosshair;max-width:100%;border-radius:8px;}
+.p10Mega{box-shadow:0 0 0 2px #ffd166 inset;}
+#p10Dash{position:fixed;inset:0;z-index:110;display:none;grid-template-columns:270px 1fr 300px;grid-template-rows:1fr auto;pointer-events:none;color:var(--text);}
+#p10Dash.show{display:grid;}
+#p10Dash>div{pointer-events:auto;}
+#p10Dash .p10DL,#p10Dash .p10DR{background:rgba(12,15,36,.88);padding:10px;overflow:auto;border-right:1px solid var(--line);}
+#p10Dash .p10DR{border-right:0;border-left:1px solid var(--line);}
+#p10Dash .p10DC{pointer-events:none;background:transparent;}
+#p10Dash .p10DB{grid-column:1 / span 3;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:rgba(12,15,36,.9);padding:10px;border-top:1px solid var(--line);}
+#p10Dash h3{margin:6px 0;font-size:14px;}
+.p10DK{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+.p10DK>span{display:block;font-size:12px;opacity:.8;}
+.p10DK>b{font-size:20px;}
+.p10DA{font-size:12px;padding:4px 6px;margin:3px 0;border-radius:8px;background:rgba(255,255,255,.05);}
+.p10DA.bad{border-left:3px solid #ef476f;}.p10DA.good{border-left:3px solid #06d6a0;}.p10DA.gold{border-left:3px solid #ffd166;}
+.p10DM .p9Bar{width:100%;}
+.p10DX{position:absolute;top:8px;right:310px;pointer-events:auto;}
+body.p10DashOn #topbar,body.p10DashOn #rightPanel,body.p10DashOn #rightToggle{visibility:hidden;}
+@media (max-width:900px){#p10Dash{grid-template-columns:1fr;grid-template-rows:auto 1fr auto auto;}#p10Dash .p10DB{grid-column:1;grid-template-columns:repeat(2,1fr);}.p10DX{right:8px;}}

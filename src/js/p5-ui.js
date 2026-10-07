@@ -190,6 +190,7 @@ function paletteCommands() {
   add('Entity inspector (pick on map)', '🔎', function () { EI.pick = true; toast('🎯 Click a citizen, vehicle, building, road or empty land', ''); }, 'inspect entity');
   add('World Control Center (admin, F10)', '🌐', function () { promptEnableAdmin('wc_world'); }, 'admin world control');
   add('Generate a challenge', '🎲', function () { generateChallenge(); }, 'random challenge');
+  if (typeof p10PaletteExtra === 'function' && S && S.p10) p10PaletteExtra(add);
   HEATMAPS.forEach(function (hm) { add('Heatmap: ' + hm.name, hm.icon, function () { setHeatmap(hm.id); }, 'overlay'); });
   return C;
 }
@@ -213,10 +214,10 @@ function openPalette(prefill) {
   renderPalette(); setTimeout(function () { inp.focus(); }, 20);
   firstTime('palette', '⌨️ Command palette', 'Type to find any menu, tool or building. Arrow keys + Enter to run.');
 }
-function closePalette() { $('paletteWrap').classList.add('hidden'); $('palInput').blur(); }
+function closePalette() { $('paletteWrap').classList.add('hidden'); $('palInput').blur(); PAL.v2 = false; }
 function renderPalette() {
   const q = $('palInput').value.trim().toLowerCase();
-  PAL.items = paletteCommands().concat(q.length >= 1 ? searchCommands(q) : []).map(function (c) { return { c: c, s: paletteScore(c, q) }; }).filter(function (x) { return x.s > 0; })
+  PAL.items = (PAL.v2 && typeof p10PaletteCommands === 'function' ? p10PaletteCommands().concat(paletteCommands()) : paletteCommands()).concat(q.length >= 1 ? searchCommands(q) : []).map(function (c) { return { c: c, s: paletteScore(c, q) }; }).filter(function (x) { return x.s > 0; })
     .sort(function (a, b) { return b.s - a.s; }).slice(0, 12).map(function (x) { return x.c; });
   PAL.sel = clamp(PAL.sel, 0, Math.max(0, PAL.items.length - 1));
   $('palList').innerHTML = PAL.items.length ? PAL.items.map(function (c, i) {

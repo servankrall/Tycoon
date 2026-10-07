@@ -96,6 +96,7 @@ function globalMods() {
   part6Mods(m);
   part8Mods(m);
   part9Mods(m);
+  if (typeof part10Mods === 'function') part10Mods(m);
   return m;
 }
 
@@ -105,6 +106,7 @@ function resetSim() {
   // Part 9 derived values (neighbour flows, grid, water, sewage, construction crews) start fresh for every city
   ['p9InCommuters', 'p9OutCommuters', 'p9Tourists', 'p9PowerImport', 'p9PowerExport', 'p9WaterBoost', 'gridBrown', 'gridNoConn', 'sewageOverload', 'lowPressure', 'p9CrewNeed', 'p9CrewAvail'].forEach(function (k) { SIM[k] = 0; });
   SIM.p9Crew = 1; SIM.p9Trade = null; SIM.budgetUnpaid = 0;
+  ['p10Mig', 'healthOverload', 'healthLoad'].forEach(function (k) { SIM[k] = 0; }); SIM.p10Rates = null; SIM.p10Tour = null;   // Part 10 derived values
   UI.advice = null; UI.idleTimer = 0;
 }
 /* econTick() lives in the Part 4 Economy system (see 5b. ECONOMY SYSTEM) */
