@@ -551,13 +551,14 @@ async function runAndroidSelfTest(phase) {
     return { ok: locked, detail: 'idle ' + (AdminAuth.lockMinutes() + 1) + ' min → ADMIN PANEL LOCKED ' + locked };
   });
   await stStep(17, 'Back Button', async function () {
-    const press = async function () { if (native) BCTA.selftestNativeBack(); else window.bctOnBack(); await stWait(700); };
-    closeModal(); setTool('select'); selectBuilding(null); closeLeft(); $('placeBar').classList.add('hidden'); if (PHOTO.on) exitPhoto(); await stWait(100);   // clean game state
-    openSettings(); await stWait(100); await press(); const closed = !$('modalWrap').classList.contains('show');
-    const isOpen = function () { return $('modalWrap').classList.contains('show') || (PSH && PSH.dialogOpen); };
-    await press(); if (!isOpen()) await press();          // a first press may still cancel a tool / selection — then the next one pauses
-    const pause = isOpen();
-    await press(); const back = !$('modalWrap').classList.contains('show');
+    const isOpen = function () { return $('modalWrap').classList.contains('show') || !!(PSH && PSH.dialogOpen); };
+    /* one back press, then wait (up to 4 s — the native round trip Java → JavaScript is slow on emulators) for the expected result */
+    const press = async function (want) { if (native) BCTA.selftestNativeBack(); else window.bctOnBack(); for (let i = 0; i < 40; i++) { await stWait(100); if (isOpen() === want) return true; } return isOpen() === want; };
+    closeModal(); setTool('select'); selectBuilding(null); closeLeft(); $('placeBar').classList.add('hidden'); if (PHOTO.on) exitPhoto(); await stWait(200);   // clean game state
+    openSettings(); await stWait(200);
+    const closed = await press(false);
+    let pause = await press(true); if (!pause) pause = await press(true);          // a first press may still cancel a tool / selection
+    const back = await press(false);
     return { ok: closed && pause && back, detail: (native ? 'Android back key (MainActivity.onBackPressed)' : 'back handler') + ': closes Settings ' + closed + ' · opens the pause menu ' + pause + ' · closes it again ' + back };
   });
   await stStep(18, 'Screen Rotation', async function () {
