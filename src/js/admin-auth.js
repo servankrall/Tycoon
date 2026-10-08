@@ -295,6 +295,7 @@ const AdminAuth = (function () {
     try { if (typeof WB !== 'undefined') WB.on = false; if (typeof RS !== 'undefined') RS.on = false; if (typeof EI !== 'undefined') EI.pick = false; if (typeof P11 !== 'undefined' && P11.multi) P11.multi.clear(); } catch (e) { /* tools off */ }
     try { if (typeof DBG !== 'undefined' && DBG.on && !BUILD.dev) { DBG.on = false; $('debug6').classList.add('hidden'); } } catch (e) { /* panel off */ }
     try { const m = document.getElementById('p11Multi'); if (m) m.remove(); } catch (e) { /* none */ }
+    try { if (/Admin Panel|WORLD CONTROL CENTER GUIDE/.test(($('modalTitle') || {}).textContent || '') && typeof closeModal === 'function') closeModal(); } catch (e) { /* no modal */ }
     adminUiRefresh();
   }
   function logout(reason) {
