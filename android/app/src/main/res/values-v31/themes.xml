@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+: system splash screen (background + adaptive app icon), then the in-game loading screen -->
+    <style name="Theme.BlockCity.Splash" parent="@android:style/Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/bct_bg</item>
+        <item name="android:windowSplashScreenBackground">@color/bct_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/bct_bg</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:statusBarColor">@color/bct_bg</item>
+        <item name="android:navigationBarColor">@color/bct_bg</item>
+        <item name="android:colorAccent">@color/bct_gold</item>
+    </style>
+</resources>

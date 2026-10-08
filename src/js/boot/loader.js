@@ -4,13 +4,13 @@
 (function () {
   'use strict';
   const SCRIPTS = [
-    ['engine', 'platform.js'], ['engine', 'config.js'], ['engine', 'data-city.js'], ['engine', 'save.js'], ['city', 'world.js'],
+    ['engine', 'build-profile.js', true], ['engine', 'platform.js'], ['engine', 'config.js'], ['engine', 'data-city.js'], ['engine', 'save.js'], ['city', 'world.js'],
     ['economy', 'economy.js'], ['economy', 'economy-market.js'], ['city', 'events.js'], ['citizens', 'citizens.js'], ['city', 'renderer.js'],
     ['city', 'ui.js'], ['city', 'p5-data.js'], ['city', 'p5-profile.js'], ['city', 'p5-systems.js'], ['city', 'city-systems.js'],
     ['engine', 'game.js'], ['city', 'simulation-data.js'], ['city', 'simulation.js'], ['city', 'p5-ui.js'], ['city', 'admin.js'],
-    ['city', 'simulation-ui.js'], ['city', 'worldgen.js'], ['city', 'admin-center.js'], ['world', 'world-engine.js'], ['traffic', 'traffic2.js'], ['citizens', 'citylife.js'], ['city', 'utilities2.js'], ['world', 'world-control.js'], ['world', 'living-world.js'], ['city', 'services2.js'], ['city', 'projects-lab.js'], ['ui', 'p10-ui.js'], ['traffic', 'transport3.js'], ['economy', 'finance3.js'], ['city', 'city3.js'], ['ui', 'p11-ui.js'], ['city', 'audio.js'], ['city', 'main.js'], ['city', 'platform-ui.js'], ['engine', 'selftest.js']
+    ['city', 'simulation-ui.js'], ['city', 'worldgen.js'], ['city', 'admin-center.js'], ['world', 'world-engine.js'], ['traffic', 'traffic2.js'], ['citizens', 'citylife.js'], ['city', 'utilities2.js'], ['world', 'world-control.js'], ['world', 'living-world.js'], ['city', 'services2.js'], ['city', 'projects-lab.js'], ['ui', 'p10-ui.js'], ['traffic', 'transport3.js'], ['economy', 'finance3.js'], ['city', 'city3.js'], ['ui', 'p11-ui.js'], ['engine', 'admin-auth.js'], ['ui', 'settings2.js'], ['ui', 'mobile.js'], ['city', 'audio.js'], ['city', 'main.js'], ['city', 'platform-ui.js'], ['engine', 'selftest.js']
   ];
-  const DEFAULT_TEXT = { engine: 'Loading engine...', city: 'Loading city systems...', economy: 'Loading economy...', citizens: 'Loading citizens...', traffic: 'Loading traffic...', world: 'Loading world...', ui: 'Loading interface...', ready: 'Ready!', failed: 'Loading failed' };
+  const DEFAULT_TEXT = { engine: 'Loading World Engine...', city: 'Loading Simulation...', economy: 'Loading economy...', citizens: 'Loading citizens...', traffic: 'Loading traffic...', world: 'Loading City Data...', ui: 'Loading interface...', ready: 'Ready!', failed: 'Loading failed' };
   const ROWS = ['rWorld', 'rBuildings', 'rEconomy', 'rCitizens', 'rTraffic', 'rUI'];
   const ROW_PCT = { rWorld: 20, rBuildings: 35, rEconomy: 50, rCitizens: 70, rTraffic: 85, rUI: 100 };
   const ROW_DEFAULT = { rWorld: 'World', rBuildings: 'Buildings', rEconomy: 'Economy', rCitizens: 'Citizens', rTraffic: 'Traffic', rUI: 'UI' };
@@ -41,7 +41,7 @@
       const s = document.createElement('script');
       s.src = 'js/' + SCRIPTS[i][1];
       s.onload = function () { resolve(); };
-      s.onerror = function () { reject(new Error('Missing file: js/' + SCRIPTS[i][1])); };
+      s.onerror = function () { if (SCRIPTS[i][2]) { s.remove(); resolve(); return; } reject(new Error('Missing file: js/' + SCRIPTS[i][1])); };      // optional files (the build profile) may be absent
       document.body.appendChild(s);
     });
   }

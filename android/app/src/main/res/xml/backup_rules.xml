@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older: back up the city saves and settings (files/store), not the self-test sandbox or logs -->
+<full-backup-content>
+    <include domain="file" path="store/" />
+    <exclude domain="file" path="selftest/" />
+    <exclude domain="file" path="logs/" />
+</full-backup-content>

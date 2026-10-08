@@ -1,0 +1,5 @@
+// BLOCK CITY TYCOON — Android app (native WebView shell around the shared game engine in ../src)
+pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+rootProject.name = 'BlockCityTycoon'
+include ':app'

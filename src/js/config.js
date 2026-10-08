@@ -21,8 +21,8 @@
    ======================================================================= */
 
 /* ============================== 1. CONFIG ============================== */
-const DEBUG = /[?&]debug\b/.test(location.search);   // open with ?debug for the debug HUD + dev console functions
-const SAVE_VERSION = 11;
+const DEBUG = !BUILD.release && /[?&]debug\b/.test(location.search);   // DEVELOPMENT / TEST builds only: ?debug for the debug HUD + dev console functions
+const SAVE_VERSION = 12;
 const SAVE_KEY = 'bct_pro_save';
 const SAVE_BACKUP_KEY = 'bct_pro_save_backup';
 const LEGACY_SAVE_KEYS = ['blockCityTycoonSave_v1'];
@@ -49,7 +49,7 @@ const QUALITY_PRESETS = {
   ULTRA:  { npc: 200, veh: 100, part: 1000, glow: true,  shadow: true,  weather: 1,    trafficHz: 60, windows: true }
 };
 const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-const IS_MOBILE = IS_TOUCH && Math.min(screen.width, screen.height) < 820;
+const IS_MOBILE = IS_ANDROID || (IS_TOUCH && Math.min(screen.width, screen.height) < 820);       // Android always uses the mobile UI
 
 const SECTORS = ['FOOD', 'SHOPPING', 'ENTERTAINMENT', 'TRANSPORT', 'HOUSING', 'ENERGY', 'FINANCE', 'TECHNOLOGY'];
 const SECTOR_ICONS = { FOOD: '🍔', SHOPPING: '🛍️', ENTERTAINMENT: '🎉', TRANSPORT: '🚌', HOUSING: '🏠', ENERGY: '⚡', FINANCE: '🏦', TECHNOLOGY: '💻', INDUSTRY: '🏭' };

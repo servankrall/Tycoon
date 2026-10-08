@@ -139,7 +139,9 @@ function slotInfo(n) {
   const c = d.city || {};
   return { n: n, exists: true, name: String(c.name || 'Block City').slice(0, 32), pop: num(c.population, 0), difficulty: c.difficulty || 'NORMAL',
     level: num(c.level, 1) | 0, size: c.size || 40, sandbox: !!c.sandbox, saved: num(d.lastSaveTime, 0), version: d.version | 0,
-    playSec: num(d.statistics && d.statistics.totals && d.statistics.totals.playSec, 0, 0, 1e12), seed: num(c.seed, 0) | 0 };
+    playSec: num(d.statistics && d.statistics.totals && d.statistics.totals.playSec, 0, 0, 1e12), seed: num(c.seed, 0) | 0,
+    platform: d.header && typeof d.header.platform === 'string' ? d.header.platform.slice(0, 12) : (d.version | 0) < 12 ? 'windows' : '', revision: d.origin ? num(d.origin.revision, 0) | 0 : 0,
+    integrity: (function () { try { return saveIntegrity(Store.getItem(slotKey(n))); } catch (e) { return 'none'; } })() };
 }
 function deleteSlot(n) { try { Store.removeItem(slotKey(n)); Store.removeItem(backupKey(n)); } catch (e) { } }
 
@@ -162,6 +164,10 @@ function buildSaveObject() {
   o.city = Object.assign({}, S.city, { roads: encodeGrid(MAP.roads), nature: encodeGrid(MAP.nature), zones: encodeGrid(MAP.zone), terrain: encodeGrid(MAP.terrain), res: encodeGrid(MAP.res) });
   o.version = SAVE_VERSION;
   o.lastSaveTime = Date.now();
+  // Part 12: platform-specific settings stay on the device (GSET.ps); the city save is the same on Windows and Android
+  o.settings = Object.assign({}, S.settings); PLATFORM_SETTING_KEYS.forEach(function (k) { delete o.settings[k]; });
+  if (!S.origin) S.origin = newOrigin();
+  o.origin = Object.assign({}, S.origin, { lastPlatform: PLATFORM_ID, lastVersion: GAME_VERSION, revision: (S.origin.revision | 0) + 1 });
   // Save 2.0 header + citizens (world, economy, buildings, quests and achievements are the other sections)
   o.citizens = serializeCitizens();
   o.vehicles = serializeVehicles();
@@ -181,7 +187,8 @@ function buildSaveObject() {
 /* Save 2.0 header (v7): what the file contains and where each section lives in the JSON. */
 function saveHeader() {
   return {
-    version: SAVE_VERSION, saveVersion: SAVE_VERSION, gameVersion: typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '1.0.0',
+    format: SAVE_FORMAT, formatVersion: 4, version: SAVE_VERSION, saveVersion: SAVE_VERSION, gameVersion: typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '1.0.0',
+    platform: PLATFORM_ID, createdOn: S.origin ? S.origin.platform : PLATFORM_ID, cityId: S.origin ? S.origin.id : '', revision: S.origin ? (S.origin.revision | 0) + 1 : 1, worldSeed: seedLabel(), checksum: CHECKSUM_PLACEHOLDER,
     timestamp: new Date().toISOString(), seed: seedLabel(), citySeed: seedLabel(), city: S.city.name, cityName: S.city.name,
     slot: S.slot || 1, playSec: Math.floor(S.statistics.totals.playSec), population: Math.floor(S.city.population),
     sections: {
@@ -191,6 +198,7 @@ function saveHeader() {
       worldSeed: ['city.seed', 'p8.world.seedLabel'], chunks: ['p9.chunks'], regions: ['p9.regions', 'p9.neighbors'], households: ['p9.households'], traffic: ['p9.traffic', 'vehicles'], utilityNetworks: ['p9.util', 'p9.water', 'p9.env'],
       disasters: ['p9.disasters', 'p9.disasterLog'], weather: ['p9.weather'], timeline: ['p9.timeline', 'p9.history', 'p9.branch'], transit: ['p9.transit'],
       livingWorld: ['p10.lw', 'p10.pop', 'p10.corp', 'p10.news', 'p10.rep', 'p10.rank'], services: ['p10.edu', 'p10.research', 'p10.health', 'p10.air', 'p10.port', 'p10.rail', 'p10.shocks'], projects: ['p10.projects', 'p10.maint', 'p10.infra', 'p10.incidents'], civic: ['p10.petitions', 'p10.objectives', 'p10.goalsDone'], graphs: ['p10.graphs'], timeMachine: ['p10.tm'],
+      worldData: ['city', 'buildings', 'p8.world', 'p9.chunks', 'p9.regions'], simulationData: ['clock', 'economy', 'citizens', 'vehicles', 'p9', 'p10', 'p11'], origin: ['origin'],
       transport: ['p11.works', 'p11.trains', 'p11.regional', 'p11.ped', 'p11.bike', 'p11.modal'], finance: ['p11.contracts', 'p11.loans', 'p11.banks', 'p11.mort'], smartCity: ['p11.sensors', 'p11.storage', 'p11.landfill', 'p11.flood', 'p11.fire'], snapshots: ['bct_snap_index (separate files)']
     }
   };
@@ -243,7 +251,8 @@ function validateSaveObject(o) {
   if (!o.p11 || typeof o.p11 !== 'object') errs.push('p11');
   if (!Array.isArray(o.citizens)) errs.push('citizens');
   if (!Array.isArray(o.vehicles)) errs.push('vehicles');
-  if (!o.header || o.header.saveVersion !== SAVE_VERSION) errs.push('header');
+  if (!o.header || o.header.saveVersion !== SAVE_VERSION || o.header.format !== SAVE_FORMAT) errs.push('header');
+  if (!o.origin || typeof o.origin.id !== 'string') errs.push('origin');
   return errs;
 }
 function saveGame(silent) {
@@ -251,7 +260,7 @@ function saveGame(silent) {
     const obj = buildSaveObject();                          // 1. state
     const errs = validateSaveObject(obj);                   // 2. validate
     if (errs.length) { logSaveError('Save validation failed: ' + errs.slice(0, 5).join(', ')); if (!silent) toast('⚠️ Save blocked: invalid data (' + errs[0] + ')', 'bad'); return false; }
-    const json = JSON.stringify(obj);                       // 3. serialize
+    const json = sealSaveJson(JSON.stringify(obj));         // 3. serialize (+ checksum for cross-platform / cloud-sync integrity)
     const back = JSON.parse(json);
     if (!back || back.version !== SAVE_VERSION || back.buildings.list.length !== obj.buildings.list.length) throw new Error('round-trip check failed');
     const slot = S.slot || 1;
@@ -259,7 +268,7 @@ function saveGame(silent) {
     if (prev) Store.setItem(backupKey(slot), prev);  // 4. backup
     Store.setItem(slotKey(slot), json);              // 5. main save
     setActiveSlot(slot);
-    S.lastSaveTime = Date.now(); S._saveBytes = json.length;
+    S.lastSaveTime = Date.now(); S._saveBytes = json.length; S.origin = obj.origin;
     if (!silent) toast('💾 Game saved', 'good');
     return true;
   } catch (e) {
@@ -289,7 +298,8 @@ const MIGRATIONS = [
   { from: 7, to: 8, run: function (d) { return migrateV7toV8(d); } },
   { from: 8, to: 9, run: function (d) { return migrateV8toV9(d); } },
   { from: 9, to: 10, run: function (d) { return migrateV9toV10(d); } },
-  { from: 10, to: 11, run: function (d) { return migrateV10toV11(d); } }
+  { from: 10, to: 11, run: function (d) { return migrateV10toV11(d); } },
+  { from: 11, to: 12, run: function (d) { return migrateV11toV12(d); } }
 ];
 function migrateSave(d) {
   if (!d || typeof d !== 'object' || Array.isArray(d)) throw new Error('Invalid save');
@@ -311,6 +321,14 @@ function migrateSave(d) {
 /* v9 = WORLD ENGINE (Part 9): chunks, regions, neighbours, traffic 2.0, transit lines, households, utility networks, timeline */
 /* v10 = LIVING WORLD (Part 10): living world, population dynamics, company AI 2.0, news, reputation, services 2.0, megaprojects, infrastructure, graphs */
 /* v11 = ADVANCED SIMULATION (Part 11): transport engine, deep economy (contracts, loans, banks, mortgages), smart city, building upgrades */
+/* v12 = CROSS-PLATFORM (Part 12): CITY_SAVE_V4 header (platform, cityId, revision, checksum), origin block, platform settings moved to the device */
+function migrateV11toV12(o) {
+  o.version = 12;
+  const h = (o.header && typeof o.header === 'object') ? o.header : {};
+  o.origin = { id: newOrigin().id, platform: typeof h.platform === 'string' ? h.platform.slice(0, 12) : 'windows', version: typeof h.gameVersion === 'string' ? h.gameVersion.slice(0, 12) : '1.4.0', created: typeof h.timestamp === 'string' ? h.timestamp.slice(0, 30) : new Date().toISOString(), revision: 0, lastPlatform: '', lastVersion: '' };
+  o.header = Object.assign(h, { format: SAVE_FORMAT, formatVersion: 4, version: 12, saveVersion: 12 });
+  return o;
+}
 function migrateV10toV11(o) {
   o.version = 11;
   o.p11 = newP11(o.city && o.city.seed);
@@ -397,6 +415,29 @@ function migrateV3toV4(o) {
 }
 
 /* --- Validation: repair anything that could break the game -------------- */
+/* --- Part 12: cross-platform save helpers --- */
+const SAVE_FORMAT = 'CITY_SAVE_V4';
+const CHECKSUM_PLACEHOLDER = '00000000';
+function newOrigin() {
+  const id = (typeof crypto !== 'undefined' && crypto.getRandomValues) ? Array.from(crypto.getRandomValues(new Uint8Array(8))).map(function (b) { return (b < 16 ? '0' : '') + b.toString(16); }).join('') : String(Date.now()) + Math.floor(Math.random() * 1e6);
+  return { id: id, platform: typeof PLATFORM_ID !== 'undefined' ? PLATFORM_ID : 'windows', version: typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '', created: new Date().toISOString(), revision: 0, lastPlatform: '', lastVersion: '' };
+}
+function sanitizeOrigin(src) {
+  const o = newOrigin();
+  if (!src || typeof src !== 'object') return o;
+  if (typeof src.id === 'string' && /^[0-9a-z]{6,24}$/.test(src.id)) o.id = src.id;
+  ['platform', 'version', 'lastPlatform', 'lastVersion'].forEach(function (k) { if (typeof src[k] === 'string') o[k] = src[k].replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 12); });
+  if (typeof src.created === 'string') o.created = src.created.slice(0, 30);
+  o.revision = num(src.revision, 0, 0, 1e9) | 0;
+  return o;
+}
+/* FNV-1a over the save text with the checksum field blanked — detects saves changed outside the game (cloud sync / transfers) */
+function fnv1a(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); } return ('0000000' + (h >>> 0).toString(16)).slice(-8); }
+function sealSaveJson(json) { const tag = '"checksum":"' + CHECKSUM_PLACEHOLDER + '"'; const i = json.indexOf(tag); return i < 0 ? json : json.slice(0, i) + '"checksum":"' + fnv1a(json) + '"' + json.slice(i + tag.length); }
+function saveIntegrity(text) {
+  const m = /"checksum":"([0-9a-f]{8})"/.exec(text || ''); if (!m) return 'none';
+  return fnv1a(text.replace('"checksum":"' + m[1] + '"', '"checksum":"' + CHECKSUM_PLACEHOLDER + '"')) === m[1] ? 'ok' : 'modified';
+}
 function sanitizeState(d) {
   registerCustomCompanies(d && d.p8);
   const meta = Object.assign(newMeta(), d.meta || {});
@@ -604,6 +645,7 @@ function sanitizeState(d) {
   ['screenShake', 'dynDiff', 'bubbles', 'deco', 'gamepad'].forEach(function (k) { se[k] = se[k] !== false; });
   se.speed = SIM_SPEEDS.indexOf(se.speed) >= 0 ? se.speed : 1;
 
+  st.origin = sanitizeOrigin(d.origin);
   // Buildings are validated later against the map (bounds, overlaps, uniques)
   st.buildings.nextId = num(d.buildings && d.buildings.nextId, 1, 1, 1e9) | 0;
   st._rawBuildings = (d.buildings && Array.isArray(d.buildings.list)) ? d.buildings.list : [];
@@ -682,6 +724,19 @@ function loadRaw(key) {
   } catch (e) { return undefined; }   // undefined = corrupted
 }
 
+/* Pre-update backups: <slot>_premig_v<N> keeps the exact original text of an older save (one per version) */
+function premigKey(slot, v) { return slotKey(slot) + '_premig_v' + v; }
+function backupBeforeMigration(slot, v) {
+  try { const k = premigKey(slot, v); if (Store.getItem(k)) return; const raw = Store.getItem(slotKey(slot)); if (raw) { Store.setItem(k, raw); Log.info('BACKUP SAVE before migration: slot ' + slot + ' v' + v + ' → ' + k); } }
+  catch (e) { Log.warn('Pre-update backup failed: ' + (e && e.message)); }
+}
+function premigBackups(slot) { return Store.keys().filter(function (k) { return k.indexOf(slotKey(slot) + '_premig_v') === 0; }).map(function (k) { return { key: k, v: +k.split('_premig_v')[1] }; }).sort(function (a, b) { return b.v - a.v; }); }
+/* ROLLBACK: put the original pre-update save back into the slot (it is migrated again on the next load) */
+function rollbackMigration(slot) {
+  const b = premigBackups(slot)[0]; if (!b) return { ok: false, reason: 'No pre-update backup for this slot' };
+  try { const cur = Store.getItem(slotKey(slot)); if (cur) Store.setItem(backupKey(slot), cur); Store.setItem(slotKey(slot), Store.getItem(b.key)); Log.info('ROLLBACK: slot ' + slot + ' restored from ' + b.key); return { ok: true, msg: 'Slot ' + slot + ' restored to its v' + b.v + ' save' }; }
+  catch (e) { return { ok: false, reason: e.message }; }
+}
 /* Load (with fallbacks): main save → backup → legacy saves → new game */
 function loadGame(slot) {
   slot = slot || activeSlot();
@@ -690,8 +745,12 @@ function loadGame(slot) {
   let st = null;
   const tryUse = function (d, label) {
     if (!d) return false;
-    try { st = sanitizeState(migrateSave(d)); return true; }
-    catch (e) { notes.push(label + ' save was corrupted.'); return false; }
+    const from = d.version | 0 || 1;
+    // UPDATE SAFETY: an older save is copied to a pre-update backup before it is migrated; the original file is
+    // never overwritten by a failed migration (ROLLBACK = keep using the untouched original / backup).
+    if (label === 'Main' && from < SAVE_VERSION) backupBeforeMigration(slot, from);
+    try { st = sanitizeState(migrateSave(d)); if (from < SAVE_VERSION) { notes.push('Save migrated v' + from + ' → v' + SAVE_VERSION + ' (pre-update backup kept).'); Log.info('Save slot ' + slot + ' migrated v' + from + ' → v' + SAVE_VERSION); } return true; }
+    catch (e) { notes.push(label + ' save ' + (from < SAVE_VERSION ? 'could not be migrated (rolled back, original kept)' : 'was corrupted') + '.'); Log.warn(label + ' save slot ' + slot + ' load/migration failed: ' + (e && e.message)); return false; }
   };
   if (data === undefined) notes.push('Main save was corrupted.');
   if (!tryUse(data, 'Main')) {
@@ -717,6 +776,7 @@ function loadGame(slot) {
   delete S._part4Gen;
   onMapChanged();
   applyCompanyNames(); RNG.seed(S.p6.rng);
+  if (typeof applyGlobalSettingsToGame === 'function') applyGlobalSettingsToGame();
   return { isNew: isNew, notes: notes };
 }
 
@@ -727,7 +787,7 @@ function exportSaveJSON() { try { return JSON.stringify(buildSaveObject(), null,
 /* IMPORT VALIDATION: version, data types, negative values, unknown properties and maximum values */
 const SAVE_TOP_KEYS = ['version', 'meta', 'money', 'budget', 'city', 'buildings', 'workers', 'research', 'technology', 'companies', 'bank', 'transport', 'economy', 'market', 'ai', 'trade',
   'diplomacy', 'contracts', 'investors', 'space', 'events', 'statistics', 'achievements', 'quests', 'tutorial', 'settings', 'clock', 'p5', 'lastNet', 'lastBudgetNet', 'lastSaveTime', 'slot',
-  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'p8', 'p9', 'p10', 'p11', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
+  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'p8', 'p9', 'p10', 'p11', 'origin', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
 function validateImport(d) {
   const errs = [];
   if (!d || typeof d !== 'object' || Array.isArray(d)) return ['The save is not a JSON object.'];
@@ -783,6 +843,7 @@ function importSave(text) {
       if (S._part4Gen) upgradeCityToPart4();
       delete S._part4Gen;
       applyCompanyNames(); RNG.seed(S.p6.rng);
+      if (typeof applyGlobalSettingsToGame === 'function') applyGlobalSettingsToGame();      // this device's graphics / accessibility / controls
       resetSim(); onMapChanged(); resetAgents(); econTick(1); saveGame(true);
     } catch (inner) { S = prevS; initMap(false); validateBuildings(S.buildings.list.map(serializeBuilding)); onMapChanged(); resetAgents(); throw inner; }
     return { ok: true, errors: [] };

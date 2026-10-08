@@ -1,9 +1,9 @@
-# 🏙️ BLOCK CITY TYCOON — Windows Desktop Edition
+# 🏙️ BLOCK CITY TYCOON — Windows EXE + Android APK
 
-**Build. Manage. Expand.** · Sürüm **1.4.0** · Kayıt formatı **v11**
+**Build. Manage. Expand.** · Sürüm **2.0.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
-`BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
+`BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE — ve 2.0.0 ile bir **Android uygulaması** (APK). Windows ve Android **aynı oyun motorunu** kullanır; yalnızca girdi, arayüz, dosya sistemi ve performans katmanı platforma özeldir. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
 
 ---
 
@@ -14,6 +14,8 @@ Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) a
 | İşletim sistemi | Windows 10 / 11 (64-bit) |
 | Geliştirme / build | [Node.js](https://nodejs.org) 20 LTS veya üstü (npm dahil) |
 | İlk `npm install` / ilk build | İnternet (Electron ve NSIS araçları bir kez indirilir) |
+| Android build | JDK 17+ ve Android SDK (`ANDROID_HOME`; Android Studio ile gelir). Gradle'ı `android/gradlew` ilk çalışmada indirir |
+| Android cihaz | Android 7.0 (API 24) veya üstü, telefon veya tablet |
 
 Oyuncunun bilgisayarında Node.js, Chrome veya terminal **gerekmez**; yalnızca EXE yeterlidir.
 
@@ -21,21 +23,33 @@ Oyuncunun bilgisayarında Node.js, Chrome veya terminal **gerekmez**; yalnızca 
 
 ```bash
 npm install        # bağımlılıklar (electron, electron-builder)
-npm run dev        # oyunu geliştirici modunda aç (Ctrl+Shift+I = DevTools, Ctrl+R = yeniden yükle)
-npm start          # oyunu oyuncu modunda aç (DevTools kapalı)
-npm run build      # Windows installer + portable EXE → dist/
-npm run check      # build öncesi kontrol (tüm dosyalar, sözdizimi, ikon)
+npm run dev            # DEVELOPMENT profili: DevTools (Ctrl+Shift+I), Ctrl+R, debug paneli, profiler
+npm start              # oyunu oyuncu modunda aç (RELEASE: DevTools kapalı)
+npm run build:windows  # BUILD WINDOWS → dist/windows/ (installer + portable EXE)
+npm run build:android  # BUILD ANDROID → dist/android/ (debug APK + imzalı release APK)
+npm run build:all      # ikisi birden
+npm run build:dev      # Windows DEVELOPMENT build · npm run build:test = TEST build
+npm run selftest:android  # bağlı cihaz / emülatörde APK otomatik testi
+npm run check          # build öncesi kontrol (tüm dosyalar, sözdizimi, ikon, Android projesi, düz metin şifre yok)
 npm run icon       # icon.svg'den icon.ico / icon.png'yi yeniden üret (isteğe bağlı)
 ```
 
-`npm run build` sonrası:
+Build sonrası:
 
 ```text
 dist/
-├── BLOCK-CITY-TYCOON-Setup-1.4.0.exe      ← kurulum sihirbazı
-├── BLOCK-CITY-TYCOON-Portable-1.4.0.exe   ← kurulumsuz, çift tıkla çalışır
-└── win-unpacked/BLOCK CITY TYCOON.exe     ← paketlenmiş uygulamanın kendisi
+├── windows/
+│   ├── BLOCK-CITY-TYCOON-Setup-2.0.0.exe       ← kurulum sihirbazı
+│   ├── BLOCK-CITY-TYCOON-Portable-2.0.0.exe    ← kurulumsuz, çift tıkla çalışır
+│   └── win-unpacked/BLOCK CITY TYCOON.exe      ← paketlenmiş uygulamanın kendisi
+└── android/
+    ├── BLOCK-CITY-TYCOON-Android.apk           ← debug APK (geliştirme)
+    └── BLOCK-CITY-TYCOON-Android-Release.apk   ← imzalı release APK (oyunculara bu verilir)
 ```
+
+**Build profilleri** (`--profile=`): **RELEASE** (varsayılan — admin gizli ve kimlik doğrulamalı, debug paneli / geliştirici komutları / debug kısayolları kapalı, üretim arayüzü), **DEVELOPMENT** (DevTools, debug, profiler), **TEST** (otomatik ve performans testleri). Profil `src/js/build-profile.js` dosyasına yazılır; build bitince varsayılan RELEASE geri konur.
+
+**Android imzalama:** release APK `android/keystore/bct-release.jks` ile imzalanır (her sürüm aynı anahtar → güncellemeler mevcut uygulamanın üzerine kurulur, şehirler silinmez). Kendi anahtarınızı `BCT_KEYSTORE_FILE`, `BCT_KEYSTORE_PASSWORD`, `BCT_KEY_ALIAS`, `BCT_KEY_PASSWORD` ortam değişkenleriyle verebilirsiniz (bkz. `android/keystore/README.md`).
 
 > **SmartScreen:** EXE dijital olarak imzalanmadığı için Windows ilk açılışta *"Windows kişisel bilgisayarınızı korudu"* diyebilir → **Ek bilgi → Yine de çalıştır**. İmzalamak için electron-builder'a bir kod imzalama sertifikası verin (`CSC_LINK`, `CSC_KEY_PASSWORD`).
 
@@ -66,10 +80,18 @@ BLOCK-CITY-TYCOON/
 ├── build/
 │   └── installer.nsh       varsayılan klasör + "Create Desktop Shortcut" sayfası + kaldırma
 ├── scripts/
+│   ├── build.js            tek komutla BUILD WINDOWS / BUILD ANDROID, DEVELOPMENT / TEST / RELEASE profilleri
+│   ├── android-selftest.sh APK'yı cihaza / emülatöre kurar, otomatik testi çalıştırır, raporu toplar
 │   ├── check.js            build öncesi doğrulama
 │   └── make-icon.js        SVG → ICO (16, 24, 32, 48, 64, 128, 256 px) + PNG
+├── android/                Android uygulaması (Gradle) — aynı src/ oyun dosyalarını assets/www olarak paketler
+│   ├── app/src/main/java/com/blockcitytycoon/game/MainActivity.java   tam ekran WebView kabuğu + BCTAndroid köprüsü
+│   ├── app/src/main/AndroidManifest.xml   izin istemez (çevrimdışı), yatay öncelikli, oyun kategorisi
+│   ├── app/src/main/res/   adaptive icon (ön plan / arka plan / tek renk), splash, yedekleme kuralları
+│   ├── keystore/           release imzalama anahtarı
+│   └── gradlew, gradle/    Gradle wrapper
 └── src/                    oyunun kendisi (renderer)
-    ├── index.html          açılış ekranı (splash), menüler, oyun arayüzü
+    ├── index.html          açılış ekranı (splash), menüler, oyun arayüzü (Windows, Android ve tarayıcı için aynı)
     ├── css/styles.css
     ├── assets/icons/       icon.ico · icon.png · icon-256.png · icon.svg
     └── js/
@@ -106,7 +128,11 @@ BLOCK-CITY-TYCOON/
         ├── finance3.js         Part 11: ticaret sözleşmeleri, Company Finance 2.0, şirket borcu + BANKRUPTCY RISK, bankalar, faiz motoru, mortgage, konut/kira/ticari piyasa, piyasa fiyatları, gıda ağı, şehir tüketimi, ekonomik döngüler, City Budget 2.0, bütçe tahmini, FINANCIAL HEALTH
         ├── city3.js            Part 11: bina iç mekânları, aktivite programları, bina enerji AI + SMART BUILDINGS, Building Upgrades 2.0, sensör ağı + veri merkezi, tahmin sistemi, kestirimci bakım, RISK MAP, yangın yayılımı, sel simülasyonu, iklim uyumu, yeşil şehir, enerji depolama, akıllı şebeke, atık yönetimi + geri dönüşüm ekonomisi
         ├── p11-ui.js           Part 11: Living City hub'ında 6 yeni sekme, 13 yeni admin bölümü + tüm admin komutları, metro hat oluşturucu, World Painter fırçaları, Ctrl çoklu seçim editörü, canlı varlık araması, CITY BOOK, Part 11 kayıt bölümü
-        ├── selftest.js         Part 9/10/11: otomatik 40 adımlı EXE testi (--selftest)
+        ├── build-profile.js    Part 12: build profili (RELEASE / DEVELOPMENT / TEST)
+        ├── admin-auth.js       Part 12: GÜVENLİ ADMIN SİSTEMİ — kimlik doğrulama (PBKDF2), roller, izin matrisi, oturum, otomatik kilit, giriş denemesi koruması, admin işlem günlüğü, owner kurtarma, komut koruması
+        ├── settings2.js        Part 12: Settings 2.0 (7 sekme), performans modları + AUTO PERFORMANCE, LOW-END MODE, simülasyon kalitesi, güvenli hız limiti, erişilebilirlik, bildirimler, gamepad 2.0
+        ├── mobile.js           Part 12: Android ana menü, mobil HUD, dokunmatik kamera (kaydırma / pinch / döndürme), mobil inşa modu, mobil yol çizici, geri tuşu, yönlendirme, ilk açılış kurulumu, mobil eğitim
+        ├── selftest.js         Part 9–12: otomatik test — Windows EXE 53 adım, Android APK 21 adım (--selftest)
         ├── main.js             döngü, girdi, menüler, açılış adımları
         └── platform-ui.js      çıkış onayı, çökme kurtarma, eski kayıt aktarımı, masaüstü ayarları, kısayollar
 ```
@@ -141,6 +167,10 @@ BLOCK CITY TYCOON\
 
 Her kayıt `header` bölümü taşır: `saveVersion, gameVersion, timestamp, citySeed, cityName, slot, playSec, population` ve her bölümün JSON içindeki yeri (`player, economy, citizens, buildings, roads, vehicles, companies, stocks, research, quests, achievements, statistics, settings`). v7 ile yoldaki kamyon/tanker/çöp kamyonu/otobüsler kargo ve varış noktalarıyla birlikte kaydedilir.
 
+v12 (2.0.0, **CITY_SAVE_V4**) ortak kayıt biçimi: header'da `format`, `formatVersion`, `gameVersion`, `saveVersion`, `platform` (windows / android / browser), `createdOn`, `cityId`, `revision`, `worldSeed` ve bir `checksum` (FNV-1a — kaydın oyun dışında değiştirilip değiştirilmediğini gösterir; bulut senkronizasyonuna hazır). Yeni `origin` bölümü şehrin kimliğini, oluşturulduğu platformu ve revizyonunu taşır. Platforma özel ayarlar (grafik kalitesi, erişilebilirlik, kontroller, mini harita, satın alma onayı) **şehir kaydına yazılmaz** — her cihazın kendi `settings.json`'unda durur. Böylece Windows'ta oluşturulan kayıt Android'de, Android kaydı Windows'ta açılır ve her cihaz kendi grafik ayarlarını korur. Kayıtlar admin durumu taşımaz: bedava / anında inşaat, dondurulmuş ekonomi ve olaysız mod yüklemede kapatılır; `"admin": true` gibi bilinmeyen alanlar içe aktarmada reddedilir.
+
+**Güncelleme güvenliği:** eski sürüm bir kayıt açılırken önce **BACKUP SAVE** (`…_premig_v<N>`, kaydın birebir kopyası), sonra **MIGRATE** yapılır; geçiş başarısız olursa orijinal dosyaya dokunulmaz (**ROLLBACK**: yedek kayıt / önceki sürüm kullanılır). Ayarlar → SYSTEM → **⏪ ROLLBACK** güncelleme öncesi kaydı geri koyar.
+
 v11 (1.4.0) ile kayda `p11` bölümü eklendi: modal dağılım, trafik ışığı AI 2.0 istatistikleri, yol çalışmaları, metro/tren ayarları, bölgesel trenler, ticaret ücretleri, yaya/bisiklet yolları, otopark, ticaret sözleşmeleri, şirket kredileri, bankalar, mortgage, ticari piyasa, ekonomik döngü, finansal sağlık geçmişi, bütçe tahmini, enerji depolama, akıllı şebeke, çöp sahaları, atık/geri dönüşüm, sensör uyarıları, yangın ve sel durumu, tahmin günlüğü ve ilçe adları. Binalara `u` (Building Upgrades 2.0 seviyeleri: enerji, kapasite, otomasyon, güvenlik, görünüm, verimlilik, otopark, lojistik, yeşil) eklendi.
 
 v10 (1.3.0) ile kayda `p10` bölümü eklendi: Living World (şirket meta verileri, markalar, borç, haberler ve aktif etkileri, itibar, yıllık sıralamalar, nüfus geçmişi), eğitim/araştırma/sağlık durumu, havaalanı/liman/demiryolu toplamları, tedarik şokları, megaprojeler, bakım bütçeleri, altyapı varlıkları (yaş, durum, seviye), olaylar, dilekçeler, hedefler, canlı grafikler, Time Machine anlık görüntüleri ve otomasyon anahtarları. Binalara `born` (yapım günü), `grade` (yükseltme seviyesi) ve `mega` (megaproje inşaatı) eklendi. v9 kayıtları açıldığında şehir eksik liseleri/klinikleri otomatik alır.
@@ -149,7 +179,7 @@ v9 (1.2.0, Save 3.0) ile kayda `p9` bölümü eklendi: chunk verisi, bölge ista
 
 v8 (1.1.0) ile kayda `p8` bölümü eklendi: üretilen dünyanın profili (seed, preset, harita tipi, nüfus, bina ve ilçe sayısı, ilçe adları, ekonomi, iklim, üretici sürümü), özel şirketler ve pazar payı hedefleri.
 
-**Migration:** `save.js` içindeki `MIGRATIONS` tablosu v1 → v2 → … → v11 adım adım çalışır. 1.2.0 `{ from: 8, to: 9 }`, 1.3.0 `{ from: 9, to: 10 }`, 1.4.0 `{ from: 10, to: 11 }` adımını ekledi; gelecek sürümler yine yalnızca yeni bir adım ekler; eski kayıtlar otomatik yükseltilir. Daha yeni bir sürümün kaydı açılmaya çalışılırsa oyun bunu reddeder ve mevcut kaydı bozmaz.
+**Migration:** `save.js` içindeki `MIGRATIONS` tablosu v1 → v2 → … → v12 adım adım çalışır. 1.2.0 `{ from: 8, to: 9 }`, 1.3.0 `{ from: 9, to: 10 }`, 1.4.0 `{ from: 10, to: 11 }`, 2.0.0 `{ from: 11, to: 12 }` adımını ekledi; gelecek sürümler yine yalnızca yeni bir adım ekler; eski kayıtlar otomatik yükseltilir. Daha yeni bir sürümün kaydı açılmaya çalışılırsa oyun bunu reddeder ve mevcut kaydı bozmaz.
 
 ### Eski tarayıcı kayıtlarını aktarma (IMPORT OLD BROWSER SAVE)
 
@@ -188,17 +218,16 @@ Geliştirici modunda (`npm run dev`) Ctrl+Shift+I DevTools'u açar. EXE'de DevTo
 
 ## 6b. Admin paneli ve tek tık dünya üretici (1.1.0)
 
-Admin paneli normal oyuncudan gizlidir.
+Admin paneli normal oyuncudan gizlidir ve 2.0.0'dan itibaren **ADMIN AUTHENTICATION** gerektirir (bkz. **6f**).
 
 | Kısayol | İşlev |
 |---|---|
-| **F10** | World Control Center / Admin Kontrol Merkezi (aç / kapat) — 1.2.0'dan itibaren önce **ADMIN MODE** açılmalı |
-| **Ctrl+Alt+F10** | Admin modunu onayla açar (ayarlara girmeden) |
-| **Ctrl+F10** | Doğrudan dünya üretici (WORLD kategorisi) |
-| **Ctrl+Shift+F10** | World Debugger (harita üstünde sorunlar) |
-| Ctrl+Shift+A | Admin paneli (eski kısayol) |
+| **Ctrl+Shift+F10** | ADMIN ACCESS giriş ekranı (oturum açıkken World Control Center) |
+| **F10** | World Control Center (yalnızca giriş yapılmışsa; aksi halde hiçbir şey yapmaz) |
+| **Ctrl+F10** | Doğrudan dünya üretici (giriş yapılmışsa) |
+| Android / dokunmatik | Ayarlar → SYSTEM'deki (veya ana menüdeki) sürüm yazısına arka arkaya **7 kez** dokunmak giriş ekranını açar |
 
-Ana menüdeki **🛡️ ADMIN** düğmesi ancak F10 bir kez kullanıldıktan sonra görünür; başlıktaki sürüm yazısına 5 kez tıklamak da onu gösterir. Panel açıkken simülasyon durur (⚙ SYSTEM'den değiştirilebilir). **🚪 EXIT ADMIN MODE** bedava inşaat, anında inşaat, oturumluk kilit açma ve debugger'ı kapatır; normal oyun eski haline döner.
+Normal menülerde admin düğmesi yoktur. Giriş yapan yöneticinin ekranında küçük bir **🛡️ ROL · kullanıcı** rozeti görünür; panel açıkken simülasyon durur (⚙ SYSTEM'den değiştirilebilir). **⏏ LOG OUT** bedava inşaat, anında inşaat ve diğer bütün admin etkilerini kapatır.
 
 **Kategoriler:** 🌍 World · 🗺 Map · 🏙 City · 🏗 Buildings · 🛣 Roads · 👥 Citizens · 🚗 Traffic · 💰 Economy · 🏢 Companies · ⚡ Utilities · 🌳 Environment · 🌦 Weather · 🚨 Events · 🔬 Technology · 📋 Quests · 🤖 AI · 🎮 Simulation · 💾 Save · 🐞 Debug · ⚙ System. Üstte büyük düğmeler: **🌍 GENERATE LIVEABLE WORLD**, **🔧 FIX WORLD**, **🔓 UNLOCK EVERYTHING**, **🏙️ MAX CITY**. Arama kutusu komut, bina, vatandaş, şirket ve ilçe arar. Altta komut konsolu vardır.
 
@@ -248,7 +277,7 @@ Her admin işlemi `logs\admin.log` dosyasına yazılır (ör. `[16:21] Admin: Ge
 
 ## 6c. World Engine ve World Control Center (1.2.0)
 
-**Admin güvenliği:** admin paneli normal oyuncuya yanlışlıkla açılmaz. ⚙️ Ayarlar → **🛡️ ENABLE ADMIN MODE** ya da **Ctrl+Alt+F10** (onay penceresiyle) açıldıktan sonra **F10** çalışır. Kapalıyken F10 yalnızca bir ipucu gösterir.
+**Admin güvenliği:** 2.0.0'da ayarlardaki "ENABLE ADMIN MODE" anahtarı kaldırıldı; World Control Center yalnızca ADMIN AUTHENTICATION sonrasında açılır (bkz. **6f**).
 
 **Devasa dünya (chunk motoru):**
 - Harita 16×16 karolu **chunk**'lara ve **bölgelere** (Central / North / South / East / West) bölünür. Yeni boyut **GIGA 128×128**; **CREATE NEW REGION** dünyaya her seferinde 16 karoluk bir halka ekler (en fazla 160×160). Nehirler, yollar ve arazi yeni bölgeye kesintisiz devam eder.
@@ -295,7 +324,7 @@ Her admin işlemi `logs\admin.log` dosyasına yazılır (ör. `[16:21] Admin: Ge
 
 **F3 performans monitörü** artık simülasyon/render süresini, vatandaş/araç/bina sayısını, aktif ve yüklü chunk'ları, AI ve pathfinding görevlerini ve belleği de gösterir.
 
-**Otomatik EXE testi:** `"BLOCK CITY TYCOON.exe" --selftest --selftest-out=rapor.json` 40 adımı çalıştırır (New City, Generate Liveable World, Validator, Auto Fix, Start, 1× / 10× / 100×, trafik, ekonomi, afet, acil durum, Save, **EXE'yi yeniden başlatma**, Load, Snapshot, Clone World, Admin Panel, chunk streaming, performans; 1.3.0 ile Living World, Company AI 2.0 & Stock Market 2.0, eğitim/sağlık, turizm/ulaşım/lojistik, tedarik şoku, megaproje, Incident Center, Simulation Lab/What-If/Time Machine, Living City UI; 1.4.0 ile metro kurma, demiryolu + bölgesel tren, ticaret rotası + sözleşme, şirket + banka + kredi, konut piyasası + mortgage, enerji depolama + akıllı şebeke + sensörler, kestirimci bakım + risk haritası, Transport AI 2.0, City Budget 2.0 + tahmin + finansal sağlık, Part 11 arayüzü ve en sonda GENERATE MEGA WORLD), ayrı bir geçici kullanıcı klasörü kullanır, `logs\selftest.json` yazar ve 0 / 1 çıkış koduyla kapanır. Windows Release iş akışı bunu her derlemede yeni EXE üzerinde çalıştırır ve raporu sürüme ekler. Tarayıcıda: `index.html?selftest`.
+**Otomatik EXE testi:** `"BLOCK CITY TYCOON.exe" --selftest --selftest-out=rapor.json` 53 adımı çalıştırır (New City, Generate Liveable World, Validator, Auto Fix, Start, 1× / 10× / 100×, trafik, ekonomi, afet, acil durum, Save, **EXE'yi yeniden başlatma**, Load, Snapshot, Clone World, Admin Panel, chunk streaming, performans; 1.3.0 ile Living World, Company AI 2.0 & Stock Market 2.0, eğitim/sağlık, turizm/ulaşım/lojistik, tedarik şoku, megaproje, Incident Center, Simulation Lab/What-If/Time Machine, Living City UI; 1.4.0 ile metro kurma, demiryolu + bölgesel tren, ticaret rotası + sözleşme, şirket + banka + kredi, konut piyasası + mortgage, enerji depolama + akıllı şebeke + sensörler, kestirimci bakım + risk haritası, Transport AI 2.0, City Budget 2.0 + tahmin + finansal sağlık, Part 11 arayüzü; 2.0.0 ile admin güvenliği (normal oyuncu reddi, kimlik doğrulama + deneme sınırı, panel + izin matrisi, işlem günlüğü + çıkış, otomatik kilit), Windows ⇄ Android kayıt, v11 → v12 kayıt / snapshot / sürüm geçişi (yedek → geçiş → geri alma), performans modları, gamepad, Settings 2.0, Sandbox · Scenario · Continue · Citizen AI ve en sonda GENERATE MEGA WORLD), ayrı bir geçici kullanıcı klasörü kullanır, `logs\selftest.json` yazar ve 0 / 1 çıkış koduyla kapanır. Windows Release iş akışı bunu her derlemede yeni EXE üzerinde çalıştırır ve raporu sürüme ekler. Tarayıcıda: `index.html?selftest`.
 
 ## 6d. Living World, gelişmiş ekonomi ve Advanced Simulation (1.3.0)
 
@@ -358,8 +387,52 @@ Part 11 sistemleri ayrı modüller değildir: hepsi aynı dünyanın verisini ok
 - World Control Center'da 13 yeni bölüm: TRANSPORT CONTROL, ECONOMY CONTROL, BUILDING CONTROL, UTILITY CONTROL, CITIZEN CONTROL, COMPANY CONTROL, TOURISM CONTROL, SMART CITY, DISASTER CONTROL, CLIMATE CONTROL, TRADE CONTROL, FINANCE CONTROL, WORLD CONTROL (World Painter).
 - **Ulaşım komutları:** BUILD METRO, GENERATE RAILWAY, CLEAR TRAFFIC, OPTIMIZE TRAFFIC, RECALCULATE ROUTES, MAX PUBLIC TRANSPORT, SPAWN TRAIN, SPAWN BUS, SPAWN EMERGENCY VEHICLE. **Ekonomi:** ECONOMIC BOOM, RECESSION, RESET PRICES, MAX CITY FUNDS, INCREASE/DECREASE DEMAND, SPAWN COMPANY, BANKRUPT COMPANY, CREATE TRADE CONTRACT. **Bina:** BUILD / UPGRADE / REPAIR SELECTED, MAX LEVEL, INSTANT CONSTRUCTION, CHANGE BUILDING TYPE, DUPLICATE, DELETE. **Vatandaş:** ADD / REMOVE POPULATION, CREATE JOBS, MOVE CITIZENS, RESET NEEDS, MAX HAPPINESS, GENERATE MIGRATION, GENERATE COMMUTERS.
 - **WORLD PAINTER:** yol, bina, arazi, su, ağaç, bölge, altyapı ve yıkım fırçaları + kaldırım/meydan/bisiklet yolu.
-- **Çoklu seçim editörü:** admin modunda Ctrl + tık; UPGRADE / REPAIR / MOVE / DELETE ALL, CHANGE TYPE, ASSIGN DISTRICT.
+- **Çoklu seçim editörü:** admin oturumunda Ctrl + tık; UPGRADE / REPAIR / MOVE / DELETE ALL, CHANGE TYPE, ASSIGN DISTRICT.
 - **Canlı varlık araması:** sonuca tıklayınca kamera oraya uçar. **CITY BOOK:** 10 bölüm, HTML olarak kaydedilebilir.
+
+## 6f. Windows EXE + Android APK + Güvenli Admin Sistemi (2.0.0)
+
+### Tek oyun motoru, üç platform
+`IS_ANDROID`, `IS_WINDOWS`, `IS_DESKTOP` otomatik algılanır (`platform.js`). Oyun motoru, ekonomi, vatandaşlar, trafik, binalar, dünya, kayıt, simülasyon, görevler ve başarımlar **her platformda aynı JavaScript kodudur**; yalnızca **girdi** (fare/klavye · dokunmatik · gamepad), **arayüz** (masaüstü · mobil HUD), **dosya sistemi** (Windows dosyaları · Android özel depolama + Storage Access Framework · tarayıcı) ve **performans** katmanları farklıdır. Android uygulaması (`android/`) aynı `src/` dosyalarını yerleşik, internetsiz bir sunucudan (`https://appassets.androidplatform.net/www/`) çalıştıran tam ekran bir WebView kabuğudur; hiçbir izin istemez.
+
+| Windows | Android |
+|---|---|
+| EXE Installer · Portable EXE | APK (debug + imzalı release) |
+| Klavye + fare · gamepad | Dokunmatik kontroller · Bluetooth gamepad |
+| Fullscreen · Borderless · Windowed | Tam ekran (immersive), yatay öncelikli, dikey/otomatik seçilebilir |
+| `%APPDATA%` kayıtları, Windows dosya pencereleri | Uygulamaya özel depolama, sistem dosya seçici ile EXPORT / IMPORT, Pictures/BLOCK CITY TYCOON |
+
+### Android
+- **Splash:** Android 12+ sistem açılış ekranı (adaptive ikon), ardından *BLOCK CITY TYCOON — Build. Manage. Expand.* ve *Loading World Engine… · Loading Simulation… · Loading City Data…*
+- **Ana menü:** NEW CITY · CONTINUE · SANDBOX · SCENARIO · CHALLENGES · SETTINGS (admin seçeneği yok).
+- **Mobil HUD:** üstte Money · Population · Happiness · GDP · Power · Water (dokununca ilgili panel), saat, hız, duraklat; altta **Build · Road · Transit · Economy · City · Map**.
+- **Dokunmatik kamera:** tek parmak kaydırma, iki parmak kaydırma + pinch zoom + **iki parmak döndürme** (↺ kuzeyi yukarı alır).
+- **Mobil inşa modu:** bina seçilince **BUILD · ROTATE · MOVE · CONFIRM · CANCEL**; canlı **yol bağlantısı · elektrik · su · bölge · arazi** kontrolleri (✓ / ! / ✗).
+- **Mobil yol çizici:** **START → DRAG → END → CONFIRM**; Small · Medium · Large · Highway · Bridge · Tunnel (köprü suyun, tünel kayanın üzerinde otomatik oluşur).
+- **Geri tuşu:** açık pencereyi kapatır, araçları iptal eder, oyunda duraklatma menüsünü açar, ana menüde çıkışı sorar.
+- **Kayıt:** SAVE · LOAD · AUTO SAVE · BACKUP · EXPORT · IMPORT; uygulama arka plana alınınca otomatik kayıt + kurtarma kaydı; Android yedekleme kuralları şehirleri korur.
+- **İkon:** şehir blokları logosu — adaptive (ön plan + arka plan + Android 13 tek renk ikon), yuvarlak ve klasik ikonlar.
+
+### Performans ve erişilebilirlik
+- **LOW / MEDIUM / HIGH / ULTRA** + **AUTO PERFORMANCE**: cihaz ölçülür (çekirdek, bellek, kısa çizim testi) ve uygun ayar seçilir; oyun sırasında FPS düşer veya cihaz ısınırsa (Android termal durum) önce uzak simülasyon, gölgeler, parçacıklar, araç ve vatandaş detayı azaltılır, sonra koşullar düzelince geri alınır.
+- **LOW-END MODE:** kısa çizim mesafesi, gölge yok, az vatandaş, trafik toplama, agresif chunk streaming — oyun mekanikleri aynen çalışır.
+- **Simülasyon kalitesi** (LOW / MEDIUM / HIGH): uzak vatandaş ve trafik toplama, chunk streaming, LOD, nesne havuzu (parçacıklar) ve FAR katmanında arka plan simülasyonu; **güvenli hız limiti** 25–100× hızlarda cihaz zorlanırsa hızı kademeli düşürür (100 → 50 → 25 → 10×).
+- **Settings 2.0:** GRAPHICS · AUDIO · CONTROLS · CAMERA · SIMULATION · ACCESSIBILITY · SYSTEM (platforma göre seçenekler). Erişilebilirlik: UI ölçeği, yazı boyutu, yüksek kontrast, azaltılmış hareket, ekran sarsıntısı kapalı, renk körü dostu heatmap'ler, büyük dokunmatik düğmeler, eğitim ipuçları.
+- **Gamepad 2.0** (Windows ve Android): Move Camera · Zoom · Rotate · Select · Build · Cancel · Menu atanabilir (CONTROLS → Assign).
+- **Bildirimler:** "New building completed", "Traffic congestion detected", "City reached 500,000 population", "New company founded" … kategori bazında açılıp kapatılır (oyun içi).
+- **İlk açılış:** grafik kalitesi · UI ölçeği · kontroller · simülasyon kalitesi → **CREATE YOUR FIRST CITY**. Android'de atlanabilir **mobil eğitim** (Tap · Drag · Zoom · Rotate · Build · Road · Map · Pause).
+- **Çevrimdışı öncelikli:** New City, Continue, Sandbox, Scenario, Save, Load ve simülasyon internetsiz çalışır; çevrimiçi bir özellik eklenirse ayrı bir katman olacaktır.
+
+### Güvenli admin sistemi
+- **Normal oyuncu** admin panelini görmez: menüde, ayarlarda, HUD'da ve komut paletinde admin yoktur; **F10 hiçbir şey yapmaz**; konsol, kısayol, URL parametresi, local storage veya kayıt düzenleme ile admin komutu çalıştırılamaz — her komut çalışmadan önce **CHECK ADMIN PERMISSION** yapar (`ADMIN COMMAND = DENIED`).
+- **ADMIN AUTHENTICATION:** Windows'ta **Ctrl+Shift+F10**, Android'de sürüm yazısına **7 dokunuş** → **ADMIN ACCESS** (kullanıcı adı + şifre). Şifre kodda **saklanmaz**: her hesap tuzlu **PBKDF2-SHA256** (120 000 tur) kaydıdır ve sahibin gizli anahtarından türetilmiş rol anahtarına bağlıdır — kodda yalnızca doğrulama özetleri vardır. Depolamadaki hesap kayıtlarını kopyalamak veya değiştirmek erişim vermez.
+- **Roller:** **OWNER** (her şey) · **ADMIN** (dünya / şehir / ekonomi) · **DEVELOPER** (debug / test) · **DEBUG** (performans / tanılama) ve gerçek bir **izin matrisi** (örn. Generate / Delete World: OWNER; Economy Control: OWNER / ADMIN; Traffic Debug: ADMIN / DEVELOPER; Performance Profiler: DEVELOPER / DEBUG). OWNER yeni hesap oluşturabilir ve şifre değiştirebilir (SYSTEM → ADMIN SECURITY).
+- **ADMIN SESSION:** yalnızca bellekte (kullanıcı, rol, platform, giriş zamanı, son etkinlik, bitiş); **LOG OUT** oturumu ve tüm admin etkilerini temizler; **otomatik kilit** varsayılan 10 dk işlem yapılmazsa (Ayarlar / SYSTEM'den değiştirilir).
+- **Başarısız giriş koruması:** 3. hatalı denemeden sonra 5 s, sonra 15 s, 30 s, 1 dk, 2 dk … bekleme (en fazla 15 dk, kalıcı kilit yok); her deneme güvenlik günlüğüne yazılır.
+- **Admin işlem günlüğü:** zaman · kullanıcı · rol · komut · hedef · sonuç (Windows'ta `logs\admin.log`).
+- **OWNER RECOVERY:** tek seferlik kurtarma kodu (giriş ekranında *Owner recovery*) yeni owner şifresi belirler; normal oyuncunun göreceği bir yerde değildir.
+- **World Control Center:** WORLD · SIMULATION · CITY · ECONOMY · CITIZENS · TRAFFIC · BUILDINGS · UTILITIES · TRANSPORT · COMPANIES · DISASTERS · WEATHER · TECHNOLOGY · SAVE · DEBUG · SYSTEM; giriş sonrası **WORLD CONTROL CENTER GUIDE**. Mobil ekranda da çalışır.
+- **Release build güvenliği:** RELEASE'te DevTools, `?debug`, debug paneli (F3) ve geliştirici komutları normal kullanıcıya kapalıdır. Otomatik test (`--selftest`, Android'de test modu) ayrı, geçici bir depolama alanında çalışır, oyuncu girişini engeller ve yalnızca o test sürecinde geçerli tek seferlik bir admin kimliği kullanır.
 
 ## 7. Pencere ve ayarlar
 
@@ -377,7 +450,7 @@ Part 11 sistemleri ayrı modüller değildir: hepsi aynı dünyanın verisini ok
 `electron/updater.js` dört adımı içerir: **Update Checker → Version Check → Download Update → Install Update**. Açmak için `package.json` içindeki `bctUpdate.manifestUrl` alanına https ile yayınlanan bir JSON adresi yazın:
 
 ```json
-{ "version": "1.4.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-1.4.0.exe", "sha256": "…", "notes": "Yeni binalar" }
+{ "version": "2.0.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-2.0.0.exe", "sha256": "…", "notes": "Yeni binalar" }
 ```
 
 Adres boşsa güncelleme kapalıdır. İnternet yoksa oyun sessizce devam eder. İndirilen installer'ın SHA-256 değeri doğrulanır. Kayıtlar kullanıcı klasöründe durduğu için güncellemeden etkilenmez.
@@ -406,9 +479,10 @@ Bu sürümde otomatik olarak (Linux üzerinde Electron + Playwright, Xvfb ile) d
 | 25 | Dünya üretici (12 preset + custom, SMALL…MEGA) | ✅ hepsi LIVEABLE, sağlık %92–98, 1–4 sn, simülasyon dakikalarca kararlı |
 | 26 | Admin paneli, konsol, snapshot/rollback, stres testi, benchmark, export/import, admin.log | ✅ tarayıcıda ve Electron'da hatasız |
 | 27 | Part 9: chunk motoru, trafik 2.0, toplu taşıma, haneler, emlak, inşaat 2.0, bakım, şebeke/su/kanalizasyon, çevre, Weather 2.0, World Control Center, inspector, fırça, bölge seçici, afet komuta merkezi, snapshot 2.0/dallanma/klon, timeline, meydan okumalar, Validator 2.0, Advisor 2.0 | ✅ tarayıcıda hatasız; GIGA 128×128 dünya 3 sn'de üretiliyor |
-| 28 | Otomatik self-test (40 adım, EXE yeniden başlatma dahil) | ✅ tarayıcıda ve Electron'da 40/40 |
+| 28 | Otomatik self-test (53 adım, EXE yeniden başlatma dahil) | ✅ tarayıcıda ve Electron'da 53/53 |
 | 29 | Part 10: Living World, yaşam döngüsü, nüfus, Company AI 2.0, markalar, Stock Market 2.0, haberler, itibar, sıralama, eğitim/araştırma/sağlık, Tourism 2.0, havaalanı/liman/demiryolu/lojistik, şoklar, megaprojeler, bakım/yaşlanma, olaylar, dilekçeler, hedefler, otomasyon, Assistant, Observatory, grafikler, Time Machine, Simulation Lab, What-If, World Factory, 22 adımlı GENERATE MEGA WORLD | ✅ tarayıcıda hatasız; v9 → v10 migration; aynı seed aynı dünya; GIGA mega dünya 7 sn, skor 94/100 |
 | 30 | Part 11: çok modlu rota, Traffic Light AI 2.0, acil durum koridoru, yol çalışmaları, metro hat oluşturucu, bölgesel tren, ticaret rotaları + sözleşmeler, bankalar, krediler, mortgage, konut/kira/ticari piyasa, City Budget 2.0, tahmin, finansal sağlık, sensörler, tahmin/bakım, risk haritası, yangın/sel, enerji depolama, akıllı şebeke, atık, 6 hub sekmesi, 13 admin bölümü, CITY BOOK | ✅ tarayıcıda ve Electron'da hatasız; v10 → v11 migration; GIGA dünya 70K nüfus, 126 TPS |
+| 31 | Part 12: güvenli admin (F10 / konsol / kayıt düzenleme / URL reddi, PBKDF2 giriş, deneme sınırı, roller + izin matrisi, oturum, otomatik kilit, çıkış, işlem günlüğü), CITY_SAVE_V4 (Windows ⇄ Android), yedek → geçiş → geri alma, snapshot ve v7 → v12 geçişi, performans modları, güvenli hız, gamepad, Settings 2.0, mobil arayüz (HUD, dokunmatik kamera, inşa modu, yol çizici, geri tuşu) | ✅ Windows sırası 53/53 (tarayıcı + Electron), Android sırası 21/21 (telefon emülasyonu); APK yerelde aapt2/javac ile derlendi ve imzalandı; release iş akışında APK Android emülatöründe test edilir |
 | 24 | Uninstaller | ✅ Wine altında dosyalar, kısayollar ve kayıt defteri girdisi siliniyor, kayıtlar korunuyor |
 
 Wine altında doğrulanamayanlar gerçek bir Windows PC'de denenmeli:
@@ -420,5 +494,5 @@ Windows'ta son kontrol:
 
 ```text
 npm install → npm run dev → NEW CITY → şehir oluşur → Ctrl+S → pencereyi kapat (EXIT)
-→ npm run build → dist\BLOCK-CITY-TYCOON-Setup-1.4.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
+→ npm run build:windows → dist\windows\BLOCK-CITY-TYCOON-Setup-2.0.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
 ```

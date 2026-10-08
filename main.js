@@ -16,7 +16,17 @@ const { createSession } = require('./electron/session');
 const { createUpdater } = require('./electron/updater');
 const pkg = require('./package.json');
 
-const DEV = process.argv.includes('--dev') || process.env.BCT_DEV === '1';
+/* Build profile (scripts/build.js → src/js/build-profile.js): DEVELOPMENT (DevTools, debug, profiler) · TEST · RELEASE.
+   A missing file means RELEASE: DevTools, reload shortcuts and debug tools stay off even with --dev. */
+function readBuildProfile() {
+  try {
+    const t = fs.readFileSync(path.join(__dirname, 'src', 'js', 'build-profile.js'), 'utf8');
+    const o = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1));
+    return ['development', 'test', 'release'].indexOf(o.profile) >= 0 ? o.profile : 'release';
+  } catch (e) { return 'release'; }
+}
+const BUILD_PROFILE = readBuildProfile();
+const DEV = (process.argv.includes('--dev') || process.env.BCT_DEV === '1') && BUILD_PROFILE === 'development';
 /* Automatic self-test (Part 9): "BLOCK CITY TYCOON.exe --selftest [--selftest-out=<file>]" plays the 40-step release test plan (20 core + 10 Living World + 10 Part 11 checks),
    restarts itself once (phase 2), writes logs/selftest.json and exits with code 0 (all passed) or 1. */
 const SELFTEST = process.argv.includes('--selftest');
@@ -59,7 +69,7 @@ function start() {
   if (SELFTEST_PHASE === 1) { try { fs.rmSync(userData, { recursive: true, force: true }); } catch (e) { /* first run */ } }
   fs.mkdirSync(userData, { recursive: true });
   log = createLogger(path.join(userData, 'logs'));
-  log.info('Game started — ' + PRODUCT + ' v' + app.getVersion() + ' (Electron ' + process.versions.electron + ', ' + process.platform + ' ' + process.arch + (DEV ? ', DEVELOPMENT' : '') + ')');
+  log.info('Game started — ' + PRODUCT + ' v' + app.getVersion() + ' (Electron ' + process.versions.electron + ', ' + process.platform + ' ' + process.arch + ', build ' + BUILD_PROFILE.toUpperCase() + (DEV ? ', DevTools on' : '') + ')');
   log.info('User data: ' + userData);
   storage = createStorage(userData, log);
   storage.cleanupTemp();
@@ -196,6 +206,18 @@ function safeName(s, ext) {
   if (ext && !n.toLowerCase().endsWith('.' + ext)) n += '.' + ext;
   return n;
 }
+let STR = null;
+function selftestRealm() {
+  if (STR) return STR;
+  const c = require('crypto'), M = c.randomBytes(32), pw = c.randomBytes(18).toString('hex'), salt = c.randomBytes(16), IT = 120000;
+  const sha = function (b) { return c.createHash('sha256').update(b).digest('hex'); };
+  const checks = {}; ['OWNER', 'ADMIN', 'DEVELOPER', 'DEBUG'].forEach(function (r) { checks[r] = sha(c.createHmac('sha256', M).update('bct-role:' + r).digest()); });
+  const dk = c.pbkdf2Sync(Buffer.from(pw, 'utf8'), Buffer.concat([salt, Buffer.from('selftest', 'utf8')]), IT, 32, 'sha256');
+  const wrap = Buffer.from(M.map(function (v, i) { return v ^ dk[i]; })).toString('hex');
+  STR = { realm: { id: 'selftest', checks: checks, records: [{ u: 'selftest', role: 'OWNER', kind: 'master', it: IT, salt: salt.toString('hex'), wrap: wrap }] }, user: 'selftest', password: pw };
+  log.info('Self-test: isolated admin realm created for this test process');
+  return STR;
+}
 function picturesDir() { const d = path.join(app.getPath('pictures'), PRODUCT); fs.mkdirSync(d, { recursive: true }); return d; }
 function uniquePath(dir, name) {
   let p = path.join(dir, name); const ext = path.extname(name), base = name.slice(0, name.length - ext.length);
@@ -216,8 +238,11 @@ function registerIpc() {
   ipcMain.on('store:write', function (e, key, value) { e.returnValue = trusted(e) ? storage.write(String(key), value) : { ok: false, error: 'untrusted' }; });
   ipcMain.on('store:remove', function (e, key) { e.returnValue = trusted(e) ? storage.remove(String(key)) : { ok: false }; });
   ipcMain.on('app:info', function (e) {
-    e.returnValue = { version: app.getVersion(), dev: DEV, portable: !!process.env.PORTABLE_EXECUTABLE_DIR, platform: process.platform, selftest: SELFTEST_PHASE };
+    e.returnValue = { version: app.getVersion(), dev: DEV, profile: BUILD_PROFILE, portable: !!process.env.PORTABLE_EXECUTABLE_DIR, platform: process.platform, selftest: SELFTEST_PHASE };
   });
+  /* Self-test admin realm: an isolated, one-time OWNER credential that exists only in this self-test process.
+     The self-test runs in its own temporary user folder (never the player's cities), blocks player input and exits at the end. */
+  ipcMain.on('selftest:adminRealm', function (e) { e.returnValue = (trusted(e) && SELFTEST) ? selftestRealm() : null; });
   /* self-test: restart into phase 2, final report */
   ipcMain.on('selftest:restart', function (e) {
     if (!trusted(e) || !SELFTEST) return;

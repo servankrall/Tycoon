@@ -1,6 +1,6 @@
 'use strict';
 /* BLOCK CITY TYCOON — ADMIN CONTROL CENTER (Part 8)
-   Hidden by default. F10 = Admin panel · Ctrl+F10 = World generator · Ctrl+Shift+F10 = World debugger (Ctrl+Shift+A still works).
+   Not part of the normal game: requires ADMIN AUTHENTICATION (admin-auth.js). Ctrl+Shift+F10 = ADMIN LOGIN · F10 = panel · Ctrl+F10 = world generator (after login).
    20 categories, one-click world generation, validator / FIX WORLD, snapshots & rollback, admin presets, stress test,
    benchmark, citizen / vehicle / company inspectors, command console and an admin action log (logs/admin.log). */
 
@@ -70,17 +70,9 @@ function adminLog(msg) {
 /* ---------------- Open / close ---------------- */
 function openAdminCenter(cat) {
   if (!S) return;
-  if (PROFILE.pin && !ADMIN.ok) {
-    showModal('🛡️ Admin panel — locked', '<p class="small">Enter your admin PIN.</p><input id="admPin" type="password" inputmode="numeric" maxlength="12" class="admInput" autocomplete="off"><div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn green" id="admUnlock">Unlock</button></div>');
-    const go = function () { if (hashPin($('admPin').value) === PROFILE.pin) { ADMIN.ok = true; closeModal(); openAdminCenter(cat); } else { toast('❌ Wrong PIN', 'bad'); sfx('error'); } };
-    $('admUnlock').onclick = go; $('admPin').onkeydown = function (e) { if (e.key === 'Enter') go(); };
-    setTimeout(function () { $('admPin').focus(); }, 30);
-    return;
-  }
   if (cat) ADM.cat = cat;
   if (!ADM.open) {
-    ADM.open = true; ADM.mode = true; ADM.menuButton = true;
-    const mb = document.querySelector('[data-menu="admin"]'); if (mb) mb.classList.remove('hidden');
+    ADM.open = true; ADM.mode = true;
     if (STARTED && ADM.pauseOnOpen && S.settings.speed > 0) { ADM.prevSpeed = S.settings.speed; setSpeed(0); }
     adminLog('Opened admin panel');
   }
@@ -103,7 +95,6 @@ function exitAdminMode() {
   ADM.mode = false; S.p5.admin.god = false; S.p5.admin.instant = false; S.debugUnlockAll = false;
   if (WDBG.on) toggleWorldDebug(false);
   ADM.pick = null;
-  const mb = document.querySelector('[data-menu="admin"]'); if (mb) mb.classList.add('hidden');
   adminLog('Exited admin mode (free build, instant build, session unlock and debugger off)');
   toast('🛡️ Admin mode off — normal game', 'good');
 }
@@ -124,7 +115,7 @@ function aVal(id) { const e = $(id); return e ? e.value : ''; }
 
 function renderAdminCenter() {
   const navBtn = function (c) { return '<button class="admNav ' + (ADM.cat === c[0] ? 'on' : '') + '" data-acat="' + c[0] + '"><span>' + c[1] + '</span>' + c[2] + '</button>'; };
-  const nav = '<div class="admNavGroup">🌐 WORLD CONTROL CENTER</div>' + WC_CATS.map(navBtn).join('') + '<div class="admNavGroup">🛡️ ADMIN TOOLS</div>' + ADM_CATS.map(navBtn).join('');
+  const nav = typeof adminNavHtml === 'function' ? adminNavHtml() : WC_CATS.map(navBtn).join('');      // Part 12: 16 sections filtered by the admin role
   $('admNavList').innerHTML = nav;
   let body = '';
   try { body = ADM.search ? adminSearchHtml(ADM.search) : (ADM_VIEWS[ADM.cat] || ADM_VIEWS.world)(); }
@@ -295,10 +286,9 @@ const ADM_VIEWS = {
   },
   system: function () {
     return aCard('⚙ System', aToggle('pauseOnOpen', '⏸ Pause the simulation while the admin panel is open', ADM.pauseOnOpen) +
-      '<p class="small">Admin mode is hidden from normal players and must be enabled first (⚙️ Settings → ENABLE ADMIN MODE, or <b>Ctrl+Alt+F10</b>). Then: <b>F10</b> World Control Center · <b>Ctrl+F10</b> world generator · <b>Ctrl+Shift+F10</b> world debugger · <b>Ctrl+Shift+A</b> admin panel.</p>' + aToggle('p9_adminMode', '🛡️ ADMIN MODE ENABLED on this device', adminModeEnabled()) +
-      aRow(ab('exitAdmin', '🚪 EXIT ADMIN MODE', 'red') + ab('openLogs', '📜 Open logs folder') + ab('classicAdmin', '🛡️ Classic admin tools'))) +
-      aCard('🔐 Admin PIN', '<p class="small">' + (PROFILE.pin ? 'A PIN protects the admin panel.' : 'No PIN set — anyone on this device can open the admin panel.') + '</p><div class="admRow"><span>New PIN (4-12 digits)</span><input class="admInput" id="acPin" type="password" inputmode="numeric" maxlength="12">' + ab('setPin', 'Set PIN', 'green') + '</div>' + (PROFILE.pin ? aRow(ab('clearPin', 'Remove PIN', 'red')) : '')) +
-      aCard('ℹ️ Build', '<p class="small">BLOCK CITY TYCOON v' + GAME_VERSION + ' · save v' + SAVE_VERSION + ' · world generator v' + WORLDGEN_VERSION + ' · ' + (DESKTOP ? 'Windows desktop' : 'browser') + '</p>');
+      '<p class="small">The World Control Center is only available after ADMIN AUTHENTICATION (Ctrl+Shift+F10 on Windows, 7 taps on the version label on Android). <b>F10</b> World Control Center · <b>Ctrl+F10</b> world generator. Session, accounts, auto-lock and logs: SYSTEM → ADMIN SECURITY.</p>' +
+      aRow(ab('sec_logout', '⏏ LOG OUT', 'red') + ab('sec_lock', '🔒 LOCK', 'blue') + ab('openLogs', '📜 Open logs folder') + ab('classicAdmin', '🛡️ Classic admin tools'))) +
+      aCard('ℹ️ Build', '<p class="small">BLOCK CITY TYCOON v' + GAME_VERSION + ' · save v' + SAVE_VERSION + ' · world generator v' + WORLDGEN_VERSION + ' · ' + PLATFORM_NAME + ' · build ' + BUILD.profile.toUpperCase() + '</p>');
   }
 };
 function customWorldHtml() {
@@ -504,7 +494,8 @@ function adminDo(a, v, el) {
     case 'exitAdmin': return exitAdminMode();
     case 'openLogs': Platform.openFolder('logs'); return;
     case 'classicAdmin': closeAdminCenter(); ADMIN.ok = true; renderAdmin(); return;
-    case 'setPin': { const pin = aVal('acPin'); if (!/^\d{4,12}$/.test(pin)) return admRe('PIN must be 4-12 digits', 'bad'); PROFILE.pin = hashPin(pin); ADMIN.ok = true; saveProfile(); return admRe('Admin PIN set'); }
+    case 'setPin': return admRe('Replaced by ADMIN AUTHENTICATION (SYSTEM → ADMIN SECURITY)', 'bad');
+    case 'setPinOld': { const pin = aVal('acPin'); if (!/^\d{4,12}$/.test(pin)) return admRe('PIN must be 4-12 digits', 'bad'); PROFILE.pin = hashPin(pin); ADMIN.ok = true; saveProfile(); return admRe('Admin PIN set'); }
     case 'clearPin': PROFILE.pin = ''; saveProfile(); return admRe('Admin PIN removed');
     case 'runCmd': ADM.search = ''; $('admSearch').value = ''; runAdminCommand(v); return;
     default: return p9AdminDo(a, v, el);              // Part 9 World Control Center actions
@@ -895,24 +886,8 @@ function bindAdminCenter() {
     else if (e.key === 'Tab') { e.preventDefault(); const m = Object.keys(ADM_COMMANDS).filter(function (k) { return k.toLowerCase().indexOf(inp.value.toLowerCase()) === 0; }); if (m.length === 1) inp.value = m[0] + ' '; else if (m.length) ADM.consoleOut.push(['', m.join('  ')]), renderAdminCenter(); }
   };
   $('admSearch').onkeydown = function (e) { e.stopPropagation(); if (e.key === 'Escape') { this.value = ''; ADM.search = ''; renderAdminCenter(); } };
-  // Hidden main-menu ADMIN button: shown only after admin mode was opened (F10) in this session
-  const mb = document.querySelector('[data-menu="admin"]'); if (mb) mb.classList.toggle('hidden', !ADM.menuButton);
-  // Five clicks on the version label also reveal it
-  const ver = $('titleVersion'); let clicks = 0, tmr = 0;
-  if (ver) ver.addEventListener('click', function () { clicks++; clearTimeout(tmr); tmr = setTimeout(function () { clicks = 0; }, 1500); if (clicks >= 5) { clicks = 0; ADM.menuButton = true; const b = document.querySelector('[data-menu="admin"]'); if (b) b.classList.remove('hidden'); toast('🛡️ Admin button revealed', ''); } });
 }
-/* Admin security (Part 9): F10 works only when ADMIN MODE is enabled (⚙️ Settings or Ctrl+Alt+F10 + confirmation) */
-window.addEventListener('keydown', function (e) {
-  if (e.key !== 'F10') return;
-  e.preventDefault(); e.stopImmediatePropagation();
-  if (typeof S === 'undefined' || !S || !MAP.roads) return;
-  if (e.ctrlKey && e.altKey) { promptEnableAdmin('wc_world'); return; }
-  if (ADM.open) { closeAdminCenter(); return; }
-  if (e.ctrlKey && e.shiftKey) { if (adminModeEnabled()) toggleWorldDebug(); else requestAdmin(); return; }
-  if (e.ctrlKey) { requestAdmin('world'); return; }
-  if (WB.on || RS.on) p9CancelTools();
-  requestAdmin();
-}, true);
+/* F10 / Ctrl+Shift+F10: see admin-auth.js (Part 12 — the panel needs an authenticated admin session) */
 window.addEventListener('keydown', function (e) {
   if (!ADM.open || e.key !== 'Escape') return;
   const t = e.target && e.target.tagName;

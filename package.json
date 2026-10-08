@@ -1,18 +1,24 @@
 {
   "name": "block-city-tycoon",
   "productName": "BLOCK CITY TYCOON",
-  "version": "1.4.0",
-  "description": "BLOCK CITY TYCOON — Build. Manage. Expand. City-building tycoon for Windows.",
+  "version": "2.0.0",
+  "description": "BLOCK CITY TYCOON — Build. Manage. Expand. City-building tycoon for Windows and Android.",
   "main": "main.js",
   "private": true,
   "author": "Block City Tycoon",
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev",
+    "dev": "node scripts/build.js profile development && electron . --dev",
     "check": "node scripts/check.js",
-    "build": "node scripts/check.js && electron-builder --win nsis portable --x64",
-    "dist": "node scripts/check.js && electron-builder --win nsis portable --x64 --publish never",
+    "build": "node scripts/build.js windows",
+    "dist": "node scripts/build.js windows",
+    "build:windows": "node scripts/build.js windows",
+    "build:android": "node scripts/build.js android",
+    "build:all": "node scripts/build.js all",
+    "build:dev": "node scripts/build.js windows --profile=development",
+    "build:test": "node scripts/build.js windows --profile=test",
+    "selftest:android": "bash scripts/android-selftest.sh",
     "build:dir": "electron-builder --win dir --x64",
     "icon": "electron scripts/make-icon.js"
   },
@@ -28,7 +34,7 @@
     "productName": "BLOCK CITY TYCOON",
     "copyright": "Copyright © 2026 Block City Tycoon",
     "directories": {
-      "output": "dist",
+      "output": "dist/windows",
       "buildResources": "build"
     },
     "files": [

@@ -1,0 +1,48 @@
+import groovy.json.JsonSlurper
+
+plugins { id 'com.android.application' }
+
+/* Version and build profile come from the shared project: ../package.json (version) and scripts/build.js (profile). */
+def pkg = new JsonSlurper().parse(file('../../package.json'))
+def ver = pkg.version.tokenize('.').collect { it.toInteger() }
+def keystoreProps = new Properties()
+def ksFile = file('../keystore/release.properties')
+if (ksFile.exists()) ksFile.withInputStream { keystoreProps.load(it) }
+def envOr = { String env, String key -> System.getenv(env) ?: keystoreProps.getProperty(key) }
+
+android {
+    namespace 'com.blockcitytycoon.game'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.blockcitytycoon.game'
+        minSdk 24
+        targetSdk 34
+        versionCode ver[0] * 10000 + ver[1] * 100 + ver[2]
+        versionName pkg.version
+        buildConfigField 'String', 'BUILD_PROFILE', "\"${System.getenv('BCT_PROFILE') ?: 'release'}\""
+    }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        release {
+            /* Release signing: environment variables (CI secrets) override android/keystore/release.properties */
+            def store = envOr('BCT_KEYSTORE_FILE', 'storeFile')
+            if (store) {
+                storeFile file(store.startsWith('/') ? store : '../keystore/' + store)
+                storePassword envOr('BCT_KEYSTORE_PASSWORD', 'storePassword')
+                keyAlias envOr('BCT_KEY_ALIAS', 'keyAlias')
+                keyPassword envOr('BCT_KEY_PASSWORD', 'keyPassword')
+            }
+        }
+    }
+    buildTypes {
+        debug { debuggable true }
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.release.storeFile ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+    lint { abortOnError false; checkReleaseBuilds false }
+    applicationVariants.all { v -> v.outputs.all { outputFileName = "BLOCK-CITY-TYCOON-Android${v.buildType.name == 'release' ? '-Release' : ''}.apk" } }
+}

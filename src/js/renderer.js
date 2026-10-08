@@ -4,7 +4,7 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let DPR = 1, CW = 0, CH = 0;
-const CAM = { x: 0, y: 0, zoom: 1, tx: null, ty: null };
+const CAM = { x: 0, y: 0, zoom: 1, tx: null, ty: null, rot: 0 };        // rot: Part 12 camera rotation (two-finger twist / gamepad), radians
 const FX = { particles: [], pool: [], texts: [], shake: 0, flash: 0, weather: 'clear', weatherUntil: 0, drops: [], lightningAt: 0, time: 0 };
 const PERF = { scale: 1, fps: 60, frames: 0, acc: 0, low: 0, high: 0, noGlow: false };
 const GROUND = { canvas: document.createElement('canvas'), scale: IS_MOBILE ? 1 : 1.5, season: -1, exp: -1, layerKey: '' };
@@ -26,7 +26,8 @@ function applyWorldTransform(sx, sy) {
   const z = CAM.zoom;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.translate(CW / 2 + (sx || 0), CH / 2 + (sy || 0));
-  if (PHOTO.on && PHOTO.rot) ctx.rotate(PHOTO.rot);
+  const rot = PHOTO.on ? PHOTO.rot : CAM.rot;
+  if (rot) ctx.rotate(rot);
   if (PHOTO.on && PHOTO.tilt && PHOTO.tilt < 1) ctx.scale(1, PHOTO.tilt);
   ctx.scale(z, z);
   ctx.translate(-CAM.x, -CAM.y);
@@ -38,8 +39,18 @@ function resizeCanvas() {
   canvas.width = Math.floor(CW * DPR); canvas.height = Math.floor(CH * DPR);
   canvas.style.width = CW + 'px'; canvas.style.height = CH + 'px';
 }
-function screenToWorld(sx, sy) { return { x: (sx - CW / 2) / CAM.zoom + CAM.x, y: (sy - CH / 2) / CAM.zoom + CAM.y }; }
-function worldToScreen(wx, wy) { return { x: (wx - CAM.x) * CAM.zoom + CW / 2, y: (wy - CAM.y) * CAM.zoom + CH / 2 }; }
+function screenToWorld(sx, sy) {
+  let dx = sx - CW / 2, dy = sy - CH / 2;
+  const r = PHOTO.on ? 0 : CAM.rot;                   // camera rotation (photo mode keeps its own projection)
+  if (r) { const c = Math.cos(-r), s = Math.sin(-r), x = dx * c - dy * s; dy = dx * s + dy * c; dx = x; }
+  return { x: dx / CAM.zoom + CAM.x, y: dy / CAM.zoom + CAM.y };
+}
+function worldToScreen(wx, wy) {
+  let dx = (wx - CAM.x) * CAM.zoom, dy = (wy - CAM.y) * CAM.zoom;
+  const r = PHOTO.on ? 0 : CAM.rot;
+  if (r) { const c = Math.cos(r), s = Math.sin(r), x = dx * c - dy * s; dy = dx * s + dy * c; dx = x; }
+  return { x: dx + CW / 2, y: dy + CH / 2 };
+}
 
 /* --- Color helpers ---------------------------------------------------------- */
 const shadeCache = new Map();
@@ -753,7 +764,7 @@ function render() {
   // Visible world rect (enlarged when the photo camera is rotated)
   const tl = screenToWorld(0, 0), br = screenToWorld(CW, CH);
   const v = { x0: tl.x - 40, y0: tl.y - 40, x1: br.x + 40, y1: br.y + 320 };
-  if (PHOTO.on && PHOTO.rot) { const ex = Math.max(CW, CH) / z * 0.5; v.x0 -= ex; v.y0 -= ex; v.x1 += ex; v.y1 += ex; }
+  if ((PHOTO.on && PHOTO.rot) || CAM.rot) { const ex = Math.max(CW, CH) / z * 0.5; v.x0 -= ex; v.y0 -= ex; v.x1 += ex; v.y1 += ex; }
   v.tx0 = clamp(Math.floor(v.x0 / TILE), 0, MAP.W - 1); v.ty0 = clamp(Math.floor(v.y0 / TILE), 0, MAP.H - 1);
   v.tx1 = clamp(Math.floor(v.x1 / TILE), 0, MAP.W - 1); v.ty1 = clamp(Math.floor(v.y1 / TILE), 0, MAP.H - 1);
   // Map shadow + ground

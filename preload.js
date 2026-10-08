@@ -11,9 +11,11 @@ contextBridge.exposeInMainWorld('bct', {
   isDesktop: true,
   version: str(info.version),
   dev: !!info.dev,
+  profile: str(info.profile || 'release'),
+  platform: str(info.platform || 'win32'),
   portable: !!info.portable,
   session: { previousCrashed: !!sessionInfo.previousCrashed },
-  selftest: info.selftest ? { phase: Number(info.selftest) || 0, restart: function () { ipcRenderer.send('selftest:restart'); }, report: function (json) { ipcRenderer.send('selftest:report', str(json)); } } : null,
+  selftest: info.selftest ? { phase: Number(info.selftest) || 0, restart: function () { ipcRenderer.send('selftest:restart'); }, report: function (json) { ipcRenderer.send('selftest:report', str(json)); }, adminRealm: function () { return ipcRenderer.sendSync('selftest:adminRealm'); } } : null,
   store: {
     loadAll: function () { return ipcRenderer.sendSync('store:loadAll'); },
     write: function (key, value) { return ipcRenderer.sendSync('store:write', str(key), str(value)); },

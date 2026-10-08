@@ -173,7 +173,7 @@ function paletteCommands() {
   add('Save game', '💾', function () { saveGame(false); }, 'save');
   add('Settings', '⚙️', function () { openSettings(); }, 'options theme accessibility');
   add('Pause / resume', '⏸️', function () { setSpeed(S.settings.speed === 0 ? 1 : 0); }, 'p');
-  add('Admin panel', '🛡️', function () { openAdmin(); }, 'admin cheat debug');
+  if (typeof AdminAuth !== 'undefined' && AdminAuth.active()) add('Admin panel', '🛡️', function () { openAdmin(); }, 'admin cheat debug');
   add('Main menu', '🏠', function () { returnToMenu(); }, 'menu exit');
   UI_THEMES.forEach(function (t) { if (themeAvailable(t)) add('Theme: ' + t.name.replace(/^\S+\s/, ''), '🎨', function () { S.settings.theme = t.id; applyTheme(); }, 'theme'); });
   BUILDING_LIST.forEach(function (d) { if (d.hidden) return; add('Build ' + d.name, d.icon, function () { startPlacing(d); }, d.cat + ' ' + d.id + ' ' + (d.sector || '')); });
@@ -183,12 +183,12 @@ function paletteCommands() {
   add('Open Transit lines', '🚇', function () { openPanel('city', 'transit'); }, 'bus metro train');
   add('Open Megacity & mega projects', '🌆', function () { openPanel('city', 'mega'); }, 'endgame');
   add('Open Company directory & stocks', '🏛️', function () { openPanel('companies', 'directory'); }, 'shares stock market');
-  add('Toggle debug panel (F3)', '🐞', function () { toggleDebug6(); }, 'fps debug');
+  if (BUILD.dev || (typeof AdminAuth !== 'undefined' && AdminAuth.can('debugPanel'))) add('Toggle debug panel (F3)', '🐞', function () { toggleDebug6(); }, 'fps debug');
   add('Smart Advisor 2.0', '🧠', function () { openAdvisor2(); }, 'advisor analysis solution problems');
   add('City timeline & history', '📜', function () { openTimeline2(); }, 'timeline history years');
   add('World, regions & neighbouring cities', '🌐', function () { openWorldOverview(); }, 'region neighbour chunks world');
   add('Entity inspector (pick on map)', '🔎', function () { EI.pick = true; toast('🎯 Click a citizen, vehicle, building, road or empty land', ''); }, 'inspect entity');
-  add('World Control Center (admin, F10)', '🌐', function () { promptEnableAdmin('wc_world'); }, 'admin world control');
+  if (typeof AdminAuth !== 'undefined' && AdminAuth.active()) add('World Control Center (admin, F10)', '🌐', function () { promptEnableAdmin('wc_world'); }, 'admin world control');
   add('Generate a challenge', '🎲', function () { generateChallenge(); }, 'random challenge');
   if (typeof p10PaletteExtra === 'function' && S && S.p10) p10PaletteExtra(add);
   HEATMAPS.forEach(function (hm) { add('Heatmap: ' + hm.name, hm.icon, function () { setHeatmap(hm.id); }, 'overlay'); });

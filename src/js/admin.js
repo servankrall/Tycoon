@@ -51,6 +51,8 @@ function renderAdmin() {
     h += '<div class="row" style="flex-wrap:wrap;gap:6px">' + admBtn('save', '💾 Save now', 'green') + admBtn('restore', '♻️ Restore backup') + admBtn('downloadJson', '⬇️ Download save (.json)') + admBtn('importJson', '⬆️ Import save file') + admBtn('viewJson', '👁️ View save JSON') + admBtn('wipeProfile', '🗑️ Reset player profile', 'red') + '</div>';
     h += '<p class="small" style="margin-top:8px">Safe save: state → validate → serialize → backup → write. Slot ' + (S.slot || 1) + ', last save ' + new Date(S.lastSaveTime).toLocaleTimeString() + '.</p><div id="admJsonBox"></div>';
   } else if (t === 'security') {
+    h += '<div class="card"><h3>🔐 Admin security</h3><p>The old admin PIN was replaced by ADMIN AUTHENTICATION (accounts, roles, auto-lock, action log): World Control Center → SYSTEM → ADMIN SECURITY.</p></div>';
+  } else if (t === 'securityOld') {
     h += '<div class="card"><h3>🔐 Admin PIN</h3><p>' + (PROFILE.pin ? 'A PIN protects this panel.' : 'No PIN set — anyone on this device can open the admin panel.') + '</p><div class="admRow"><span>New PIN (4-12 digits)</span><input class="admInput" id="admNewPin" type="password" inputmode="numeric" maxlength="12">' + admBtn('setPin', 'Set PIN', 'green') + '</div>' + (PROFILE.pin ? admBtn('clearPin', 'Remove PIN', 'red') + ' ' + admBtn('lock', '🔒 Lock now') : '') + '</div>';
   }
   showModal('🛡️ Admin Panel', h);

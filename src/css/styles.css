@@ -650,3 +650,107 @@ body.p10DashOn #topbar,body.p10DashOn #rightPanel,body.p10DashOn #rightToggle{vi
 /* ===================== PART 11 ===================== */
 #p11Multi{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:115;display:none;gap:4px;align-items:center;flex-wrap:wrap;max-width:94vw;background:rgba(12,15,36,.94);border:1px solid var(--accent);border-radius:12px;padding:6px 10px;color:var(--text);}
 #p11Multi.show{display:flex;}
+/* ===================== Part 12: SECURE ADMIN — login, session pill ===================== */
+#admLogin{position:fixed;inset:0;z-index:1200;background:rgba(5,6,18,.86);display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px);}
+#admLoginBox{width:min(420px,100%);background:linear-gradient(180deg,#1b1f40,#12152b);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:10px;}
+#admLoginBox .alHead{font-weight:900;letter-spacing:3px;color:var(--gold);font-size:18px;text-align:center;}
+#admLoginBox .alSub{font-size:12px;color:var(--dim);text-align:center;}
+#admLoginBox label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--dim);margin-top:4px;}
+#admLoginBox input{background:#0f1226;border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font-size:15px;min-height:44px;}
+#admLoginBox .alBtns{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;}
+#admLoginBox .alBtns .btn{min-height:44px;min-width:110px;}
+#admLoginBox .alMsg{min-height:18px;font-size:12px;}
+#admLoginBox .alMsg.neg{color:var(--red,#ef476f);}
+#admLoginBox .alLink{background:none;border:0;color:var(--dim);font-size:11px;text-decoration:underline;align-self:center;margin-top:6px;cursor:pointer;}
+#admLoginBox .hidden{display:none;}
+#admPill{position:fixed;right:10px;bottom:calc(var(--nav-h, 0px) + 74px);z-index:640;background:linear-gradient(90deg,#3a0ca3,#7209b7);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:7px 12px;font-size:11px;font-weight:800;letter-spacing:.5px;box-shadow:0 4px 14px rgba(0,0,0,.4);cursor:pointer;}
+body.admOpen #admPill{display:none;}
+.verTap{cursor:default;user-select:none;}
+/* ===================== Part 12: CROSS-PLATFORM / MOBILE UI ===================== */
+:root{--ui-scale:1;--text-k:1;--touch:44px;}
+body[data-textsize="S"]{--text-k:.92;} body[data-textsize="L"]{--text-k:1.12;} body[data-textsize="XL"]{--text-k:1.25;}
+body.largeTouch{--touch:56px;}
+#topbar,#leftnav,#toolbar,#rightPanel,#bottomInfo,#placeBar,.menuBox,#mHud,#mBar,#mBuildBar,#mRoad,#tutorial,#dialogBox{zoom:var(--ui-scale);}
+#modal,#leftPanel .panelBody,#rpBody,#biMain,#sysBox{zoom:var(--text-k);}
+/* Settings 2.0 tabs */
+.s2Tabs{flex-wrap:wrap;gap:4px;padding:0 0 8px;position:sticky;top:-2px;background:var(--panel-solid);z-index:2;}
+.s2Tabs .tab{min-height:36px;}
+.s2Row{padding:6px 0;gap:10px;} .s2Row span{flex:1;}
+.s2Opts{flex-wrap:wrap;gap:6px;margin:4px 0;}
+body.largeTouch .s2Tabs .tab,body.largeTouch .s2Opts .btn,body.largeTouch .s2Row .btn{min-height:var(--touch);min-width:var(--touch);}
+/* Colour-blind heat legend */
+body.cbHeat .hlBar{filter:hue-rotate(0deg);}
+/* First launch */
+.flRow{margin:10px 0;display:flex;flex-direction:column;gap:6px;} .flSeg{flex-wrap:wrap;} .flSeg button{min-height:40px;}
+/* ---- Mobile UI (Android app or touch phone) ---- */
+body.mobileUI{--top-h:50px;--nav-w:0px;--nav-h:60px;}
+body.mobileUI #topbar,body.mobileUI #leftnav{display:none !important;}
+#mHud,#mBar{display:none;}
+body.mobileUI #mHud{display:flex;position:fixed;z-index:30;left:0;right:0;top:0;height:calc(var(--top-h) + env(safe-area-inset-top,0));padding:env(safe-area-inset-top,0) calc(6px + env(safe-area-inset-right,0)) 0 calc(6px + env(safe-area-inset-left,0));align-items:center;gap:6px;background:linear-gradient(180deg,rgba(18,21,43,.97),rgba(18,21,43,.88));border-bottom:1px solid var(--line);}
+#mHud .mStats{flex:1;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;} #mHud .mStats::-webkit-scrollbar{display:none;}
+#mHud .mStat{display:flex;align-items:center;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:4px 8px;min-height:36px;white-space:nowrap;font-size:12px;cursor:pointer;}
+#mHud .mStat i{font-style:normal;font-size:14px;} #mHud .mStat b{font-weight:800;}
+#mHud .mStat.bad{border-color:#ef476f;background:rgba(239,71,111,.18);}
+#mHud .mRight{display:flex;align-items:center;gap:4px;} #mClock{font-size:12px;font-weight:800;color:var(--dim);min-width:40px;text-align:center;}
+#mHud .mIcon{min-width:var(--touch);height:calc(var(--touch) - 6px);border-radius:10px;background:var(--panel3);border:1px solid var(--line);color:var(--text);font-weight:900;font-size:15px;}
+body.mobileUI #mBar{display:flex;position:fixed;z-index:30;left:0;right:0;bottom:0;height:calc(var(--nav-h) + env(safe-area-inset-bottom,0));padding:4px calc(6px + env(safe-area-inset-right,0)) calc(4px + env(safe-area-inset-bottom,0)) calc(6px + env(safe-area-inset-left,0));gap:4px;background:rgba(18,21,43,.96);border-top:1px solid var(--line);}
+#mBar .mBtn{flex:1;min-height:var(--touch);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-radius:12px;font-size:10.5px;font-weight:800;letter-spacing:.5px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);}
+#mBar .mBtn span{font-size:19px;line-height:1;} #mBar .mBtn.on{background:var(--panel3);color:var(--gold);border-color:var(--gold);}
+body.mobileUI #leftPanel{left:0;right:0;width:auto;top:auto;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0));height:min(62vh,520px);border-radius:18px 18px 0 0;border-right:none;transform:translateY(110%);}
+body.mobileUI #leftPanel.open{transform:translateY(0);}
+body.mobileUI.portrait #leftPanel{height:58vh;}
+body.mobileUI #toolbar{left:calc(6px + env(safe-area-inset-left,0)) !important;top:calc(var(--top-h) + 8px);max-height:calc(100vh - var(--top-h) - var(--nav-h) - 24px);overflow-y:auto;}
+body.mobileUI .toolBtn{width:var(--touch);height:var(--touch);} body.mobileUI .toolBtn .tip{display:none;}
+body.mobileUI #toolbar #paletteBtn,body.mobileUI #toolbar #overlayBtn,body.mobileUI #toolbar #overlayLabel,body.mobileUI #toolbar #mobRotate{display:none;}
+body.mobileUI #rightToggle{top:calc(var(--top-h) + 8px) !important;right:calc(8px + env(safe-area-inset-right,0)) !important;}
+body.mobileUI #rightPanel{top:var(--top-h);bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0));width:min(88vw,340px);}
+body.mobileUI #bottomInfo{left:8px !important;right:8px !important;bottom:calc(var(--nav-h) + 8px + env(safe-area-inset-bottom,0));flex-wrap:wrap;padding:8px 10px;}
+body.mobileUI #biActions .btn{min-height:var(--touch);flex:1;}
+body.mobileUI #placeBar{bottom:calc(var(--nav-h) + 12px + env(safe-area-inset-bottom,0));width:calc(100% - 16px);}
+body.mobileUI #placeBar .btn{min-height:var(--touch);}
+body.mobileUI #minimap{width:120px;height:120px;right:8px !important;top:calc(var(--top-h) + 58px);}
+body.mobileUI #fpsBox{top:calc(var(--top-h) + 6px);}
+body.mobileUI #toasts{top:calc(var(--top-h) + 8px);}
+body.mobileUI.mBuilding #bottomInfo,body.mobileUI.mRoading #bottomInfo,body.mobileUI.mBuilding #placeBar{display:none !important;}
+body.mobileUI.portrait #mHud .mStat{padding:3px 6px;font-size:11px;} body.mobileUI.portrait #mClock{display:none;}
+/* build bar */
+#mBuildBar{position:fixed;z-index:31;left:8px;right:8px;bottom:calc(var(--nav-h, 0px) + 10px + env(safe-area-inset-bottom,0));background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:8px 10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px;}
+#mBuildBar.hidden,#mRoad.hidden{display:none;}
+#mBuildBar .mbInfo{font-size:13px;} #mBuildBar .mbBtns{display:flex;gap:6px;flex-wrap:wrap;} #mBuildBar .mbBtns .btn{flex:1;min-height:var(--touch);min-width:84px;font-size:13px;}
+#mBuildBar .btn:disabled{opacity:.45;}
+.mChecks{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;} .mChk{font-size:11px;padding:3px 7px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);}
+.mChk.ok{border-color:#06d6a0;color:#8cffc1;} .mChk.warn{border-color:#ffd166;color:#ffd166;} .mChk.bad{border-color:#ef476f;color:#ff8fa3;} .mChk.na{opacity:.55;}
+.mWhy{font-size:11px;color:#ff8fa3;margin-top:3px;}
+body:not(.mobileUI) #mBuildBar{left:auto;right:calc(var(--right-w,280px) + 16px);width:min(560px,60vw);bottom:16px;}
+/* road builder */
+#mRoad{position:fixed;z-index:31;left:8px;right:8px;bottom:calc(var(--nav-h, 0px) + 10px + env(safe-area-inset-bottom,0));background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:8px 10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px;}
+#mRoad .mrTypes{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;} body.portrait #mRoad .mrTypes{grid-template-columns:repeat(3,1fr);}
+#mRoad .mrTypes button{min-height:var(--touch);border-radius:10px;background:var(--panel2);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;}
+#mRoad .mrTypes button small{font-size:9.5px;color:var(--dim);font-weight:600;} #mRoad .mrTypes button.on{border-color:var(--gold);color:var(--gold);background:var(--panel3);} #mRoad .mrTypes button.dis{opacity:.45;}
+#mRoad .mrSteps{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:800;flex-wrap:wrap;} #mRoad .mrSteps span{padding:3px 8px;border-radius:8px;background:var(--panel2);color:var(--dim);} #mRoad .mrSteps span.cur{background:var(--gold);color:#1a1300;} #mRoad .mrSteps span.done{color:#8cffc1;} #mRoad .mrSteps i{font-style:normal;color:var(--dim);}
+#mRoad .mrBtns{display:flex;gap:6px;} #mRoad .mrBtns .btn{flex:1;min-height:var(--touch);} #mRoad .mrTip{color:var(--dim);}
+/* mobile tutorial */
+#mTut{position:fixed;inset:0;z-index:1100;background:rgba(5,6,18,.72);display:flex;align-items:center;justify-content:center;padding:16px;}
+#mTut .mtCard{width:min(440px,100%);background:linear-gradient(180deg,#1b1f40,#12152b);border:1px solid var(--line);border-radius:18px;padding:18px;text-align:center;box-shadow:var(--shadow);}
+#mTut .mtIcon{font-size:54px;} #mTut .mtTitle{font-weight:900;letter-spacing:1px;color:var(--gold);margin:6px 0;} #mTut p{font-size:14px;line-height:1.45;}
+#mTut .mtDots{display:flex;justify-content:center;gap:5px;margin:10px 0;} #mTut .mtDots i{width:8px;height:8px;border-radius:50%;background:var(--panel3);} #mTut .mtDots i.on{background:var(--gold);}
+#mTut .mtBtns{display:flex;gap:8px;} #mTut .mtBtns .btn{flex:1;min-height:var(--touch);}
+/* Android main menu: NEW CITY · CONTINUE · SANDBOX · SCENARIO · CHALLENGES · SETTINGS */
+#menuMain.mobMenu .menuRow .menuBtn:not([data-menu="sandbox"]):not([data-menu="scenario"]):not([data-menu="challenges"]),#menuMain.mobMenu #menuImportOld,#menuMain.mobMenu #menuExportAll{display:none;}
+#menuMain.mobMenu .menuBtn{min-height:var(--touch);font-size:15px;}
+#menuMain.mobMenu .menuRow{gap:6px;}
+body.mobileUI #titleHint{display:none;}
+body.mobileUI #titleScreen{overflow-y:auto;}
+@media (orientation:landscape) and (max-height:500px){
+  body.mobileUI #titleLogo{font-size:34px;margin-top:4px;} body.mobileUI #titleSub{font-size:12px;margin-bottom:6px;}
+  #menuMain.mobMenu{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:start;max-width:720px;}
+  #menuMain.mobMenu #continueCard{grid-column:1/-1;}
+  #menuMain.mobMenu .menuRow{grid-column:1/-1;}
+}
+/* very wide screens (ultrawide) and 1440p: keep panels readable */
+@media (min-width:2200px){ #modal{max-width:1200px;} }
+@media (orientation:landscape) and (max-height:500px){
+  body.mobileUI #titleBlocks{display:none;} body.mobileUI #titleVersion{margin:2px 0 6px;}
+  #menuMain.mobMenu #continueCard{display:none;}
+  #menuMain.mobMenu{padding:10px 12px;}
+}

@@ -104,7 +104,8 @@ function sanitizeP5(src) {
   p.tut.step = num(tu.step, 0, 0, 20) | 0; p.tut.done = !!tu.done;
   if (tu.base && typeof tu.base === 'object') for (const k in tu.base) if (/^[a-zA-Z]{1,16}$/.test(k)) p.tut.base[k] = num(tu.base[k], 0, -1e15, 1e15);
   const adm = src.admin || {};
-  ['used', 'god', 'instant', 'freeze', 'noEvents'].forEach(function (k) { p.admin[k] = !!adm[k]; });
+  p.admin.used = !!adm.used;           // Part 12: admin effects (free/instant build, frozen economy, no events) never come from a save
+  ['god', 'instant', 'freeze', 'noEvents'].forEach(function (k) { p.admin[k] = false; });
   const sts = src.stats || {};
   for (const k in p.stats) p.stats[k] = num(sts[k], 0, 0, 1e9) | 0;
   return p;

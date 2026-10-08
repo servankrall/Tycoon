@@ -131,7 +131,9 @@ function onPointerMove(e) {
   if (UI.zoneDrag && UI.zoneDrag.mouse) { UI.zoneDrag.x1 = t.x; UI.zoneDrag.y1 = t.y; return; }
   if (INPUT.moved) {
     let px = dx, py = dy;
-    if (PHOTO.on && PHOTO.rot) { const c = Math.cos(-PHOTO.rot), sn = Math.sin(-PHOTO.rot); px = dx * c - dy * sn; py = dx * sn + dy * c; }
+    const pr = PHOTO.on ? PHOTO.rot : CAM.rot;
+    if (pr) { const c = Math.cos(-pr), sn = Math.sin(-pr); px = dx * c - dy * sn; py = dx * sn + dy * c; }
+    if (GSET.invertPan) { px = -px; py = -py; }
     CAM.x = dn.camX - px / CAM.zoom; CAM.y = dn.camY - py / CAM.zoom; clampCamera();
     if (e.pointerType !== 'mouse') UI.hover = null;
   }
@@ -455,7 +457,7 @@ function loop(ts) {
   try {
     pollGamepad(dt);
     if (STARTED) {
-      const simDt = dt * S.settings.speed;
+      const simDt = dt * (typeof safeSpeed === 'function' ? safeSpeed(S.settings.speed) : S.settings.speed);      // Part 12: safe speed limit on slow devices
       if (simDt > 0) {
         S.clock.gameSec += simDt * TIME_SCALE;
         S.clock.runSec += simDt;

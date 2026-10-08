@@ -1133,17 +1133,11 @@ function p9TapHook(sx, sy) {
 function p9CancelTools() { let any = false; if (WB.on) { WB.on = false; any = true; } if (RS.on) { RS.on = false; RS.drag = null; any = true; } if (EI.pick || ADM.disPick) { EI.pick = false; ADM.disPick = false; any = true; } if (typeof P10 !== 'undefined' && P10.pickMega) { P10.pickMega = null; any = true; } if (any) toast('Tool stopped', ''); return any; }
 
 /* ===================================== ADMIN SECURITY ===================================== */
-function adminModeEnabled() { return !!(GSET && GSET.adminEnabled); }
-function enableAdminMode(on) { GSET.adminEnabled = !!on; GSET = Object.assign(sanitizeGSET(GSET), { _rev: GSET._rev }); saveGSET(); Log.info('Admin mode ' + (on ? 'enabled' : 'disabled')); }
-function requestAdmin(cat) {
-  if (adminModeEnabled()) { openAdminCenter(cat); return true; }
-  toast('🛡️ Admin mode is disabled — enable it in ⚙️ Settings (ENABLE ADMIN MODE) or press Ctrl+Alt+F10', '');
-  return false;
-}
-function promptEnableAdmin(cat) {
-  if (adminModeEnabled()) { openAdminCenter(cat); return; }
-  sysDialog('🛡️ ENABLE ADMIN MODE?', '<p>The admin panel / World Control Center is a single-player development tool. It can change money, the map and every simulation value.</p><p class="small" style="margin-top:6px">You can turn it off again in ⚙️ Settings.</p>', [['ENABLE', 'gold', function () { enableAdminMode(true); openAdminCenter(cat); }], ['CANCEL', '', null]], 1);
-}
+/* Part 12: admin access = an authenticated ADMIN SESSION (admin-auth.js). Settings, saves or local storage can't enable it. */
+function adminModeEnabled() { return typeof AdminAuth !== 'undefined' && AdminAuth.active(); }
+function enableAdminMode(on) { if (!on && typeof AdminAuth !== 'undefined') AdminAuth.logout('admin mode disabled'); }
+function requestAdmin(cat) { if (adminModeEnabled()) { openAdminCenter(cat); return true; } return false; }
+function promptEnableAdmin(cat) { if (adminModeEnabled()) openAdminCenter(cat); }
 
 /* ===================================== F3 PERFORMANCE MONITOR ===================================== */
 function p9DebugLines() {
@@ -1157,7 +1151,7 @@ function p9DebugLines() {
 }
 Object.assign(ADM_VIEWS, WC_VIEWS);
 /* The World Control Center tabs live in the admin panel next to the Part 8 tools */
-const P9_ADMIN_EXTRA = { p9_adminMode: function () { enableAdminMode(!adminModeEnabled()); if (!adminModeEnabled()) { exitAdminMode(); return; } admRe('Admin mode enabled'); } };
+const P9_ADMIN_EXTRA = { p9_adminMode: function () { if (adminModeEnabled()) AdminAuth.logout('admin mode switched off'); } };
 function openTimeline2() { showModal('📜 City timeline & history', '<div class="grid2"><div class="card"><h3>📜 Timeline</h3>' + timelineHtml() + '</div><div class="card"><h3>📖 City history</h3>' + cityHistoryHtml() + '</div></div>'); }
 function openWorldOverview() {
   const regs = weRegionStats(false), w = worldStatus();

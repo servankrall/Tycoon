@@ -384,14 +384,15 @@ function p10SearchHtml(q) {
 function adminGate(f, cat) { return function () { if (!adminModeEnabled()) { promptEnableAdmin(cat || 'wc_world'); return; } f(); }; }
 function p10PaletteCommands() {
   const C = [], add = function (label, icon, run, kw) { C.push({ label: label, icon: icon, run: run, kw: (kw || '').toLowerCase() }); };
-  add('Generate World', '🌍', adminGate(function () { openAdminCenter('wc_factory'); }, 'wc_factory'), 'world generator new mega');
-  add('Repair World', '🔧', adminGate(function () { openAdminCenter('wc_debug'); quickAction('q_repairWorld'); }), 'fix validate');
-  add('Open World Control Center', '🌐', function () { promptEnableAdmin('wc_world'); }, 'admin f10');
-  add('Create Snapshot', '📸', adminGate(function () { const s = createSnapshot('Snapshot ' + new Date().toLocaleString()); toast(s ? '📸 Snapshot ' + s.id : '❌ Snapshot failed', s ? 'good' : 'bad'); }), 'save backup');
-  add('Clone World', '🧬', adminGate(function () { openAdminCenter('wc_world'); quickAction('q_clone'); }), 'copy duplicate');
-  add('Spawn Disaster', '🌪️', adminGate(function () { openAdminCenter('wc_disaster'); }, 'wc_disaster'), 'earthquake flood fire storm');
-  add('Clear Traffic', '🧹', adminGate(function () { openAdminCenter('wc_traffic'); adminDo('clearTraffic'); }, 'wc_traffic'), 'jam vehicles');
-  add('Unlock Everything', '🔓', adminGate(function () { confirmDialog('🔓 Unlock everything?', 'All regions, buildings, technologies and megaprojects are unlocked for this city.', 'Unlock', unlockEverything); }), 'unlock all');
+  const adm = typeof AdminAuth !== 'undefined' && AdminAuth.active();          // Part 12: admin commands only exist for an authenticated admin
+  if (adm) add('Generate World', '🌍', adminGate(function () { openAdminCenter('wc_factory'); }, 'wc_factory'), 'world generator new mega');
+  if (adm) add('Repair World', '🔧', adminGate(function () { openAdminCenter('wc_debug'); quickAction('q_repairWorld'); }), 'fix validate');
+  if (adm) add('Open World Control Center', '🌐', function () { promptEnableAdmin('wc_world'); }, 'admin f10');
+  if (adm) add('Create Snapshot', '📸', adminGate(function () { const s = createSnapshot('Snapshot ' + new Date().toLocaleString()); toast(s ? '📸 Snapshot ' + s.id : '❌ Snapshot failed', s ? 'good' : 'bad'); }), 'save backup');
+  if (adm) add('Clone World', '🧬', adminGate(function () { openAdminCenter('wc_world'); quickAction('q_clone'); }), 'copy duplicate');
+  if (adm) add('Spawn Disaster', '🌪️', adminGate(function () { openAdminCenter('wc_disaster'); }, 'wc_disaster'), 'earthquake flood fire storm');
+  if (adm) add('Clear Traffic', '🧹', adminGate(function () { openAdminCenter('wc_traffic'); adminDo('clearTraffic'); }, 'wc_traffic'), 'jam vehicles');
+  if (adm) add('Unlock Everything', '🔓', adminGate(function () { confirmDialog('🔓 Unlock everything?', 'All regions, buildings, technologies and megaprojects are unlocked for this city.', 'Unlock', unlockEverything); }), 'unlock all');
   add('Build Mega Project', '🏗️', function () { openHub('projects'); }, 'megaproject project manager');
   add('Open Economy', '💰', function () { openPanel('city', 'economy'); }, 'money budget');
   add('Open Citizen Analytics', '👥', function () { openHub('citizens'); }, 'citizens opinions petitions population');

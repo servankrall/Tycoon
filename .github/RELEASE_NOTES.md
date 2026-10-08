@@ -1,11 +1,13 @@
 # 🏙️ BLOCK CITY TYCOON
-**Build. Manage. Expand.** — Windows masaüstü sürümü (64-bit, Windows 10/11)
+**Build. Manage. Expand.** — Windows (64-bit, Windows 10/11) ve Android (7.0+)
 
 ## İndir
 | Dosya | Ne için |
 |---|---|
 | **BLOCK-CITY-TYCOON-Setup-x.y.z.exe** | Kurulum sihirbazı: klasör seçimi (varsayılan `C:\Program Files\Block City Tycoon`), masaüstü kısayolu seçeneği, Başlat Menüsü kısayolu, Ayarlar → Uygulamalar'dan kaldırma |
 | **BLOCK-CITY-TYCOON-Portable-x.y.z.exe** | Kurulumsuz: çift tıkla oyna; kayıtlar EXE'nin yanındaki `BLOCK CITY TYCOON Data` klasöründe |
+| **BLOCK-CITY-TYCOON-Android-Release.apk** | Android 7.0+ telefon / tablet: APK'yı telefona indirip açın (ilk kez "bilinmeyen kaynaklardan yükleme" izni istenir). Güncellemeler mevcut uygulamanın üzerine kurulur, şehirler korunur |
+| BLOCK-CITY-TYCOON-Android.apk | Geliştirici (debug) APK'sı |
 
 > ⚠️ EXE dijital olarak imzalı değil. Windows ilk açılışta mavi bir uyarı gösterirse **Ek bilgi → Yine de çalıştır**'a basın.
 
@@ -17,6 +19,16 @@
 
 ## Eski tarayıcı kayıtları
 Oyunu Chrome/Edge'de oynadıysanız: tarayıcıda Ayarlar → **📦 Export all saves** (veya **⬇️ Download .json**), sonra EXE'de **📦 Import old browser save** ile dosyayı seçin.
+
+## 2.0.0 — Part 12: Windows EXE + Android APK + Güvenli Admin Sistemi
+- **Android APK:** aynı oyun motoru (ekonomi, vatandaşlar, trafik, dünya, kayıt, simülasyon, görevler, başarımlar) Android'de; izin istemeyen, çevrimdışı, tam ekran uygulama. Sistem açılış ekranı + adaptive ikon, yatay öncelikli (dikey / otomatik seçilebilir), geri tuşu, Bluetooth gamepad.
+- **Mobil arayüz:** Android ana menüsü (NEW CITY · CONTINUE · SANDBOX · SCENARIO · CHALLENGES · SETTINGS), kompakt HUD (Money · Population · Happiness · GDP · Power · Water) ve alt çubuk (Build · Road · Transit · Economy · City · Map), dokunmatik kamera (kaydırma, pinch zoom, iki parmak döndürme), **BUILD · ROTATE · MOVE · CONFIRM · CANCEL** inşa modu ve yol / elektrik / su / bölge / arazi kontrolleri, **START → DRAG → END → CONFIRM** yol çizici (Small · Medium · Large · Highway · Bridge · Tunnel).
+- **Performans:** LOW / MEDIUM / HIGH / ULTRA + **AUTO PERFORMANCE** (cihaz testi, FPS ve ısınma takibi), **LOW-END MODE**, simülasyon kalitesi, **güvenli hız limiti** (100× ağır gelirse otomatik düşer).
+- **Settings 2.0:** GRAPHICS · AUDIO · CONTROLS · CAMERA · SIMULATION · ACCESSIBILITY · SYSTEM; UI ölçeği, yazı boyutu, yüksek kontrast, azaltılmış hareket, sarsıntı kapalı, renk körü dostu heatmap, büyük dokunmatik düğmeler, eğitim ipuçları; atanabilir gamepad; oyun içi bildirimler; ilk açılış kurulumu ve mobil eğitim.
+- **Ortak kayıt (CITY_SAVE_V4, v12):** Windows kaydı Android'de, Android kaydı Windows'ta açılır; platform, şehir kimliği, revizyon ve checksum; grafik / erişilebilirlik ayarları cihazda kalır. Güncellemede önce **yedek**, sonra **geçiş**, hata olursa **geri alma**; Android'de arka plana alınınca otomatik kayıt ve **RECOVER CITY**.
+- **Güvenli admin sistemi:** admin paneli normal oyuncuda tamamen gizli (menüde / ayarlarda / HUD'da yok, F10 hiçbir şey yapmaz). **ADMIN AUTHENTICATION** (Windows: Ctrl+Shift+F10, Android: sürüm yazısına 7 dokunuş) — şifre kodda yok, tuzlu PBKDF2 doğrulaması; **OWNER / ADMIN / DEVELOPER / DEBUG** rolleri ve gerçek izin matrisi; her komutta yetki kontrolü (konsol, kısayol, URL, local storage ve kayıt düzenleme ile çalıştırılamaz); oturum, **LOG OUT**, **otomatik kilit** (10 dk), başarısız giriş koruması, **admin işlem günlüğü**, owner kurtarma kodu, WORLD CONTROL CENTER GUIDE.
+- **Build sistemi:** `npm run build:windows` → `dist/windows/`, `npm run build:android` → `dist/android/`; DEVELOPMENT / TEST / RELEASE profilleri; release APK imzalı.
+- **Otomatik test:** Windows EXE 53 adım (admin güvenliği, Windows ⇄ Android kayıt, kayıt / snapshot / sürüm geçişi dahil), Android APK 21 adım — release iş akışında APK bir Android emülatöründe test edilir.
 
 ## 1.4.0 — Part 11: Gelişmiş şehir simülasyonu, ulaşım AI ve derin ekonomi
 - **Birleşik ulaşım motoru** ve **çok modlu rota:** vatandaşlar yürüme, bisiklet, araba (otopark arama), toplu taşıma, aktarma ve park & ride arasında süre/maliyet/trafik/aktarma/konfora göre seçim yapar.

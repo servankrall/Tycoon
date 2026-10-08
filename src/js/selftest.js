@@ -1,12 +1,18 @@
 'use strict';
-/* BLOCK CITY TYCOON — AUTOMATIC SELF-TEST (Part 9, extended with the Part 10 Living World checks 21–30)
+/* BLOCK CITY TYCOON — AUTOMATIC SELF-TEST (Part 9, extended with Part 10/11 checks and the Part 12 cross-platform test)
+   Windows EXE: 53 steps (Part 12: admin security / authentication / panel / logout / auto-lock, cross-platform save,
+   save + snapshot + version migration, performance modes, gamepad, settings). Android APK: 21 steps (APK launch, splash,
+   new city, touch camera, zoom, building, road building, save, restart, continue, load, performance mode, admin
+   authentication / panel / logout / auto lock, native back button, screen rotation, native gamepad, Windows save → Android,
+   save migration). Admin rights come from an isolated one-time realm created by the platform shell for this test only.
    Started with  "BLOCK CITY TYCOON.exe --selftest [--selftest-out=<file>]"  (the Windows release workflow runs it on the
    freshly built EXE) or in a browser with  index.html?selftest . It plays through the 20 checks of the release test plan,
    restarts the EXE in the middle (save → restart → load) and writes a JSON report to logs/selftest.json (and <file>).
    The self-test uses its own temporary user-data folder, so it never touches real cities. */
-const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 40 };
+const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 53, running: false };
 function stPhase() {
   if (DESKTOP && BCT.selftest && BCT.selftest.phase) return BCT.selftest.phase;
+  if (IS_ANDROID_APP && ANDROID_INFO.selftest) return ANDROID_INFO.selftestPhase || 1;
   const m = /[?&]selftest(?:=(\d))?/.exec(location.search); if (!m) return 0;
   return +m[1] || 1;
 }
@@ -25,17 +31,22 @@ async function stStep(n, name, fn) {
 }
 function stDone() {
   const ok = SELFTEST.steps.length === SELFTEST.total && SELFTEST.steps.every(function (s) { return s.ok; });
-  const rep = { ok: ok, version: GAME_VERSION, saveVersion: SAVE_VERSION, platform: DESKTOP ? 'desktop' : 'browser', finished: new Date().toISOString(), seconds: Math.round((Date.now() - SELFTEST.t0) / 1000), passed: SELFTEST.steps.filter(function (s) { return s.ok; }).length, total: SELFTEST.total, steps: SELFTEST.steps, errors: ERRLOG.slice(0, 20) };
+  const rep = { ok: ok, version: GAME_VERSION, saveVersion: SAVE_VERSION, platform: PLATFORM_ID + (DESKTOP ? ' (desktop app)' : IS_ANDROID_APP ? ' (Android app)' : ' (browser)'), build: BUILD.profile, finished: new Date().toISOString(), seconds: Math.round((Date.now() - SELFTEST.t0) / 1000), passed: SELFTEST.steps.filter(function (s) { return s.ok; }).length, total: SELFTEST.total, steps: SELFTEST.steps, errors: ERRLOG.slice(0, 20) };
   Log.info('[selftest] FINISHED: ' + rep.passed + '/' + SELFTEST.total + ' passed' + (ok ? ' — ALL OK' : ' — FAILURES'));
   try { Store.removeItem(SELFTEST.key); } catch (e) { /* storage */ }
   window.__selftest = rep;
+  stInputBlocker(false);
   if (DESKTOP && BCT.selftest) BCT.selftest.report(JSON.stringify(rep, null, 2));
+  else if (IS_ANDROID_APP && ANDROID_INFO.selftest) { BCTA.selftestReport(JSON.stringify(rep)); console.log('SELFTEST ' + JSON.stringify({ ok: rep.ok, passed: rep.passed, total: rep.total })); }
   else console.log('SELFTEST ' + JSON.stringify(rep));
 }
 async function runSelfTest() {
   const phase = stPhase(); if (!phase) return;
-  SELFTEST.phase = phase;
-  enableAdminMode(true);
+  SELFTEST.phase = phase; SELFTEST.running = true;
+  stInputBlocker(true);
+  const auth = await AdminAuth.selftestLogin();           // isolated self-test realm (EXE / APK) or harness credentials (browser)
+  if (!auth.ok) Log.warn('[selftest] admin login failed: ' + auth.reason);
+  if (IS_ANDROID) return runAndroidSelfTest(phase);
   if (phase === 1) {
     SELFTEST.t0 = Date.now(); SELFTEST.steps = []; SELFTEST.data = {};
     await stStep(1, 'NEW CITY', async function () {
@@ -87,7 +98,7 @@ async function runSelfTest() {
     await stStep(14, 'Restart EXE', async function () {
       stStore();
       if (DESKTOP && BCT.selftest) { setTimeout(function () { BCT.selftest.restart(); }, 300); return { ok: true, detail: 'restarting the EXE…' }; }
-      setTimeout(function () { location.href = location.pathname + '?selftest=2'; }, 300);
+      setTimeout(function () { location.href = location.pathname + stSearch(2); }, 300);
       return { ok: true, detail: 'reloading the page…' };
     });
     return;
@@ -250,11 +261,327 @@ async function runSelfTest() {
     const o = buildSaveObject(), errs = validateSaveObject(o);
     return { ok: hub === tabs.length && adm === cats.length && book === BOOK_CH.length && !errs.length && !!o.p11, detail: hub + '/' + tabs.length + ' hub tabs · ' + adm + '/' + cats.length + ' admin sections · City Book ' + book + '/' + BOOK_CH.length + ' chapters · search "hospital" → ' + found + ' · save v' + o.version + ' valid' };
   });
-  await stStep(40, 'Generate Mega World', async function () {
+  await part12DesktopSteps();
+  await stStep(53, 'Generate Mega World', async function () {
     const res = await generateMegaWorld('tinyisland', { seed: 31337, name: 'SELFTEST ISLAND', slot: 3 });
     closeModal(); clearDialogues();
     const sc = S.p10 && S.p10.genScore;
     return { ok: !!res && res.steps === 22 && !!sc && sc.overall >= 60 && STARTED, detail: res ? res.steps + '-step pipeline · ' + fmt(res.population) + ' citizens · ' + res.buildings + ' buildings · score ' + (sc ? sc.overall : '?') + '/100 · ' + res.seconds.toFixed(1) + ' s' : 'generation failed' };
+  });
+  stDone();
+}
+/* ===================================== Part 12 helpers ===================================== */
+function stSearch(phase) { const p = (location.search.match(/[?&]platform=\w+/) || [''])[0].replace('?', '&'); return '?selftest=' + phase + p; }
+/* The player can't touch the game while the automatic test runs (synthetic test events are not blocked) */
+function stInputBlocker(on) {
+  let el = document.getElementById('stBlock');
+  if (on && !el) {
+    el = document.createElement('div'); el.id = 'stBlock';
+    el.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:transparent;pointer-events:all;';
+    el.innerHTML = '<div style="position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.65);color:#7fffd4;font:11px monospace;padding:4px 8px;border-radius:6px">SELF-TEST RUNNING — input disabled</div>';
+    document.body.appendChild(el);
+    window.addEventListener('keydown', stKeyBlock, true); window.addEventListener('keyup', stKeyBlock, true);
+  } else if (!on && el) { el.remove(); window.removeEventListener('keydown', stKeyBlock, true); window.removeEventListener('keyup', stKeyBlock, true); }
+}
+function stKeyBlock(e) { if (e.isTrusted) { e.preventDefault(); e.stopImmediatePropagation(); } }
+function stKey(key, mods) { window.dispatchEvent(new KeyboardEvent('keydown', Object.assign({ key: key, bubbles: true, cancelable: true }, mods || {}))); }
+/* synthetic touch pointers on the game canvas (setPointerCapture needs a real pointer, so it is stubbed meanwhile) */
+function stPtr(type, id, x, y) { canvas.dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, pointerType: 'touch', isPrimary: id === 1, bubbles: true, cancelable: true, button: 0, buttons: type === 'pointerup' ? 0 : 1 })); }
+async function stTouch(fn) { const spc = canvas.setPointerCapture; canvas.setPointerCapture = function () { }; try { return await fn(); } finally { canvas.setPointerCapture = spc; INPUT.pointers.clear(); INPUT.down = null; INPUT.pinch = null; MOB.rot = null; } }
+async function stDrag(id, x0, y0, x1, y1, n) { stPtr('pointerdown', id, x0, y0); for (let i = 1; i <= (n || 8); i++) { stPtr('pointermove', id, x0 + (x1 - x0) * i / (n || 8), y0 + (y1 - y0) * i / (n || 8)); await stWait(16); } stPtr('pointerup', id, x1, y1); }
+function stDenied() {
+  const m0 = S.money, b0 = S.budget, open0 = ADM.open;
+  adminDo('maxMoney'); quickAction('q_treasury'); runAdminCommand('giveMoney 999999'); adminCmd11('aMaxFunds'); p10Do('heal'); openAdminCenter('wc_econ'); renderAdmin();
+  return S.money === m0 && S.budget === b0 && !ADM.open && !open0;
+}
+/* a save of this city as another platform wrote it (header + origin), sealed with a fresh checksum */
+function stForeignSave(platform) {
+  saveGame(true);
+  const o = JSON.parse(Store.getItem(slotKey(S.slot || 1)));
+  o.header.platform = platform; o.origin.platform = platform; o.origin.lastPlatform = platform; o.header.checksum = CHECKSUM_PLACEHOLDER;
+  return sealSaveJson(JSON.stringify(o));
+}
+function stAsV11(o) { o.version = 11; delete o.origin; if (o.header) { o.header.saveVersion = 11; o.header.version = 11; delete o.header.format; delete o.header.checksum; } return o; }
+function stFreeRoadRun(len) {
+  const cx = Math.floor(MAP.W / 2), cy = Math.floor(MAP.H / 2);
+  for (let r = 2; r < Math.max(MAP.W, MAP.H) / 2; r++) for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
+    let ok = true; for (let k = 0; k < len && ok; k++) ok = inMap(x + k, y) && canRoad(x + k, y) && !MAP.roads[idx(x + k, y)];
+    if (ok) return { x: x, y: y };
+  }
+  return null;
+}
+function stFreeBuildSpot(d) {
+  const cx = Math.floor(MAP.W / 2), cy = Math.floor(MAP.H / 2);
+  for (let r = 1; r < Math.max(MAP.W, MAP.H) / 2; r++) for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) if (canPlace(fpDef(d, 0), x, y).ok) return { x: x, y: y };
+  return null;
+}
+
+/* ===================================== Part 12: Windows / desktop steps 40–51 ===================================== */
+async function part12DesktopSteps() {
+  await stStep(40, 'Admin security — normal player', async function () {
+    AdminAuth.logout('self-test: normal player check');
+    stKey('F10'); await stWait(100);
+    const f10 = !ADM.open && !document.getElementById('admLogin');
+    const denied = stDenied();
+    S.p5.admin.god = true; S.p5.admin.instant = true; enforceAdminState();
+    const saveEdit = !S.p5.admin.god && !S.p5.admin.instant;
+    GSET.adminEnabled = true; const setting = !adminModeEnabled(); GSET.adminEnabled = false;
+    const imp = importSave(JSON.stringify(Object.assign(JSON.parse(stForeignSave(PLATFORM_ID)), { admin: true })));
+    const pal = p10PaletteCommands().every(function (c) { return !/Generate World|Unlock Everything|World Control Center/.test(c.label); });
+    stKey('F10', { ctrlKey: true, shiftKey: true }); await stWait(100);
+    const login = !!document.getElementById('admLogin'); closeAdminLogin();
+    const ok = f10 && denied && saveEdit && setting && !imp.ok && pal && login;
+    return { ok: ok, detail: 'F10 → nothing ' + f10 + ' · commands DENIED ' + denied + ' · save edit (god mode) removed ' + saveEdit + ' · settings flag ignored ' + setting + ' · "admin": true save rejected ' + !imp.ok + ' · no admin in palette ' + pal + ' · Ctrl+Shift+F10 → ADMIN ACCESS ' + login };
+  });
+  await stStep(41, 'Admin authentication', async function () {
+    const w = []; for (let i = 0; i < 3; i++) { const r = await AdminAuth.login('owner', 'wrong-password-' + i); w.push(r.wait || 0); }
+    const limited = w[2] > 0 && AdminAuth.waitLeft() > 0;
+    Store.removeItem('bct_admin_guard');
+    const r = await AdminAuth.selftestLogin(), i = AdminAuth.info() || {};
+    const failedLogged = AdminAuth.securityLog().filter(function (e) { return e.event === 'LOGIN FAILED'; }).length >= 3;
+    return { ok: limited && r.ok && i.role === 'OWNER' && failedLogged, detail: '3 wrong passwords → wait ' + Math.round(w[2] / 1000) + ' s (rate limit) · failures logged ' + failedLogged + ' · login ' + (r.ok ? 'OK as ' + i.role + ' (' + i.user + ', ' + i.platform + ', session expires ' + new Date(i.expiresAt).toLocaleTimeString() + ')' : r.reason) };
+  });
+  await stStep(42, 'Admin panel & permission matrix', async function () {
+    openAdminCenter('wc_world'); await stWait(150);
+    const groups = document.querySelectorAll('#admNavList .admNavGroup').length, tabs = Array.from(document.querySelectorAll('#admNavList [data-acat]')).map(function (b) { return b.dataset.acat; });
+    let bad = 0; tabs.forEach(function (c) { ADM.cat = c; renderAdminCenter(); if ($('admBody').innerHTML.indexOf('Panel error') >= 0) bad++; });
+    const m = [!roleAllows('ADMIN', 'generate'), roleAllows('ADMIN', 'city'), roleAllows('DEVELOPER', 'debug'), !roleAllows('DEVELOPER', 'city'), roleAllows('DEBUG', 'perf'), !roleAllows('DEBUG', 'debug'), !adminTabAllowed('DEBUG', 'wc_econ'), adminTabAllowed('DEBUG', 'wc_perf')];
+    closeAdminCenter();
+    return { ok: ADM.open === false && groups === 16 && bad === 0 && m.every(Boolean), detail: 'WORLD CONTROL CENTER: ' + groups + ' sections, ' + tabs.length + ' tabs rendered (' + bad + ' errors) · matrix OWNER/ADMIN/DEVELOPER/DEBUG ' + m.filter(Boolean).length + '/' + m.length + ' checks' };
+  });
+  await stStep(43, 'Admin action log & logout', async function () {
+    quickAction('q_repairAll');
+    const last = AdminAuth.actions().slice(-1)[0] || {};
+    openAdminCenter(); S.p5.admin.god = true;
+    AdminAuth.logout('self-test');
+    const after = !AdminAuth.active() && !ADM.open && !S.p5.admin.god && stDenied();
+    return { ok: last.cmd === 'q_repairAll' && /OK/.test(last.result) && after, detail: 'logged "' + last.cmd + '" by ' + last.user + ' (' + last.role + ') → ' + last.result + ' · LOG OUT: session cleared, panel closed, free build off, commands denied ' + after };
+  });
+  await stStep(44, 'Admin auto-lock', async function () {
+    await AdminAuth.selftestLogin(); openAdminCenter(); const min = AdminAuth.lockMinutes();
+    AdminAuth._testIdle((min + 1) * 60000); await stWait(5600);
+    const locked = !AdminAuth.active() && !ADM.open && !!AdminAuth.lockedUser();
+    const r = await AdminAuth.selftestLogin();
+    return { ok: locked && r.ok, detail: 'inactive ' + (min + 1) + ' min → ADMIN PANEL LOCKED ' + locked + ' (re-authentication required) · signed in again ' + r.ok };
+  });
+  await stStep(45, 'Cross-platform save (Windows ⇄ Android)', function () {
+    saveGame(true);
+    const raw = Store.getItem(slotKey(S.slot || 1)), o = JSON.parse(raw), name0 = S.city.name, b0 = S.buildings.list.length;
+    const fmtOk = o.header.format === 'CITY_SAVE_V4' && o.header.platform === PLATFORM_ID && !!o.header.cityId && o.settings.quality === undefined && saveIntegrity(raw) === 'ok';
+    const r = importSave(stForeignSave('android'));
+    const ok = fmtOk && r.ok && S.city.name === name0 && S.buildings.list.length === b0 && S.settings.quality === GSET.graphics;
+    return { ok: ok, detail: 'CITY_SAVE_V4 header (platform ' + o.header.platform + ', city ' + o.header.cityId + ', revision ' + o.header.revision + ', checksum ' + saveIntegrity(raw) + ') · graphics settings not in the save ' + (o.settings.quality === undefined) + ' · Android save loaded on ' + PLATFORM_NAME + ': ' + (r.ok ? b0 + ' buildings, device graphics ' + S.settings.quality : r.errors.join('; ')) };
+  });
+  await stStep(46, 'Save migration v11 → v12 (backup → migrate → rollback)', async function () {
+    saveGame(true);
+    const o = stAsV11(JSON.parse(Store.getItem(slotKey(1))));
+    Store.setItem(slotKey(3), JSON.stringify(o)); premigBackups(3).forEach(function (b) { Store.removeItem(b.key); });
+    loadSlot(3); await stWait(600); closeModal(); clearDialogues();
+    const migrated = STARTED && S.version === SAVE_VERSION && !!S.origin && S.slot === 3, backup = premigBackups(3)[0];
+    const rb = rollbackMigration(3), back = JSON.parse(Store.getItem(slotKey(3)) || '{}');
+    loadSlot(1); await stWait(600); closeModal(); clearDialogues();
+    return { ok: migrated && !!backup && backup.v === 11 && rb.ok && back.version === 11 && S.slot === 1, detail: 'v11 save → loaded as v' + S.version + ' (' + (migrated ? 'migrated' : 'FAILED') + ') · BACKUP SAVE ' + (backup ? backup.key : 'missing') + ' · ROLLBACK → slot 3 is v' + back.version + ' again' };
+  });
+  await stStep(47, 'Snapshot migration', async function () {
+    const snap = createSnapshot('Self-test v11 snapshot', true); if (!snap) return { ok: false, detail: 'snapshot failed' };
+    Store.setItem(snapKey(snap.id), JSON.stringify(stAsV11(JSON.parse(Store.getItem(snapKey(snap.id))))));
+    const name0 = S.city.name; rollbackSnapshot(snap.id); await stWait(300); closeModal(); clearDialogues();
+    return { ok: S.city.name === name0 && S.version === SAVE_VERSION && !!S.origin, detail: snap.id + ' stored as v11 → rolled back and migrated to v' + S.version + ' ("' + S.city.name + '")' };
+  });
+  await stStep(48, 'Version migration (v7 → v12)', function () {
+    const o = buildSaveObject(); o.version = 7; ['p8', 'p9', 'p10', 'p11', 'origin'].forEach(function (k) { delete o[k]; }); o.header = { version: 7, saveVersion: 7, gameVersion: '1.0.0', timestamp: new Date().toISOString() };
+    const st = sanitizeState(migrateSave(o));
+    return { ok: st.version === SAVE_VERSION && !!st.p11 && !!st.p10 && !!st.origin, detail: 'a 1.0.0 (v7) save passes every migration step → v' + st.version + ' with Part 8–12 data' };
+  });
+  await stStep(49, 'Performance modes, low-end mode & safe speed', function () {
+    const pm = GSET.perfMode; GSET.perfMode = 'AUTO'; GSET.autoPerfLevel = ''; applyPerfMode();
+    const auto = AUTOP.benchmark && QUALITY_ORDER.indexOf(S.settings.quality) >= 0;
+    const n0 = perfPreset(QUALITY_PRESETS.HIGH).npc; GSET.lowEnd = true; GSET._rev++; const n1 = perfPreset(QUALITY_PRESETS.HIGH).npc; GSET.lowEnd = false; GSET._rev++;
+    const fm = PERF.frameMs, sp = S.settings.speed; S.settings.speed = 100; PERF.frameMs = 250; for (let i = 0; i < 4; i++) safeSpeedTick(); const cap = SAFE.cap; PERF.frameMs = fm; S.settings.speed = sp; SAFE.cap = 100; GSET.perfMode = pm; saveGSET();
+    return { ok: auto && n1 < n0 && cap < 100, detail: 'AUTO PERFORMANCE: benchmark ' + AUTOP.benchmark.score + ' → ' + S.settings.quality + ' · LOW-END MODE citizens ' + n0 + ' → ' + n1 + ' · SAFE SPEED LIMIT 100× → ' + cap + '× when frames take 250 ms' };
+  });
+  await stStep(50, 'Gamepad', function () {
+    const x0 = CAM.x; PADN.t = 0;
+    window.bctPadAxes(1, 0, 0, 0, 0, 0); pollGamepad(0.2); const moved = CAM.x > x0;
+    window.bctPadKey(99, true); pollGamepad(0.016); const built = UI.panel === 'build'; window.bctPadKey(99, false); pollGamepad(0.016); closeLeft();
+    window.bctPadAxes(0, 0, 0, 0, 0, 0); pollGamepad(0.016); PADN.t = 0;
+    return { ok: moved && built && PAD.active, detail: 'controller connected · left stick moved the camera ' + Math.round(CAM.x - x0) + ' px · X → build menu ' + built + ' · mapping ' + Object.keys(GSET.padMap).length + ' actions' };
+  });
+  await stStep(51, 'Settings 2.0 & accessibility', function () {
+    let ok = 0; SET2_TABS.forEach(function (t) { openSettings(t[0]); if ($('modalBody').innerText.length > 80 && $('modalBody').querySelector('.s2Tabs')) ok++; }); closeModal();
+    const us = GSET.uiScale; GSET.uiScale = 115; applySettings2(); const v = getComputedStyle(document.documentElement).getPropertyValue('--ui-scale').trim(); GSET.uiScale = us; applySettings2();
+    return { ok: ok === SET2_TABS.length && v === '1.15', detail: ok + '/' + SET2_TABS.length + ' tabs (' + SET2_TABS.map(function (t) { return t[2]; }).join(', ') + ') · UI scale 115% applied' };
+  });
+  await stStep(52, 'Sandbox · Scenario · Continue · Citizen AI', async function () {
+    saveGame(true); const home = S.slot || 1, name1 = S.city.name;
+    deleteSlot(4); MENU.opts.slot = 4; showMenu('sandbox'); createSandbox(); await stWait(1200); closeModal(); clearDialogues();
+    const sbx = STARTED && S.city.sandbox && S.slot === 4;
+    deleteSlot(4); MENU.opts.slot = 4; showMenu('scenario'); $('scName').value = 'SELFTEST SCENARIO'; createScenario(); await stWait(1200); closeModal(); clearDialogues();
+    const scn = STARTED && S.slot === 4 && S.city.name === 'SELFTEST SCENARIO';
+    setSpeed(5); await stWait(2000); setSpeed(1);
+    const states = {}; AG.citizens.forEach(function (c) { states[c.state] = (states[c.state] || 0) + 1; });
+    const ai = AG.citizens.length > 0 && Object.keys(states).length >= 2;
+    returnToMenu(); setActiveSlot(home); refreshMenuCity(home); await stWait(300);
+    $('playBtn').click(); await stWait(1200); closeModal(); clearDialogues();
+    const cont = STARTED && S.slot === home && S.city.name === name1;
+    deleteSlot(4);
+    return { ok: sbx && scn && ai && cont, detail: 'SANDBOX ' + sbx + ' · SCENARIO ' + scn + ' · Citizen AI ' + AG.citizens.length + ' agents in ' + Object.keys(states).length + ' states (' + Object.keys(states).slice(0, 4).join(', ') + ') · CONTINUE → "' + S.city.name + '" ' + cont };
+  });
+}
+
+/* ===================================== Part 12: Android APK self-test (21 steps) ===================================== */
+async function runAndroidSelfTest(phase) {
+  SELFTEST.total = 21;
+  const native = IS_ANDROID_APP;
+  if (phase === 1) {
+    SELFTEST.t0 = Date.now(); SELFTEST.steps = []; SELFTEST.data = {};
+    await stStep(1, 'APK Launch', function () {
+      return { ok: IS_ANDROID && (!native || ANDROID_INFO.version === GAME_VERSION), detail: native ? 'BLOCK CITY TYCOON ' + ANDROID_INFO.version + ' (' + ANDROID_INFO.versionCode + ', ' + ANDROID_INFO.profile + ') on ' + ANDROID_INFO.model + ', Android ' + ANDROID_INFO.release + ' (API ' + ANDROID_INFO.sdk + '), ' + ANDROID_INFO.cores + ' cores, ' + Math.round(ANDROID_INFO.ramMB / 1024) + ' GB' : 'browser preview of the Android UI' };
+    });
+    await stStep(2, 'Splash', function () {
+      const line = Log.lines.find(function (l) { return /Boot finished in/.test(l); }) || '';
+      return { ok: $('bootSplash').style.display === 'none' || $('bootSplash').classList.contains('gone'), detail: 'BLOCK CITY TYCOON · Build. Manage. Expand. → ' + (line.split('] ')[1] || 'loaded') };
+    });
+    await stStep(3, 'New City', async function () {
+      const g = await generateWorld('balanced', { seed: 515151, name: 'ANDROID CITY', slot: 1, size: 'SMALL' });
+      closeModal(); clearDialogues(); if (typeof tutStep !== 'undefined') { tutStep = 99; showTutStep(); } const t = document.getElementById('mTut'); if (t) t.remove(); MOB.tut = null;
+      S.budget = Math.max(S.budget, 2e6); S.money = Math.max(S.money, 2e6);
+      return { ok: !!g && STARTED && S.city.population > 300 && !!MOB.hud, detail: fmt(Math.round(S.city.population)) + ' citizens · ' + S.buildings.list.length + ' buildings · mobile HUD ' + !!MOB.hud + ' · ' + window.innerWidth + '×' + window.innerHeight };
+    });
+    await stStep(4, 'Touch Camera', function () {
+      return stTouch(async function () { const x0 = CAM.x, y0 = CAM.y; await stDrag(1, CW / 2, CH / 2, CW / 2 - 180, CH / 2 - 60); return { ok: Math.abs(CAM.x - x0) > 50, detail: 'one-finger drag moved the camera ' + Math.round(CAM.x - x0) + ' / ' + Math.round(CAM.y - y0) + ' world px' }; });
+    });
+    await stStep(5, 'Zoom (pinch) & rotate', function () {
+      return stTouch(async function () {
+        CAM.zoom = 1; const z0 = CAM.zoom, cx = CW / 2, cy = CH / 2;
+        stPtr('pointerdown', 1, cx - 50, cy); stPtr('pointerdown', 2, cx + 50, cy); await stWait(30);
+        for (let i = 1; i <= 8; i++) { stPtr('pointermove', 2, cx + 50 + i * 12, cy); stPtr('pointermove', 1, cx - 50 - i * 12, cy); await stWait(16); }
+        const z1 = CAM.zoom;
+        for (let i = 1; i <= 8; i++) { const a = i * 0.06, r = 146; stPtr('pointermove', 1, cx - r * Math.cos(a), cy - r * Math.sin(a)); stPtr('pointermove', 2, cx + r * Math.cos(a), cy + r * Math.sin(a)); await stWait(16); }
+        stPtr('pointerup', 2, cx, cy); stPtr('pointerup', 1, cx, cy);
+        const rot = CAM.rot; setCamRot(0);
+        return { ok: z1 > z0 * 1.3 && Math.abs(rot) > 0.15, detail: 'pinch zoom ' + z0.toFixed(2) + ' → ' + z1.toFixed(2) + ' · two-finger rotate ' + Math.round(rot * 180 / Math.PI) + '° (↺ reset)' };
+      });
+    });
+    await stStep(6, 'Building (BUILD · ROTATE · MOVE · CONFIRM)', async function () {
+      const d = BUILDINGS.house || BUILDING_LIST.find(function (x) { return x.cat === 'Housing' && unlockStatus(x).ok; });
+      const spot = stFreeBuildSpot(d); if (!spot) return { ok: false, detail: 'no free spot' };
+      const n0 = S.buildings.list.length; startPlacing(d); await stWait(100);
+      const bar = MOB.buildBar && !MOB.buildBar.classList.contains('hidden');
+      MOB.buildBar.querySelector('[data-mb="move"]').click(); const mv = MOB.ghostMove; MOB.buildBar.querySelector('[data-mb="move"]').click();
+      UI.ghost = { x: spot.x, y: spot.y }; renderBuildBar(); const checks = $('mbInfo').querySelectorAll('.mChk').length;
+      MOB.buildBar.querySelector('[data-mb="confirm"]').click(); await stWait(100);
+      MOB.buildBar.querySelector('[data-mb="cancel"]').click();
+      return { ok: bar && mv && checks === 5 && S.buildings.list.length === n0 + 1, detail: d.name + ' placed at ' + spot.x + ',' + spot.y + ' · build bar ' + bar + ' · MOVE mode ' + mv + ' · ' + checks + ' checks (road, power, water, zone, terrain)' };
+    });
+    await stStep(7, 'Road Building (START → DRAG → END → CONFIRM)', function () {
+      return stTouch(async function () {
+        const run = stFreeRoadRun(5); if (!run) return { ok: false, detail: 'no free land for a road' };
+        document.querySelector('[data-mbar="road"]').click(); await stWait(100);
+        const sheet = MOB.roadSheet && !MOB.roadSheet.classList.contains('hidden');
+        MOB.roadSheet.querySelector('[data-mroad="medium"]').click();
+        const r0 = MAP.roads.reduce(function (a, v) { return a + (v ? 1 : 0); }, 0);
+        const a = worldToScreen((run.x + 0.5) * TILE, (run.y + 0.5) * TILE), b = worldToScreen((run.x + 4.5) * TILE, (run.y + 0.5) * TILE);
+        await stDrag(1, a.x, a.y, b.x, b.y, 10); await stWait(80);
+        const step = MOB.road.step, btn = MOB.roadSheet.querySelector('[data-mra="confirm"]');
+        if (btn) btn.click(); await stWait(80);
+        const r1 = MAP.roads.reduce(function (a, v) { return a + (v ? 1 : 0); }, 0);
+        const cl = MOB.roadSheet.querySelector('[data-mra="close"]'); if (cl) cl.click();
+        return { ok: sheet && step === 3 && !!btn && r1 >= r0 + 4, detail: 'road builder ' + sheet + ' · Medium road · dragged 5 tiles → step ' + ['START', 'DRAG', 'END', 'CONFIRM'][Math.min(3, step)] + ' · ' + (r1 - r0) + ' road tiles built' };
+      });
+    });
+    await stStep(8, 'Save', function () {
+      const ok = saveGame(false);
+      SELFTEST.data.saved = { name: S.city.name, buildings: S.buildings.list.length, size: MAP.W };
+      let onDisk = true; if (native) { try { onDisk = !!JSON.parse(BCTA.storeLoadAll())[slotKey(1)]; } catch (e) { onDisk = false; } }
+      return { ok: ok && onDisk, detail: 'saved ' + S.buildings.list.length + ' buildings · ' + (native ? 'file in the app\'s private storage (files/store)' : 'browser storage') + ' · ' + Math.round((S._saveBytes || 0) / 1024) + ' KB' };
+    });
+    await stStep(9, 'Restart APK', function () {
+      stStore();
+      if (native) { setTimeout(function () { BCTA.selftestRestart(); }, 300); return { ok: true, detail: 'restarting the app…' }; }
+      setTimeout(function () { location.href = location.pathname + stSearch(2); }, 300);
+      return { ok: true, detail: 'reloading…' };
+    });
+    return;
+  }
+  const prev = stLoad();
+  if (!prev) { SELFTEST.steps = []; SELFTEST.t0 = Date.now(); await stStep(9, 'Restart APK', function () { return { ok: false, detail: 'no state from phase 1' }; }); stDone(); return; }
+  SELFTEST.steps = prev.steps; SELFTEST.t0 = prev.t0; SELFTEST.data = prev.data || {};
+  const last = SELFTEST.steps[SELFTEST.steps.length - 1]; if (last && last.n === 9) last.detail = native ? 'app restarted (new activity, WebView and storage re-read)' : 'page reloaded';
+  const sv = SELFTEST.data.saved || {};
+  if (PSH && PSH.dialogOpen) closeSysDialog();          // the restart leaves the session flag 'open' → recovery prompt; the test continues the saved city
+  await stStep(10, 'Continue', async function () {
+    $('playBtn').click(); await stWait(1500); closeModal(); clearDialogues(); const t = document.getElementById('mTut'); if (t) t.remove(); MOB.tut = null;
+    return { ok: STARTED && S.city.name === sv.name && S.buildings.list.length === sv.buildings, detail: 'CONTINUE → "' + S.city.name + '" ' + S.buildings.list.length + '/' + sv.buildings + ' buildings' };
+  });
+  await stStep(11, 'Load', async function () {
+    loadSlot(1); await stWait(800); closeModal(); clearDialogues();
+    return { ok: STARTED && S.city.name === sv.name && MAP.W === sv.size, detail: 'loaded "' + S.city.name + '" · map ' + MAP.W + '×' + MAP.H + ' · save v' + S.version + ' · ' + (S.origin ? 'city ' + S.origin.id + ' rev ' + S.origin.revision : '') };
+  });
+  await stStep(12, 'Performance Mode', async function () {
+    GSET.perfMode = 'AUTO'; GSET.autoPerfLevel = ''; applyPerfMode();
+    const q = S.settings.quality, therm = Platform.thermal();
+    GSET.lowEnd = true; GSET._rev++; applyPerfMode(); const low = S.settings.quality; GSET.lowEnd = false; GSET._rev++; GSET.autoPerfLevel = ''; applyPerfMode(); saveGSET();
+    const g0 = S.clock.gameSec, t0 = performance.now(); setSpeed(100); await stWait(2500); const r = (S.clock.gameSec - g0) / TIME_SCALE / ((performance.now() - t0) / 1000); setSpeed(1);
+    return { ok: !!AUTOP.benchmark && QUALITY_ORDER.indexOf(q) >= 0 && low === 'LOW' && r > 5, detail: 'AUTO → ' + q + ' (benchmark ' + AUTOP.benchmark.score + ', thermal ' + therm + ') · LOW-END → ' + low + ' · 100× → ' + r.toFixed(0) + '× real (safe limit ' + SAFE.cap + '×) · FPS ' + Math.round(PERF.fps) };
+  });
+  await stStep(13, 'Admin Authentication', async function () {
+    AdminAuth.logout('self-test');
+    const denied = stDenied() && !document.querySelector('[data-menu="admin"]');
+    openSettings('system'); await stWait(100);
+    const v = document.getElementById('setVersion'); for (let i = 0; i < 7 && v; i++) v.click();
+    const login = !!document.getElementById('admLogin'); closeAdminLogin(); closeModal();
+    const r = await AdminAuth.selftestLogin();
+    return { ok: denied && login && r.ok && AdminAuth.role() === 'OWNER', detail: 'normal player: no admin UI, commands DENIED ' + denied + ' · 7 taps on the version → ADMIN ACCESS ' + login + ' · login ' + (r.ok ? 'OK (' + AdminAuth.role() + ')' : r.reason) };
+  });
+  await stStep(14, 'Admin Panel', async function () {
+    openAdminCenter('wc_world'); await stWait(150);
+    const groups = document.querySelectorAll('#admNavList .admNavGroup').length, tabs = Array.from(document.querySelectorAll('#admNavList [data-acat]')).map(function (b) { return b.dataset.acat; });
+    let bad = 0; tabs.forEach(function (c) { ADM.cat = c; renderAdminCenter(); if ($('admBody').innerHTML.indexOf('Panel error') >= 0) bad++; });
+    const pill = !!document.getElementById('admPill'); closeAdminCenter();
+    return { ok: groups === 16 && bad === 0 && pill, detail: groups + ' sections · ' + tabs.length + ' tabs rendered (' + bad + ' errors) · admin pill visible only when signed in ' + pill };
+  });
+  await stStep(15, 'Admin Logout', function () {
+    openAdminCenter(); AdminAuth.logout('self-test');
+    return { ok: !AdminAuth.active() && !ADM.open && !document.getElementById('admPill') && stDenied(), detail: 'session cleared · panel closed · pill hidden · commands denied' };
+  });
+  await stStep(16, 'Admin Auto Lock', async function () {
+    await AdminAuth.selftestLogin(); openAdminCenter(); AdminAuth._testIdle((AdminAuth.lockMinutes() + 1) * 60000); await stWait(5600);
+    const locked = !AdminAuth.active() && !ADM.open;
+    return { ok: locked, detail: 'idle ' + (AdminAuth.lockMinutes() + 1) + ' min → ADMIN PANEL LOCKED ' + locked };
+  });
+  await stStep(17, 'Back Button', async function () {
+    const press = async function () { if (native) BCTA.selftestNativeBack(); else window.bctOnBack(); await stWait(700); };
+    openSettings(); await stWait(100); await press(); const closed = !$('modalWrap').classList.contains('show');
+    await press(); const pause = $('modalWrap').classList.contains('show') || (PSH && PSH.dialogOpen);
+    await press(); const back = !$('modalWrap').classList.contains('show');
+    return { ok: closed && pause && back, detail: (native ? 'Android back key (MainActivity.onBackPressed)' : 'back handler') + ': closes Settings ' + closed + ' · opens the pause menu ' + pause + ' · closes it again ' + back };
+  });
+  await stStep(18, 'Screen Rotation', async function () {
+    if (!native) return { ok: true, detail: 'browser preview: orientation is controlled by the Android app (portrait / landscape layouts are covered by the UI tests)' };
+    const wait = async function (cond) { for (let i = 0; i < 40 && !cond(); i++) await stWait(150); return cond(); };
+    Platform.setOrientation('portrait'); const p = await wait(function () { return window.innerHeight > window.innerWidth; }); const pw = window.innerWidth + '×' + window.innerHeight;
+    Platform.setOrientation('landscape'); const l = await wait(function () { return window.innerWidth > window.innerHeight; }); const lw = window.innerWidth + '×' + window.innerHeight;
+    applyOrientation();
+    return { ok: p && l, detail: 'portrait ' + pw + ' ' + p + ' → landscape ' + lw + ' ' + l + ' (canvas and HUD re-laid out)' };
+  });
+  await stStep(19, 'Gamepad', async function () {
+    PADN.t = 0; PAD.active = false;
+    if (native) BCTA.selftestNativePad(); else { window.bctPadKey(96, true); setTimeout(function () { window.bctPadKey(96, false); }, 100); }
+    await stWait(500); pollGamepad(0.016);
+    return { ok: PADN.t > 0 && PAD.active, detail: (native ? 'native controller event (KEYCODE_BUTTON_A via MainActivity.dispatchKeyEvent)' : 'controller event') + ' → game gamepad layer · connected ' + PAD.active };
+  });
+  await stStep(20, 'Windows Save → Android', function () {
+    const t = stForeignSave('windows'), b0 = S.buildings.list.length, r = importSave(t);
+    return { ok: r.ok && S.buildings.list.length === b0 && S.settings.quality === GSET.graphics, detail: 'save written on Windows (CITY_SAVE_V4, checksum ' + saveIntegrity(t) + ') loaded on Android: ' + (r.ok ? b0 + ' buildings, Android graphics kept (' + S.settings.quality + ')' : r.errors.join('; ')) };
+  });
+  await stStep(21, 'Save Migration', function () {
+    saveGame(true);
+    const o = stAsV11(JSON.parse(Store.getItem(slotKey(1))));
+    Store.setItem(slotKey(3), JSON.stringify(o)); premigBackups(3).forEach(function (b) { Store.removeItem(b.key); });
+    const res = loadGame(3), migrated = S.version === SAVE_VERSION && !!S.origin, backup = premigBackups(3)[0], rb = rollbackMigration(3);
+    loadSlot(1);
+    return { ok: !res.isNew && migrated && !!backup && rb.ok, detail: 'v11 save → v' + SAVE_VERSION + ' with BACKUP SAVE ' + (backup ? backup.key : 'missing') + ' · ROLLBACK ' + rb.ok };
   });
   stDone();
 }

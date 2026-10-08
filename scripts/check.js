@@ -35,6 +35,15 @@ else {
   [16, 32, 48, 64, 128, 256].forEach(function (s) { if (sizes.indexOf(s) < 0) fail('icon.ico lacks ' + s + 'x' + s); });
   ok('icon.ico contains ' + sizes.join(', ') + ' px');
 }
+['android/app/src/main/AndroidManifest.xml', 'android/app/src/main/java/com/blockcitytycoon/game/MainActivity.java', 'android/app/build.gradle', 'android/gradlew',
+  'android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml', 'android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png', 'android/app/src/main/res/drawable-nodpi/splash_logo.png'].forEach(function (f) { if (!fs.existsSync(path.join(ROOT, f))) fail('missing ' + f); });
+ok('Android project files present');
+/* security: the admin system must never contain a plain-text password */
+fs.readdirSync(path.join(ROOT, 'src/js')).filter(function (f) { return /\.js$/.test(f); }).forEach(function (f) {
+  const t = fs.readFileSync(path.join(ROOT, 'src/js', f), 'utf8');
+  if (/(adminPassword|ownerPassword|ADMIN_PASSWORD)\s*[=:]\s*['"]/.test(t)) fail('plain-text admin password in src/js/' + f);
+});
+ok('no plain-text admin passwords');
 const pkg = require(path.join(ROOT, 'package.json'));
 if (!/^\d+\.\d+\.\d+$/.test(pkg.version)) fail('package.json version must be x.y.z');
 ok('version ' + pkg.version);

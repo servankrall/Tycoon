@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash: dark background with the city-block logo while the WebView starts (Android 7–11) -->
+    <style name="Theme.BlockCity.Splash" parent="@android:style/Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@drawable/splash</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:statusBarColor">@color/bct_bg</item>
+        <item name="android:navigationBarColor">@color/bct_bg</item>
+        <item name="android:colorAccent">@color/bct_gold</item>
+    </style>
+</resources>

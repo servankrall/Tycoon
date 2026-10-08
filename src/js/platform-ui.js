@@ -66,9 +66,24 @@ function showRecoveryDialog(rec) {
       if (r.ok) { clearRecovery(); setActiveSlot(slot); clearDialogues(); CAM.x = MAP.W * TILE / 2; CAM.y = MAP.H * TILE / 2; Log.info('Previous session recovered (slot ' + slot + ')'); startGame({ isNew: false, notes: ['Previous session recovered.'] }); }
       else { Log.error('Recovery failed: ' + r.errors.join('; ')); toast('❌ Recovery failed — loading the last save instead', 'bad'); clearRecovery(); loadSlot(slot); }
     }],
-    [T('loadLast'), 'green', function () { clearRecovery(); Log.info('Recovery: loading last save'); loadSlot(clamp(rec.slot | 0, 1, SLOT_COUNT)); }],
+    [T('loadLast'), 'green', function () { clearRecovery(); Log.info('Recovery: loading last save'); loadSlot(clamp(rec.slot | 0, 1, SLOT_COUNT)); }]
+  ].concat(lastSnapshot() ? [['📸 LAST SNAPSHOT', 'blue', function () { const sn = lastSnapshot(); clearRecovery(); Log.info('Recovery: last snapshot ' + sn.id); loadSlot(clamp(rec.slot | 0, 1, SLOT_COUNT)); setTimeout(function () { try { rollbackSnapshot(sn.id); } catch (e) { toast('❌ Snapshot could not be restored', 'bad'); } }, 600); }]] : []).concat([
     [T('discard'), '', function () { clearRecovery(); Log.info('Recovery snapshot discarded'); }]
-  ], -1);
+  ]), -1);
+}
+function lastSnapshot() { try { const idx = snapshotIndex(); return idx.length ? idx[idx.length - 1] : null; } catch (e) { return null; } }
+function androidLifecycle() {
+  /* MainActivity.onPause / onResume call these directly (the WebView does not always fire visibilitychange) */
+  window.bctOnPause = function () { try { if (STARTED) { saveGame(true); writeRecovery(); } Store.setItem(SESSION_KEY, 'paused'); Log.info('App paused (autosaved)'); } catch (e) { /* storage */ } return 'ok'; };
+  window.bctOnResume = function () { try { Store.setItem(SESSION_KEY, 'open'); } catch (e) { /* storage */ } return 'ok'; };
+  /* Android: the OS may stop a backgrounded app at any time — autosave + recovery snapshot on pause, "open" again on resume */
+  document.addEventListener('visibilitychange', function () {
+    if (DESKTOP) return;
+    try {
+      if (document.hidden) { if (STARTED) { saveGame(true); writeRecovery(); } Store.setItem(SESSION_KEY, 'paused'); Log.info('App paused (autosaved)'); }
+      else { Store.setItem(SESSION_KEY, 'open'); Log.info('App resumed'); }
+    } catch (e) { /* storage blocked */ }
+  });
 }
 
 /* --- Exit (window X / Alt+F4): autosave, then confirm --- */
@@ -223,8 +238,7 @@ function globalSettingsHtml() {
     gsTog('shadows', '🌗 ' + T('shadows')) +
     '<div class="small">👥 ' + T('npc') + '</div>' + gsBtns('npcDensity', pct, pct.map(function (x) { return x + '%'; })) +
     '<div class="small" style="margin-top:6px">🚗 ' + T('traffic2') + '</div>' + gsBtns('trafficDensity', pct, pct.map(function (x) { return x + '%'; })) +
-    gsTog('pauseOnBlur', '⏸️ ' + T('pauseBlur')) +
-    gsTog('adminEnabled', '🛡️ ENABLE ADMIN MODE (F10 World Control Center — single-player developer tool)');
+    gsTog('pauseOnBlur', '⏸️ ' + T('pauseBlur'));
   if (DESKTOP) {
     const mode = GSET.borderless ? 'borderless' : GSET.fullscreen ? 'fullscreen' : 'windowed';
     h += '<div class="small" style="margin-top:6px">' + T('resolution') + '</div>' + gsBtns('resolution', RESOLUTIONS, RESOLUTIONS.map(function (r) { return r.replace('x', '×'); })) +
@@ -273,7 +287,7 @@ function onGsetClick(el) {
     });
     return;
   }
-  const bools = ['autosave', 'shadows', 'pauseOnBlur', 'adminEnabled'], nums = ['autosaveInterval', 'masterVolume', 'npcDensity', 'trafficDensity'];
+  const bools = ['autosave', 'shadows', 'pauseOnBlur'], nums = ['autosaveInterval', 'masterVolume', 'npcDensity', 'trafficDensity'];
   if (bools.indexOf(k) >= 0) GSET[k] = v === '1';
   else if (nums.indexOf(k) >= 0) GSET[k] = +v;
   else GSET[k] = v;
@@ -283,7 +297,6 @@ function onGsetClick(el) {
   if (k === 'particles') { applyGlobalSettingsToGame(); FX.particles.length = 0; }
   if (k === 'resolution') Platform.applyWindow();
   if (k === 'language') applyShellTexts();
-  if (k === 'adminEnabled') { Log.info('Admin mode ' + (GSET.adminEnabled ? 'enabled' : 'disabled') + ' in Settings'); if (!GSET.adminEnabled && typeof exitAdminMode === 'function' && ADM.mode) exitAdminMode(); }
   sfx('click');
   if ($('modalWrap').classList.contains('show')) openSettings();
 }
@@ -341,7 +354,10 @@ function platformBoot() {
   const ib = $('menuImportOld'); if (ib) ib.onclick = importAnyFile;
   const eb = $('menuExportAll'); if (eb) eb.onclick = exportAllSaves;
   document.body.classList.toggle('desktop', DESKTOP);
+  androidLifecycle();
   bindAdminCenter();
+  if (typeof mobileBoot === 'function') mobileBoot();          // Part 12: platform classes, mobile HUD, touch camera, build/road bars
+  if (typeof applySettings2 === 'function') applySettings2();
   applyShellTexts();
   const migrated = migrateLocalStorageToDisk();
   if (migrated && !STARTED) refreshMenuCity(activeSlot());
