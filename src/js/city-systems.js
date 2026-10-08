@@ -330,7 +330,7 @@ function resolveDecision(uid, k, auto) {
   }
   if (dec.type.indexOf('c6_') === 0) applyCrisisChoice(dec.type.slice(3), o.choice);
   notify((auto ? '⏱️ Auto-decision: ' : '✔️ Decision: ') + DECISION_TYPES[dec.type].title + ' → ' + o.label, '');
-  if ($('modalWrap').classList.contains('show') && $('modalTitle').textContent === DECISION_TYPES[dec.type].title) closeModal();
+  if ($('modalWrap').classList.contains('show') && ($('modalTitle').textContent === DECISION_TYPES[dec.type].title || $('modalTitle').textContent === tr(DECISION_TYPES[dec.type].title))) closeModal();
   renderRight();
 }
 function placeEmergencyGenerator() {

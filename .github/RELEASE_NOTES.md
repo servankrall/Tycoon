@@ -20,6 +20,11 @@
 ## Eski tarayıcı kayıtları
 Oyunu Chrome/Edge'de oynadıysanız: tarayıcıda Ayarlar → **📦 Export all saves** (veya **⬇️ Download .json**), sonra EXE'de **📦 Import old browser save** ile dosyayı seçin.
 
+## 2.1.0 — Türkçe dil desteği
+- **Oyunun tamamı Türkçe:** menüler, HUD, paneller, binalar, teknolojiler, hikâye, görevler, eğitimler, başarımlar, haberler, bildirimler, ayarlar, admin paneli ve harita etiketleri. Windows, Android ve tarayıcıda aynı.
+- **Ayarlar → SİSTEM → Dil** (English / Türkçe) ve ilk açılış kurulumunda dil seçimi; değişiklik anında uygulanır. Cihaz dili Türkçe ise oyun Türkçe başlar.
+- Kayıtlar dilden bağımsız: Türkçe oynanan şehir İngilizce de açılır.
+
 ## 2.0.0 — Part 12: Windows EXE + Android APK + Güvenli Admin Sistemi
 - **Android APK:** aynı oyun motoru (ekonomi, vatandaşlar, trafik, dünya, kayıt, simülasyon, görevler, başarımlar) Android'de; izin istemeyen, çevrimdışı, tam ekran uygulama. Sistem açılış ekranı + adaptive ikon, yatay öncelikli (dikey / otomatik seçilebilir), geri tuşu, Bluetooth gamepad.
 - **Mobil arayüz:** Android ana menüsü (NEW CITY · CONTINUE · SANDBOX · SCENARIO · CHALLENGES · SETTINGS), kompakt HUD (Money · Population · Happiness · GDP · Power · Water) ve alt çubuk (Build · Road · Transit · Economy · City · Map), dokunmatik kamera (kaydırma, pinch zoom, iki parmak döndürme), **BUILD · ROTATE · MOVE · CONFIRM · CANCEL** inşa modu ve yol / elektrik / su / bölge / arazi kontrolleri, **START → DRAG → END → CONFIRM** yol çizici (Small · Medium · Large · Highway · Bridge · Tunnel).

@@ -230,7 +230,7 @@ function globalSettingsHtml() {
   const pct = [25, 50, 75, 100, 150, 200];
   let h = '<div class="secTitle">🖥️ ' + T('desktop') + '</div>' +
     '<div class="small">' + T('language') + '</div>' + gsBtns('language', ['en', 'tr'], ['English', 'Türkçe']) +
-    '<p class="small" style="margin-top:2px">Language changes the desktop shell (loading screen, dialogs, this section); the game itself is in English.</p>' +
+    '<p class="small" style="margin-top:2px">Language switches the whole game live: menus, HUD, panels, dialogs, notifications, tutorials and map labels (English / Türkçe).</p>' +
     gsTog('autosave', '💾 ' + T('autosave')) +
     '<div class="small">' + T('interval') + '</div>' + gsBtns('autosaveInterval', [15, 30, 60, 120, 300], ['15 s', '30 s', '1 min', '2 min', '5 min']) +
     '<div class="small" style="margin-top:6px">🔈 ' + T('volume') + ' (' + GSET.masterVolume + '%)</div>' + gsBtns('masterVolume', [0, 25, 50, 80, 100], ['0', '25', '50', '80', '100']) +
@@ -296,7 +296,7 @@ function onGsetClick(el) {
   if (k === 'masterVolume' && SND.master) SND.master.gain.value = 0.5 * masterVolume();
   if (k === 'particles') { applyGlobalSettingsToGame(); FX.particles.length = 0; }
   if (k === 'resolution') Platform.applyWindow();
-  if (k === 'language') applyShellTexts();
+  if (k === 'language') { applyShellTexts(); if (typeof setLanguage === 'function') setLanguage(GSET.language); }
   sfx('click');
   if ($('modalWrap').classList.contains('show')) openSettings();
 }
@@ -358,6 +358,7 @@ function platformBoot() {
   bindAdminCenter();
   if (typeof mobileBoot === 'function') mobileBoot();          // Part 12: platform classes, mobile HUD, touch camera, build/road bars
   if (typeof applySettings2 === 'function') applySettings2();
+  if (typeof i18nBoot === 'function') i18nBoot();          // Türkçe / English for the whole game (Settings → SYSTEM → Language)
   applyShellTexts();
   const migrated = migrateLocalStorageToDisk();
   if (migrated && !STARTED) refreshMenuCity(activeSlot());

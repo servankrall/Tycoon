@@ -1,6 +1,6 @@
 # 🏙️ BLOCK CITY TYCOON — Windows EXE + Android APK
 
-**Build. Manage. Expand.** · Sürüm **2.0.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
+**Build. Manage. Expand.** · Sürüm **2.1.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
 `BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE — ve 2.0.0 ile bir **Android uygulaması** (APK). Windows ve Android **aynı oyun motorunu** kullanır; yalnızca girdi, arayüz, dosya sistemi ve performans katmanı platforma özeldir. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
@@ -39,8 +39,8 @@ Build sonrası:
 ```text
 dist/
 ├── windows/
-│   ├── BLOCK-CITY-TYCOON-Setup-2.0.0.exe       ← kurulum sihirbazı
-│   ├── BLOCK-CITY-TYCOON-Portable-2.0.0.exe    ← kurulumsuz, çift tıkla çalışır
+│   ├── BLOCK-CITY-TYCOON-Setup-2.1.0.exe       ← kurulum sihirbazı
+│   ├── BLOCK-CITY-TYCOON-Portable-2.1.0.exe    ← kurulumsuz, çift tıkla çalışır
 │   └── win-unpacked/BLOCK CITY TYCOON.exe      ← paketlenmiş uygulamanın kendisi
 └── android/
     ├── BLOCK-CITY-TYCOON-Android.apk           ← debug APK (geliştirme)
@@ -434,6 +434,16 @@ Part 11 sistemleri ayrı modüller değildir: hepsi aynı dünyanın verisini ok
 - **World Control Center:** WORLD · SIMULATION · CITY · ECONOMY · CITIZENS · TRAFFIC · BUILDINGS · UTILITIES · TRANSPORT · COMPANIES · DISASTERS · WEATHER · TECHNOLOGY · SAVE · DEBUG · SYSTEM; giriş sonrası **WORLD CONTROL CENTER GUIDE**. Mobil ekranda da çalışır.
 - **Release build güvenliği:** RELEASE'te DevTools, `?debug`, debug paneli (F3) ve geliştirici komutları normal kullanıcıya kapalıdır. Otomatik test (`--selftest`, Android'de test modu) ayrı, geçici bir depolama alanında çalışır, oyuncu girişini engeller ve yalnızca o test sürecinde geçerli tek seferlik bir admin kimliği kullanır.
 
+## 6g. Türkçe dil desteği (2.1.0)
+
+Oyunun tamamı artık **Türkçe** oynanabilir — Windows EXE, Android APK ve tarayıcıda aynı şekilde:
+
+- **Nerede değiştirilir:** ⚙️ Ayarlar → **SİSTEM → Dil** (English / Türkçe) ve ilk açılış kurulumundaki **🌐 Language / Dil** satırı. Değişiklik **anında** uygulanır, yeniden başlatma gerekmez; seçim cihaz ayarlarında saklanır (şehir kaydına yazılmaz, kayıtlar iki dilde de aynı açılır). İlk açılışta cihaz / tarayıcı dili Türkçe ise oyun doğrudan Türkçe başlar.
+- **Ne çevrilir:** ana menü, HUD, inşa / şehir / şirket / araştırma / dünya panelleri ve sekmeleri, bina adları ve açıklamaları, teknolojiler, hikâye, görevler, eğitimler (mobil eğitim dahil), başarımlar ve unvanlar, olaylar, haberler, bildirimler, vatandaş düşünceleri, danışman, ayarlar, Living City hub'ı, admin paneli (World Control Center) ve haritadaki etiketler.
+- **Ne çevrilmez:** özel adlar — şehir, ilçe, şirket ve komşu şehir adları — olduğu gibi kalır.
+- **Nasıl çalışır:** oyun kodu İngilizce kalır; `src/js/i18n.js` ekrana gelen metni yakalar ve `src/js/i18n-tr.js` sözlüğünden (≈3.800 ifade) çevirir. Sayılar `{n}`, bina adları `{b}`, özel adlar `{c}` yer tutucusuyla şablonlanır (`"{b} inşaatı tamamlandı."`); Türkçe sözdizimi farklıysa `{n2}` / `{n1}` ile sıra değiştirilir. Karışık metinler `·`, `—`, `|`, `:` ve `→` noktalarından parçalanıp ayrı ayrı çevrilir. Çeviriler önbelleğe alınır ve yeni arayüz ekrana çizilmeden çevrilir, bu yüzden titreme veya FPS kaybı yoktur.
+- **Yeni metin eklemek:** `src/js/i18n-tr.js` içine `"İngilizce metin": "Türkçe metin",` satırı eklemek yeterli. `npm run check` her ifadenin İngilizce anahtarıyla aynı yer tutucuları taşıdığını doğrular.
+
 ## 7. Pencere ve ayarlar
 
 - Başlangıç 1280×720, en küçük 1024×600; yeniden boyutlandırma, büyütme, küçültme, tam ekran.
@@ -450,7 +460,7 @@ Part 11 sistemleri ayrı modüller değildir: hepsi aynı dünyanın verisini ok
 `electron/updater.js` dört adımı içerir: **Update Checker → Version Check → Download Update → Install Update**. Açmak için `package.json` içindeki `bctUpdate.manifestUrl` alanına https ile yayınlanan bir JSON adresi yazın:
 
 ```json
-{ "version": "2.0.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-2.0.0.exe", "sha256": "…", "notes": "Yeni binalar" }
+{ "version": "2.0.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-2.1.0.exe", "sha256": "…", "notes": "Yeni binalar" }
 ```
 
 Adres boşsa güncelleme kapalıdır. İnternet yoksa oyun sessizce devam eder. İndirilen installer'ın SHA-256 değeri doğrulanır. Kayıtlar kullanıcı klasöründe durduğu için güncellemeden etkilenmez.
@@ -494,5 +504,5 @@ Windows'ta son kontrol:
 
 ```text
 npm install → npm run dev → NEW CITY → şehir oluşur → Ctrl+S → pencereyi kapat (EXIT)
-→ npm run build:windows → dist\windows\BLOCK-CITY-TYCOON-Setup-2.0.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
+→ npm run build:windows → dist\windows\BLOCK-CITY-TYCOON-Setup-2.1.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
 ```

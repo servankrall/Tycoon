@@ -1,7 +1,7 @@
 {
   "name": "block-city-tycoon",
   "productName": "BLOCK CITY TYCOON",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "BLOCK CITY TYCOON — Build. Manage. Expand. City-building tycoon for Windows and Android.",
   "main": "main.js",
   "private": true,

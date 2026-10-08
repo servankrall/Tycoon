@@ -44,6 +44,15 @@ fs.readdirSync(path.join(ROOT, 'src/js')).filter(function (f) { return /\.js$/.t
   if (/(adminPassword|ownerPassword|ADMIN_PASSWORD)\s*[=:]\s*['"]/.test(t)) fail('plain-text admin password in src/js/' + f);
 });
 ok('no plain-text admin passwords');
+/* Türkçe: every phrase keeps the numbers / building / name slots of its English key */
+{
+  const vm = require('vm'), box = {};
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'src/js/i18n-tr.js'), 'utf8') + ';this.D = I18N_TR;', box);
+  const slots = function (t, k) { const m = t.match(new RegExp('\\{' + k + '\\d?\\}', 'g')); return m ? m.length : 0; };
+  let bad = 0;
+  Object.keys(box.D).forEach(function (en) { ['n', 'b', 'c'].forEach(function (k) { if (slots(en, k) !== slots(box.D[en], k)) { bad++; if (bad < 6) fail('i18n-tr.js: {' + k + '} slots differ in "' + en + '"'); } }); });
+  if (!bad) ok('Turkish dictionary: ' + Object.keys(box.D).length + ' phrases, placeholders consistent');
+}
 const pkg = require(path.join(ROOT, 'package.json'));
 if (!/^\d+\.\d+\.\d+$/.test(pkg.version)) fail('package.json version must be x.y.z');
 ok('version ' + pkg.version);

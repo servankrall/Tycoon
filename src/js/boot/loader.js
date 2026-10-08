@@ -4,7 +4,7 @@
 (function () {
   'use strict';
   const SCRIPTS = [
-    ['engine', 'build-profile.js', true], ['engine', 'platform.js'], ['engine', 'config.js'], ['engine', 'data-city.js'], ['engine', 'save.js'], ['city', 'world.js'],
+    ['engine', 'build-profile.js', true], ['engine', 'platform.js'], ['engine', 'i18n-tr.js'], ['engine', 'i18n.js'], ['engine', 'config.js'], ['engine', 'data-city.js'], ['engine', 'save.js'], ['city', 'world.js'],
     ['economy', 'economy.js'], ['economy', 'economy-market.js'], ['city', 'events.js'], ['citizens', 'citizens.js'], ['city', 'renderer.js'],
     ['city', 'ui.js'], ['city', 'p5-data.js'], ['city', 'p5-profile.js'], ['city', 'p5-systems.js'], ['city', 'city-systems.js'],
     ['engine', 'game.js'], ['city', 'simulation-data.js'], ['city', 'simulation.js'], ['city', 'p5-ui.js'], ['city', 'admin.js'],

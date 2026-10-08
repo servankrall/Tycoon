@@ -312,7 +312,7 @@ function bindUI() {
       case 'downloadSave': downloadSaveFile(); break;
       case 'storyreplay': S.p5.story.phase = 'intro'; clearDialogues(); storyTick(); break;
       case 'cityhall': openCityHall(); break;
-      case 'transfer': transferToBudget(+v); if ($('modalTitle').textContent.indexOf('City Hall') >= 0) openCityHall(); else renderLeft(true); break;
+      case 'transfer': transferToBudget(+v); if ($('modalTitle').textContent.indexOf('City Hall') >= 0 || $('modalTitle').textContent.indexOf(tr('City Hall')) >= 0) openCityHall(); else renderLeft(true); break;
       case 'acquire': confirmDialog('🦈 Acquire ' + aiDef(id).name + '?', 'Price: <b>' + money(aiValue(id)) + '</b>. All its buildings and cash become yours.', 'Acquire', function () { acquireAI(id); renderLeft(true); }); break;
       case 'mprice': setMarketPrice(id, +v); renderLeft(true); break;
       case 'advert': runAdCampaign(id); renderLeft(true); break;

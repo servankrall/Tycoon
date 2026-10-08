@@ -268,6 +268,7 @@ function firstLaunchSetup(done) {
   const q = (GSET.perfMode || 'AUTO');
   const seg = function (k, vals, labels, cur) { return '<div class="seg flSeg" data-fl="' + k + '">' + vals.map(function (v, i) { return '<button type="button" class="' + (String(cur) === String(v) ? 'on' : '') + '" data-v="' + v + '">' + (labels ? labels[i] : v) + '</button>'; }).join('') + '</div>'; };
   sysDialog('👋 WELCOME TO BLOCK CITY TYCOON', '<p class="small">Quick setup for ' + PLATFORM_NAME + ' — you can change everything later in ⚙️ Settings.</p>' +
+    '<div class="flRow"><b>🌐 Language / Dil</b>' + seg('language', ['en', 'tr'], ['English', 'Türkçe'], GSET.language === 'tr' ? 'tr' : 'en') + '</div>' +
     '<div class="flRow"><b>🎨 Graphics quality</b>' + seg('perfMode', ['AUTO', 'LOW', 'MEDIUM', 'HIGH', 'ULTRA'], null, q) + '</div>' +
     '<div class="flRow"><b>🔠 UI scale</b>' + seg('uiScale', [85, 100, 115, 130], ['85%', '100%', '115%', '130%'], GSET.uiScale || 100) + '</div>' +
     '<div class="flRow"><b>🎮 Controls</b>' + seg('controls', ['touch', 'mouse', 'gamepad'], ['👆 Touch', '🖱 Mouse + keyboard', '🎮 Gamepad'], IS_MOBILE ? 'touch' : 'mouse') + '</div>' +
@@ -278,7 +279,7 @@ function firstLaunchSetup(done) {
       const b = e.target.closest('button'); if (!b) return;
       g.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
       const k = g.dataset.fl, v = b.dataset.v;
-      if (k === 'perfMode') GSET.perfMode = v; else if (k === 'uiScale') GSET.uiScale = +v; else if (k === 'simQuality') GSET.simQuality = v;
+      if (k === 'language') { GSET.language = v; saveGSET(); if (typeof applyShellTexts === 'function') applyShellTexts(); setLanguage(v); } else if (k === 'perfMode') GSET.perfMode = v; else if (k === 'uiScale') GSET.uiScale = +v; else if (k === 'simQuality') GSET.simQuality = v;
       else if (k === 'controls') { GSET.largeTouch = v === 'touch' && IS_MOBILE; if (S && S.settings) S.settings.gamepad = true; }
       applySettings2();
     });

@@ -232,7 +232,7 @@ const ADM_VIEWS = {
       aRow(ab('clearPollution', '🧼 Clear pollution', 'green') + ab('clearWaste', '🗑 Clear waste') + ab('plantTrees', '🌳 Plant 50 trees') + ab('addParks', '🏞 Add 10 parks')));
   },
   weather: function () {
-    return aCard('🌦 Weather', aRow(WEATHER_TYPES.map(function (w) { return ab('weather', { clear: '☀️', cloudy: '☁️', rain: '🌧', storm: '⛈', snow: '❄️', fog: '🌫', heatwave: '🔥' }[w] + ' ' + w, FX.weather === w ? 'gold' : '', w); }).join(''))) +
+    return aCard('🌦 Weather', aRow(WEATHER_TYPES.map(function (w) { return ab('weather', ({ clear: '☀️', cloudy: '☁️', rain: '🌧', storm: '⛈', snow: '❄️', fog: '🌫', heatwave: '🔥', heavyrain: '🌧', coldwave: '🥶' }[w] || '🌦') + ' ' + w, FX.weather === w ? 'gold' : '', w); }).join(''))) +
       aCard('🕒 Time', aRow([['06:00', 6], ['12:00', 12], ['18:00', 18], ['00:00', 0]].map(function (t) { return ab('hour', t[0], '', t[1]); }).join('')) +
         aInput('awHour', 'Set hour (0-23)', Math.floor(gameHour()), 'setHour') + aInput('awDay', 'Set day', gameDay(), 'setDay') + aInput('awYear', 'Set year', gameYear(), 'setYear') +
         aRow(SEASONS.map(function (s, i) { return ab('season', s.icon + ' ' + s.name, seasonIndex() === i ? 'gold' : '', i); }).join('')) +

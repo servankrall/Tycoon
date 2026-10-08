@@ -17,7 +17,7 @@ const BUILD = (function () {                      // build profile (scripts/buil
 })();
 const DESKTOP = !!(BCT && BCT.isDesktop);
 const DEV_MODE = !!(BCT && BCT.dev) && BUILD.dev;
-const GAME_VERSION = (BCT && BCT.version) || (ANDROID_INFO && ANDROID_INFO.version) || '2.0.0';
+const GAME_VERSION = (BCT && BCT.version) || (ANDROID_INFO && ANDROID_INFO.version) || '2.1.0';
 /* --- Platform detection: IS_ANDROID · IS_WINDOWS · IS_DESKTOP (automatic; ?platform=android previews the mobile UI in a browser) --- */
 const PLATFORM_OVERRIDE = (function () { try { const m = /[?&]platform=(android|windows|desktop)\b/.exec(location.search); return m ? m[1] : ''; } catch (e) { return ''; } })();
 const IS_ANDROID = !!BCTA || PLATFORM_OVERRIDE === 'android';
