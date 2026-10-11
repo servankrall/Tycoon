@@ -20,6 +20,26 @@
 ## Eski tarayıcı kayıtları
 Oyunu Chrome/Edge'de oynadıysanız: tarayıcıda Ayarlar → **📦 Export all saves** (veya **⬇️ Download .json**), sonra EXE'de **📦 Import old browser save** ile dosyayı seçin.
 
+## 2.2.0 — Part 13: Android mobil arayüz, dokunmatik kontroller ve tam oynanabilirlik
+- **Gerçek mobil arayüz (PC arayüzü küçültülmedi):** Android'de masaüstü üst çubuk, sol menü, araç çubuğu ve paneller kapanır; oyun mantığı aynı, arayüz katmanı platforma göre değişir.
+- **Responsive UI motoru:** ekranın kısa kenarına göre tek ölçek birimi, **UI SCALE** (80–140 %), **LARGE TOUCH BUTTONS**, cihaz DPI'sına göre en küçük okunabilir yazı ve en az 42 px dokunma alanı. HUD kendini sıkıştırır; hiçbir öğe üst üste binmez veya ekran dışına çıkmaz (otomatik **UI bounds** denetimi + düzeltme).
+- **Safe area:** çentik, kamera deliği, yuvarlak köşeler ve hareket çubuğu (Android kabuğu → `bctInsets`) hesaba katılır.
+- **Mobil HUD:** sol üst şehir · para · nüfus, üst orta seviye · tarih, sağ üst mutluluk · elektrik · su · 🔔 · ☰. Alt kısım boş: sadece **BUILD · ROAD · ZONE · TRANSPORT · CITY · ECONOMY · MAP** araç çubuğu. Solda ⏸ · hız · 🎯 kamera sıfırlama · 🧭 minimap.
+- **Build menüsü:** alt sayfa (telefon) / yan panel (tablet), 8 kategori (Residential, Commercial, Industrial, Services, Parks, Utilities, Transport, Special), simge · ad · fiyat · gerekli seviye gösteren dokunulabilir kartlar; X veya aşağı kaydırma ile kapanır.
+- **Build modu:** hayalet önizleme (yeşil **BUILDABLE** / kırmızı **CANNOT BUILD** + sebep), haritaya dokun / hayaleti sürükle → **ROTATE · CANCEL · CONFIRM**. Hızlı çift basış iki bina yapmaz.
+- **Yol ve bölge modu:** Small · Medium · Large · Highway · Bridge · Tunnel, **START → DRAG → END → CONFIRM**.
+- **Dokunmatik kamera:** tek parmak kaydırma, iki parmak pan, pinch zoom, iki parmak döndürme — zoom ve döndürme aynı harekette karışmaz; çoklu dokunuşta bina seçme / yol çizme / tıklama tetiklenmez. **Camera Sensitivity** (Low / Medium / High).
+- **Inspector kartları:** bina (seviye, durum, işçi, gelir, elektrik, su, UPGRADE, iki adımlı DEMOLISH, önemli binada ikinci onay), vatandaş, araç ve yol (tip, kapasite, trafik, durum, hız, yükseltme).
+- **CITY ve ECONOMY sayfaları** (kartlar + kaydırma / pinch zoom / ekranda kalan tooltip'li grafikler), tam ekran **CITY MAP** (yollar, bölgeler, binalar, toplu taşıma, su, elektrik; dokunduğun yere kamera gider).
+- **Bildirimler:** küçük toast'lar, yoğunlukta **🔔 bildirim merkezi**; görevler / olaylar yan panelde.
+- **Pause menüsü:** RESUME · SAVE (tek dokunuş, *SAVING CITY... → CITY SAVED*) · SETTINGS · CONTROLS · EXIT TO MENU. **Geri tuşu:** oyun → pause, pause → devam, build → iptal, harita → kapat, panel → kapat; ilk basışta uygulama asla kapanmaz.
+- **Mobil ayarlar (kartlar):** Graphics (LOW / MEDIUM / HIGH / ULTRA / AUTO, **FPS hedefi** AUTO / 30 / 45 / 60, FPS göstergesi), Controls, Camera, Audio, Simulation (otomatik kayıt varsayılanı 5 dk + önemli olaylardan sonra), Accessibility.
+- **Dikey ekran:** oyun sırasında **PLEASE ROTATE YOUR DEVICE** (ya da Ayarlar'dan dikey düzen). Tablette geniş düzen.
+- **Dokunmatik eğitim:** Kamera · Zoom · Build · Road · Map · Economy · Save, NEXT / SKIP.
+- **Kararlılık:** WebView çökerse uygulama kapanmaz, görünüm yeniden kurulur ve son autosave korunur; hata fırtınasında **ERROR RECOVERY**; Android düşük bellek uyarısında **LOW MEMORY MODE** (uzak chunk / doku boşaltma, ajan birleştirme, daha az parçacık ve gölge).
+- **Admin kuralı aynen:** normal kullanıcı admin göremez, Android'de F10 gibi masaüstü kısayolları **ADMIN COMMAND DENIED**; yetkili admin paneli telefonda tek, tablette iki/üç sütun.
+- **Testler:** Android self-test 24 adım (yeni: UI bounds, dokunma önceliği, harita / sayfalar / kayıt), `npm run test:mobile-ui` 8 ekran boyutunda (720×1280, 1080×1920, 1080×2400 çentikli, 1440×2560, 21:9, tablet ×2, dikey) tüm ana ekranları gerçek dokunmatik olaylarla dener.
+
 ## 2.1.0 — Türkçe dil desteği
 - **Oyunun tamamı Türkçe:** menüler, HUD, paneller, binalar, teknolojiler, hikâye, görevler, eğitimler, başarımlar, haberler, bildirimler, ayarlar, admin paneli ve harita etiketleri. Windows, Android ve tarayıcıda aynı.
 - **Ayarlar → SİSTEM → Dil** (English / Türkçe) ve ilk açılış kurulumunda dil seçimi; değişiklik anında uygulanır. Cihaz dili Türkçe ise oyun Türkçe başlar.

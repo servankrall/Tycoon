@@ -2,12 +2,13 @@
 # version) and by hand (Actions → "Release (Windows + Android)" → Run workflow).
 #   windows : Setup + Portable EXE (dist/windows) → automatic self-test of the built EXE (restart included)
 #   android : debug + signed release APK (dist/android) → automatic self-test of the release APK on an Android emulator
+#   mobile-ui: the Android UI on 8 phone / tablet screen sizes with real touch input (scripts/mobile-ui-test.js)
 #   release : one GitHub Release with the EXEs, APKs, both self-test reports and SHA-256 checksums
 name: Release (Windows + Android)
 
 on:
   push:
-    branches: [claude/happy-mayer-nu7z1c]
+    branches: [claude/happy-mayer-nu7z1c, claude/festive-newton-q17ibb]
     paths:
       - "src/**"
       - "electron/**"
@@ -115,8 +116,30 @@ jobs:
             dist/android/logcat.txt
           if-no-files-found: warn
 
+  mobile-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright + Chromium (outside the project, no Electron download)
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw" && npm init -y >/dev/null && npm i playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Mobile UI test (small / medium / large / QHD / 21:9 phones, two tablets, portrait)
+        env:
+          PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
+        run: node scripts/mobile-ui-test.js --out=dist/mobile-ui
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-ui
+          path: dist/mobile-ui/
+          if-no-files-found: warn
+
   release:
-    needs: [windows, android]
+    needs: [windows, android, mobile-ui]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

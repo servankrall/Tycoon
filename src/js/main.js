@@ -449,6 +449,8 @@ function updateHud() {
 let lastTs = 0, uiAcc = 0, panelAcc = 0, saveAcc = 0, advAcc = 0, dashAcc = 0, issueAcc = 0, miniAcc = 0;
 /* Main loop (Loop 2.0): rendering every frame; the simulation advances in fixed ticks via the Game engine. */
 function loop(ts) {
+  const cap = window.BCT_FPS_CAP || 0;                // Part 13: FPS target (30 / 45 / 60, AUTO on mobile)
+  if (cap && lastTs && ts - lastTs < 1000 / cap - 2) { requestAnimationFrame(loop); return; }
   const tWork = performance.now();
   const dt = Math.min(0.1, lastTs ? (ts - lastTs) / 1000 : 0.016);
   lastTs = ts;
