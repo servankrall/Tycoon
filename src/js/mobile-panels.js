@@ -734,6 +734,11 @@ function noteError() {
 const AUDIT_SEL = ['#mHud', '#mSide', '#mBar', '#mBuildBar', '#mRoad', '#mSheet', '#mInspect', '#mNotes', '#mPage .mPageHead', '#mPage .mPageBody', '#mMap .mMapHead', '#mMap .mMapBody', '#modal', '#sysBox', '#minimap', '#leftPanel.open', '#rightPanel', '#mTut .mtCard', '#dialogBox', '#admPill', '#mToolHint', '#mSaveChip', '#mHeld', '#issuesBar', '#wgBox', '#admLoginBox', '#admTop', '#admMain', '#dailyCard', '#fpsBox'];
 function safeRect() { return { l: RESP.sa.l, t: RESP.sa.t, r: window.innerWidth - RESP.sa.r, b: window.innerHeight - RESP.sa.b }; }
 function visibleEl(el) { if (!el || el.classList.contains('hidden')) return false; const cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0; }
+/* finite entrance animations (slide / pop) jump to their end before measuring; endless effects (pulse) are left alone */
+function settleAnimations(el) {
+  if (!el.getAnimations) return;
+  el.getAnimations().forEach(function (an) { try { const t = an.effect && an.effect.getComputedTiming ? an.effect.getComputedTiming() : null; if (an.playState === 'running' && t && isFinite(t.endTime)) an.finish(); } catch (e) { /* not finishable */ } });
+}
 /* Checks x ≥ left, x + width ≤ right, y ≥ top, y + height ≤ bottom against the safe area; fix = move / shrink offenders */
 function mobileUiAudit(fix) {
   if (!IS_MOBILE) return [];
@@ -741,7 +746,7 @@ function mobileUiAudit(fix) {
   AUDIT_SEL.forEach(function (sel) {
     document.querySelectorAll(sel).forEach(function (el) {
       if (!visibleEl(el) || el.closest('.hidden')) return;
-      if (fix && el.getAnimations && el.getAnimations().some(function (an) { return an.playState === 'running'; })) { auditSoon(); return; }   // still sliding in
+      settleAnimations(el);                       // judge where the element comes to rest, not a frame of its slide-in (slow devices)
       if (fix && el._afix) { el.style.translate = ''; el.style.maxWidth = el._afix.mw; el.style.maxHeight = el._afix.mh; el._afix = null; }
       let r = el.getBoundingClientRect(); if (!r.width || !r.height) return;
       const bad = function (q) { return q.left < sa.l - 0.5 || q.top < sa.t - 0.5 || q.right > sa.r + 0.5 || q.bottom > sa.b + 0.5; };
