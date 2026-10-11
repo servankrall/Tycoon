@@ -418,8 +418,11 @@ async function part12DesktopSteps() {
     const sbx = STARTED && S.city.sandbox && S.slot === 4;
     deleteSlot(4); MENU.opts.slot = 4; showMenu('scenario'); $('scName').value = 'SELFTEST SCENARIO'; createScenario(); await stWait(1200); closeModal(); clearDialogues();
     const scn = STARTED && S.slot === 4 && S.city.name === 'SELFTEST SCENARIO';
-    setSpeed(5); await stWait(2000); setSpeed(1);
-    const states = {}; AG.citizens.forEach(function (c) { states[c.state] = (states[c.state] || 0) + 1; });
+    /* citizens wake up on their own schedule: sample until at least two AI states appear (max 8 s at 5×) instead of once after 2 s */
+    let states = {};
+    setSpeed(5);
+    for (let i = 0; i < 16; i++) { await stWait(500); states = {}; AG.citizens.forEach(function (c) { states[c.state] = (states[c.state] || 0) + 1; }); if (i >= 3 && AG.citizens.length > 0 && Object.keys(states).length >= 2) break; }
+    setSpeed(1);
     const ai = AG.citizens.length > 0 && Object.keys(states).length >= 2;
     returnToMenu(); setActiveSlot(home); refreshMenuCity(home); await stWait(300);
     $('playBtn').click(); await stWait(1200); closeModal(); clearDialogues();
