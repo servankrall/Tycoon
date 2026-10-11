@@ -254,6 +254,8 @@ function gstIntercept(e) {
   if (typeof WB !== 'undefined' && (WB.on || (typeof RS !== 'undefined' && RS.on))) return false;   // admin world brush / region selector
   return true;
 }
+/* the player's finger always wins: camera fly-to and the landmark cinematic stop moving the camera (the celebration still plays) */
+function stopCameraMotion() { FX.fly = null; if (FX.cine && FX.cine.t < 1.4) FX.cine.t = 1.4; CAM.tx = null; CAM.ty = null; }
 function gstMultiStart() {
   const p = Array.from(GST.pts.values()); if (p.length < 2) return;
   const mid = { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 };
@@ -284,6 +286,7 @@ function gstDown(e) {
   e.stopImmediatePropagation(); e.preventDefault();
   try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
   UI.lastPointer = 'touch'; UI.idleTimer = 0;
+  stopCameraMotion();
   GST.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (GST.pts.size >= 2) {
     if (GST.mode === 'draw') { cancelDrawStroke(); }
@@ -309,6 +312,7 @@ function gstMove(e) {
   if (!gstIntercept(e) || !GST.pts.has(e.pointerId)) return;
   e.stopImmediatePropagation();
   GST.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (FX.fly || FX.cine) stopCameraMotion();                // also when a cinematic starts mid-gesture
   if (GST.mode === 'multi') { gstMultiMove(); return; }
   const st = GST.st; if (!st || e.pointerId !== st.id) return;
   const dx = e.clientX - st.x, dy = e.clientY - st.y, far = Math.hypot(dx, dy) > 10;

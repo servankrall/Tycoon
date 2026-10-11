@@ -729,7 +729,9 @@ function noteError() {
 }
 
 /* ===================================== UI BOUNDS AUDIT (automatic) & SHOW UI BOUNDS (development builds) ===================================== */
-const AUDIT_SEL = ['#mHud', '#mSide', '#mBar', '#mBuildBar', '#mRoad', '#mSheet', '#mInspect', '#mNotes', '#mPage', '#mMap', '#modal', '#sysBox', '#minimap', '#leftPanel.open', '#rightPanel', '#mTut .mtCard', '#dialogBox', '#admPill', '#mToolHint', '#mSaveChip', '#mHeld', '#issuesBar', '#wgBox', '#admLoginBox', '#adminCenter', '#dailyCard', '#fpsBox'];
+/* Full-screen layers (#mPage, #mMap, #adminCenter) paint their background edge to edge on purpose (under the notch);
+   their header and content are what has to stay inside the safe area, so those are audited */
+const AUDIT_SEL = ['#mHud', '#mSide', '#mBar', '#mBuildBar', '#mRoad', '#mSheet', '#mInspect', '#mNotes', '#mPage .mPageHead', '#mPage .mPageBody', '#mMap .mMapHead', '#mMap .mMapBody', '#modal', '#sysBox', '#minimap', '#leftPanel.open', '#rightPanel', '#mTut .mtCard', '#dialogBox', '#admPill', '#mToolHint', '#mSaveChip', '#mHeld', '#issuesBar', '#wgBox', '#admLoginBox', '#admTop', '#admMain', '#dailyCard', '#fpsBox'];
 function safeRect() { return { l: RESP.sa.l, t: RESP.sa.t, r: window.innerWidth - RESP.sa.r, b: window.innerHeight - RESP.sa.b }; }
 function visibleEl(el) { if (!el || el.classList.contains('hidden')) return false; const cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0; }
 /* Checks x ≥ left, x + width ≤ right, y ≥ top, y + height ≤ bottom against the safe area; fix = move / shrink offenders */

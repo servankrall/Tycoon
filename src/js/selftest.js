@@ -287,7 +287,7 @@ function stKeyBlock(e) { if (e.isTrusted) { e.preventDefault(); e.stopImmediateP
 function stKey(key, mods) { window.dispatchEvent(new KeyboardEvent('keydown', Object.assign({ key: key, bubbles: true, cancelable: true }, mods || {}))); }
 /* synthetic touch pointers on the game canvas (setPointerCapture needs a real pointer, so it is stubbed meanwhile) */
 function stPtr(type, id, x, y) { canvas.dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, pointerType: 'touch', isPrimary: id === 1, bubbles: true, cancelable: true, button: 0, buttons: type === 'pointerup' ? 0 : 1 })); }
-async function stTouch(fn) { const spc = canvas.setPointerCapture; canvas.setPointerCapture = function () { }; try { return await fn(); } finally { canvas.setPointerCapture = spc; INPUT.pointers.clear(); INPUT.down = null; INPUT.pinch = null; MOB.rot = null; if (typeof gstReset === 'function') gstReset(); } }
+async function stTouch(fn) { const spc = canvas.setPointerCapture; canvas.setPointerCapture = function () { }; if (typeof stopCameraMotion === 'function') stopCameraMotion(); try { return await fn(); } finally { canvas.setPointerCapture = spc; INPUT.pointers.clear(); INPUT.down = null; INPUT.pinch = null; MOB.rot = null; if (typeof gstReset === 'function') gstReset(); } }
 async function stDrag(id, x0, y0, x1, y1, n) { stPtr('pointerdown', id, x0, y0); for (let i = 1; i <= (n || 8); i++) { stPtr('pointermove', id, x0 + (x1 - x0) * i / (n || 8), y0 + (y1 - y0) * i / (n || 8)); await stWait(16); } stPtr('pointerup', id, x1, y1); }
 function stDenied() {
   const m0 = S.money, b0 = S.budget, open0 = ADM.open;
@@ -478,7 +478,7 @@ async function runAndroidSelfTest(phase) {
         await stWait(100);
         const bar = MOB.buildBar && !MOB.buildBar.classList.contains('hidden');
         MOB.buildBar.querySelector('[data-mb="rotate"]').click(); MOB.buildBar.querySelector('[data-mb="rotate"]').click(); MOB.buildBar.querySelector('[data-mb="rotate"]').click(); MOB.buildBar.querySelector('[data-mb="rotate"]').click();
-        CAM.rot = 0; CAM.zoom = 1; CAM.x = (spot.x + 0.5) * TILE; CAM.y = (spot.y + 0.5) * TILE; clampCamera();
+        stopCameraMotion(); CAM.rot = 0; CAM.zoom = 1; CAM.x = (spot.x + 0.5) * TILE; CAM.y = (spot.y + 0.5) * TILE; clampCamera(); await stWait(60);   // camera pinned (no fly / easing) before the tap point is computed
         if (UI.ghost && Math.abs(UI.ghost.x - spot.x) <= 2 && Math.abs(UI.ghost.y - spot.y) <= 2) { UI.ghost = { x: spot.x + 4, y: spot.y + 4 }; renderBuildBar(); }   // start away from the spot
         const p = worldToScreen((spot.x + 0.5) * TILE, (spot.y + 0.5) * TILE);
         stPtr('pointerdown', 1, p.x, p.y); await stWait(40); stPtr('pointerup', 1, p.x, p.y); await stWait(60);    // tap → the ghost moves there (nothing is built yet)
