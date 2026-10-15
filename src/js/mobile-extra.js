@@ -380,12 +380,11 @@ function buildMinimap2() {
   cv.addEventListener('pointerup', function (e) { const d = down; down = null; if (!d || !mobOn()) return; if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 10 && performance.now() - d.t < 350) setTimeout(function () { openCityMap(); }, 0); });
   applyMiniSize(); syncMiniCtl();
 }
-window.addEventListener('resize', function () { setTimeout(syncMiniCtl, 300); });
+window.addEventListener('resize', function () { syncMiniCtl(); });
 function syncMiniCtl() {
   const ctl = document.getElementById('mMiniCtl'), cv = $('minimap'); if (!ctl || !cv) return;
   const on = STARTED && !cv.classList.contains('hidden') && shown(cv);
   ctl.classList.toggle('hidden', !on);
-  if (on) { const r = cv.getBoundingClientRect(); ctl.style.top = Math.round(r.bottom + 4) + 'px'; ctl.style.left = Math.round(r.left) + 'px'; ctl.style.width = Math.round(r.width) + 'px'; }
   const z = document.getElementById('mZoomBox'); if (z) z.classList.toggle('hidden', GSET.gestureCam !== false);
 }
 /* emergencies + important buildings on the minimap */

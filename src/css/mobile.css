@@ -66,7 +66,8 @@ body.mobileUI.inGame #mSide{display:flex;flex-direction:column;flex-wrap:wrap;al
 body.mobileUI.mBuilding #mSide,body.mobileUI.mRoading #mSide{opacity:.85;}
 body.mobileUI.phone.mSheetOpen #mSide{display:none;}
 /* minimap (top right, under the HUD) */
-body.mobileUI #minimap{left:auto;right:var(--R) !important;top:var(--below-hud);width:clamp(92px,calc(var(--u)*120),170px);height:clamp(92px,calc(var(--u)*120),170px);z-index:28;border-radius:calc(var(--u)*12);}
+body.mobileUI{--mini-sz:clamp(92px,calc(var(--u)*120),170px);}
+body.mobileUI #minimap{left:auto;right:var(--R) !important;top:var(--below-hud);width:var(--mini-sz);height:var(--mini-sz);z-index:28;border-radius:calc(var(--u)*12);}
 body.mobileUI:not(.inGame) #minimap,body.mobileUI.mInsOpen #minimap,body.mobileUI.mSheetOpen.tablet #minimap{display:none;}
 
 /* ---------- BOTTOM TOOLBAR ---------- */
@@ -499,9 +500,10 @@ body.mobileUI.mBuilding #mComment,body.mobileUI.mRoading #mComment,body.mobileUI
 .mNote.hasLoc{cursor:pointer;} .mnGo{font-style:normal;font-size:var(--fs-xs);font-weight:900;color:var(--gold);margin-left:auto;white-space:nowrap;}
 body.mobileUI #toasts .toast.hasLoc{pointer-events:auto;cursor:pointer;}
 /* MINIMAP 2.0: size S / M / L, full map, close */
-body.mobileUI.mini-s #minimap{width:clamp(80px,calc(var(--u)*92),130px);height:clamp(80px,calc(var(--u)*92),130px);}
-body.mobileUI.mini-l #minimap{width:clamp(120px,calc(var(--u)*170),240px);height:clamp(120px,calc(var(--u)*170),240px);}
-#mMiniCtl{position:fixed;z-index:28;display:flex;gap:3px;justify-content:space-between;}
+body.mobileUI.mini-s{--mini-sz:clamp(80px,calc(var(--u)*92),130px);}
+body.mobileUI.mini-l{--mini-sz:clamp(120px,calc(var(--u)*170),240px);}
+/* placed by CSS under the minimap (same size variable) — never a stale JS position after rotation / resize */
+#mMiniCtl{position:fixed;z-index:28;display:flex;gap:3px;justify-content:space-between;right:var(--R);top:calc(var(--below-hud) + var(--mini-sz) + 4px);width:var(--mini-sz);}
 #mMiniCtl.hidden,body.mobileUI.mInsOpen #mMiniCtl,body.mobileUI.mSheetOpen.tablet #mMiniCtl,body.mobileUI:not(.inGame) #mMiniCtl{display:none;}
 #mMiniCtl button{flex:1;min-width:0;height:max(36px,calc(var(--u)*36));border-radius:calc(var(--u)*10);background:rgba(18,21,43,.88);border:1px solid var(--line);color:var(--text);font-size:var(--fs-s);font-weight:900;}
 #mZoomBox{display:flex;flex-direction:column;gap:calc(var(--u)*6);} #mZoomBox.hidden{display:none;}

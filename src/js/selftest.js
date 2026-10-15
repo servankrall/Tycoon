@@ -591,7 +591,8 @@ async function runAndroidSelfTest(phase) {
   await stStep(19, 'Gamepad', async function () {
     PADN.t = 0; PAD.active = false;
     if (native) BCTA.selftestNativePad(); else { window.bctPadKey(96, true); setTimeout(function () { window.bctPadKey(96, false); }, 100); }
-    await stWait(500); pollGamepad(0.016);
+    for (let i = 0; i < 30 && !PADN.t; i++) await stWait(100);          // the native key event reaches the WebView asynchronously (slow emulators)
+    await stWait(100); pollGamepad(0.016);
     return { ok: PADN.t > 0 && PAD.active, detail: (native ? 'native controller event (KEYCODE_BUTTON_A via MainActivity.dispatchKeyEvent)' : 'controller event') + ' → game gamepad layer · connected ' + PAD.active };
   });
   await stStep(20, 'Windows Save → Android', function () {
