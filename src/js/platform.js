@@ -17,7 +17,7 @@ const BUILD = (function () {                      // build profile (scripts/buil
 })();
 const DESKTOP = !!(BCT && BCT.isDesktop);
 const DEV_MODE = !!(BCT && BCT.dev) && BUILD.dev;
-const GAME_VERSION = (BCT && BCT.version) || (ANDROID_INFO && ANDROID_INFO.version) || '2.1.0';
+const GAME_VERSION = (BCT && BCT.version) || (ANDROID_INFO && ANDROID_INFO.version) || '2.2.0';
 /* --- Platform detection: IS_ANDROID · IS_WINDOWS · IS_DESKTOP (automatic; ?platform=android previews the mobile UI in a browser) --- */
 const PLATFORM_OVERRIDE = (function () { try { const m = /[?&]platform=(android|windows|desktop)\b/.exec(location.search); return m ? m[1] : ''; } catch (e) { return ''; } })();
 const IS_ANDROID = !!BCTA || PLATFORM_OVERRIDE === 'android';
@@ -143,7 +143,7 @@ function defaultGSET() {
   return {
     settingsVersion: 1, resolution: '1280x720', fullscreen: false, borderless: false,
     music: false, sfx: true, masterVolume: 80, graphics: small ? 'LOW' : 'HIGH', particles: 'ON', shadows: true,
-    npcDensity: 100, trafficDensity: 100, autosave: true, autosaveInterval: 30, language: (navigator.language || '').toLowerCase().indexOf('tr') === 0 ? 'tr' : 'en',
+    npcDensity: 100, trafficDensity: 100, autosave: true, autosaveInterval: IS_ANDROID ? 300 : 30, language: (navigator.language || '').toLowerCase().indexOf('tr') === 0 ? 'tr' : 'en',
     pauseOnBlur: false, browserImportPrompted: false, localMigrated: false, adminEnabled: false, adminLockMin: 10
   };
 }
@@ -167,7 +167,7 @@ function sanitizeGSET(src) {
   o.particles = pickIn(src.particles, ['ON', 'REDUCED', 'OFF'], d.particles);
   o.npcDensity = pickIn(Number(src.npcDensity), [25, 50, 75, 100, 150, 200], d.npcDensity);
   o.trafficDensity = pickIn(Number(src.trafficDensity), [25, 50, 75, 100, 150, 200], d.trafficDensity);
-  o.autosaveInterval = pickIn(Number(src.autosaveInterval), [15, 30, 60, 120, 300], d.autosaveInterval);
+  o.autosaveInterval = pickIn(Number(src.autosaveInterval), [15, 30, 60, 120, 300, 600], d.autosaveInterval);
   o.language = pickIn(src.language, Object.keys(SHELL_TEXT), d.language);
   return o;
 }

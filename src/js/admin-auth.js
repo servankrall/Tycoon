@@ -636,6 +636,7 @@ function adminGuideOnce() {
 window.addEventListener('keydown', function (e) {
   if (e.key !== 'F10') return;
   e.preventDefault(); e.stopImmediatePropagation();
+  if (IS_ANDROID) { AdminAuth.security('ADMIN COMMAND DENIED', 'F10 on Android — desktop shortcuts never open the admin panel (use the authorised 7-tap login)'); return; }
   if (e.ctrlKey && e.shiftKey) { if (AdminAuth.active()) openAdminCenter(); else openAdminLogin({ via: 'Ctrl+Shift+F10' }); return; }
   if (!AdminAuth.active()) { AdminAuth.security('ADMIN COMMAND DENIED', 'F10 — not authenticated'); return; }
   if (typeof S === 'undefined' || !S || !MAP.roads) return;

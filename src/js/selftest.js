@@ -1,7 +1,7 @@
 'use strict';
 /* BLOCK CITY TYCOON — AUTOMATIC SELF-TEST (Part 9, extended with Part 10/11 checks and the Part 12 cross-platform test)
    Windows EXE: 53 steps (Part 12: admin security / authentication / panel / logout / auto-lock, cross-platform save,
-   save + snapshot + version migration, performance modes, gamepad, settings). Android APK: 21 steps (APK launch, splash,
+   save + snapshot + version migration, performance modes, gamepad, settings). Android APK: 24 steps (APK launch, splash,
    new city, touch camera, zoom, building, road building, save, restart, continue, load, performance mode, admin
    authentication / panel / logout / auto lock, native back button, screen rotation, native gamepad, Windows save → Android,
    save migration). Admin rights come from an isolated one-time realm created by the platform shell for this test only.
@@ -287,7 +287,7 @@ function stKeyBlock(e) { if (e.isTrusted) { e.preventDefault(); e.stopImmediateP
 function stKey(key, mods) { window.dispatchEvent(new KeyboardEvent('keydown', Object.assign({ key: key, bubbles: true, cancelable: true }, mods || {}))); }
 /* synthetic touch pointers on the game canvas (setPointerCapture needs a real pointer, so it is stubbed meanwhile) */
 function stPtr(type, id, x, y) { canvas.dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, pointerType: 'touch', isPrimary: id === 1, bubbles: true, cancelable: true, button: 0, buttons: type === 'pointerup' ? 0 : 1 })); }
-async function stTouch(fn) { const spc = canvas.setPointerCapture; canvas.setPointerCapture = function () { }; try { return await fn(); } finally { canvas.setPointerCapture = spc; INPUT.pointers.clear(); INPUT.down = null; INPUT.pinch = null; MOB.rot = null; } }
+async function stTouch(fn) { const spc = canvas.setPointerCapture; canvas.setPointerCapture = function () { }; if (typeof stopCameraMotion === 'function') stopCameraMotion(); try { return await fn(); } finally { canvas.setPointerCapture = spc; INPUT.pointers.clear(); INPUT.down = null; INPUT.pinch = null; MOB.rot = null; if (typeof gstReset === 'function') gstReset(); } }
 async function stDrag(id, x0, y0, x1, y1, n) { stPtr('pointerdown', id, x0, y0); for (let i = 1; i <= (n || 8); i++) { stPtr('pointermove', id, x0 + (x1 - x0) * i / (n || 8), y0 + (y1 - y0) * i / (n || 8)); await stWait(16); } stPtr('pointerup', id, x1, y1); }
 function stDenied() {
   const m0 = S.money, b0 = S.budget, open0 = ADM.open;
@@ -418,8 +418,11 @@ async function part12DesktopSteps() {
     const sbx = STARTED && S.city.sandbox && S.slot === 4;
     deleteSlot(4); MENU.opts.slot = 4; showMenu('scenario'); $('scName').value = 'SELFTEST SCENARIO'; createScenario(); await stWait(1200); closeModal(); clearDialogues();
     const scn = STARTED && S.slot === 4 && S.city.name === 'SELFTEST SCENARIO';
-    setSpeed(5); await stWait(2000); setSpeed(1);
-    const states = {}; AG.citizens.forEach(function (c) { states[c.state] = (states[c.state] || 0) + 1; });
+    /* citizens wake up on their own schedule: sample until at least two AI states appear (max 8 s at 5×) instead of once after 2 s */
+    let states = {};
+    setSpeed(5);
+    for (let i = 0; i < 16; i++) { await stWait(500); states = {}; AG.citizens.forEach(function (c) { states[c.state] = (states[c.state] || 0) + 1; }); if (i >= 3 && AG.citizens.length > 0 && Object.keys(states).length >= 2) break; }
+    setSpeed(1);
     const ai = AG.citizens.length > 0 && Object.keys(states).length >= 2;
     returnToMenu(); setActiveSlot(home); refreshMenuCity(home); await stWait(300);
     $('playBtn').click(); await stWait(1200); closeModal(); clearDialogues();
@@ -429,9 +432,9 @@ async function part12DesktopSteps() {
   });
 }
 
-/* ===================================== Part 12: Android APK self-test (21 steps) ===================================== */
+/* ===================================== Part 12/13: Android APK self-test (24 steps) ===================================== */
 async function runAndroidSelfTest(phase) {
-  SELFTEST.total = 21;
+  SELFTEST.total = 24;
   const native = IS_ANDROID_APP;
   if (phase === 1) {
     SELFTEST.t0 = Date.now(); SELFTEST.steps = []; SELFTEST.data = {};
@@ -456,23 +459,39 @@ async function runAndroidSelfTest(phase) {
         CAM.zoom = 1; const z0 = CAM.zoom, cx = CW / 2, cy = CH / 2;
         stPtr('pointerdown', 1, cx - 50, cy); stPtr('pointerdown', 2, cx + 50, cy); await stWait(30);
         for (let i = 1; i <= 8; i++) { stPtr('pointermove', 2, cx + 50 + i * 12, cy); stPtr('pointermove', 1, cx - 50 - i * 12, cy); await stWait(16); }
-        const z1 = CAM.zoom;
-        for (let i = 1; i <= 8; i++) { const a = i * 0.06, r = 146; stPtr('pointermove', 1, cx - r * Math.cos(a), cy - r * Math.sin(a)); stPtr('pointermove', 2, cx + r * Math.cos(a), cy + r * Math.sin(a)); await stWait(16); }
+        const z1 = CAM.zoom, r1 = CAM.rot || 0;
+        stPtr('pointerup', 2, cx, cy); stPtr('pointerup', 1, cx, cy); await stWait(30);
+        /* a separate twist gesture: pinch and rotate never mix inside one gesture (Part 13) */
+        const r = 146; stPtr('pointerdown', 1, cx - r, cy); stPtr('pointerdown', 2, cx + r, cy); await stWait(30);
+        for (let i = 1; i <= 8; i++) { const a = i * 0.06; stPtr('pointermove', 1, cx - r * Math.cos(a), cy - r * Math.sin(a)); stPtr('pointermove', 2, cx + r * Math.cos(a), cy + r * Math.sin(a)); await stWait(16); }
         stPtr('pointerup', 2, cx, cy); stPtr('pointerup', 1, cx, cy);
-        const rot = CAM.rot; setCamRot(0);
-        return { ok: z1 > z0 * 1.3 && Math.abs(rot) > 0.15, detail: 'pinch zoom ' + z0.toFixed(2) + ' → ' + z1.toFixed(2) + ' · two-finger rotate ' + Math.round(rot * 180 / Math.PI) + '° (↺ reset)' };
+        const rot = CAM.rot, z2 = CAM.zoom; setCamRot(0);
+        return { ok: z1 > z0 * 1.3 && r1 === 0 && Math.abs(rot) > 0.15 && Math.abs(z2 - z1) < 0.05 && !UI.selected, detail: 'pinch zoom ' + z0.toFixed(2) + ' → ' + z1.toFixed(2) + ' (rotation ' + r1.toFixed(2) + ') · twist ' + Math.round(rot * 180 / Math.PI) + '° (zoom ' + z2.toFixed(2) + ') · selection ' + !!UI.selected };
       });
     });
-    await stStep(6, 'Building (BUILD · ROTATE · MOVE · CONFIRM)', async function () {
-      const d = BUILDINGS.house || BUILDING_LIST.find(function (x) { return x.cat === 'Housing' && unlockStatus(x).ok; });
-      const spot = stFreeBuildSpot(d); if (!spot) return { ok: false, detail: 'no free spot' };
-      const n0 = S.buildings.list.length; startPlacing(d); await stWait(100);
-      const bar = MOB.buildBar && !MOB.buildBar.classList.contains('hidden');
-      MOB.buildBar.querySelector('[data-mb="move"]').click(); const mv = MOB.ghostMove; MOB.buildBar.querySelector('[data-mb="move"]').click();
-      UI.ghost = { x: spot.x, y: spot.y }; renderBuildBar(); const checks = $('mbInfo').querySelectorAll('.mChk').length;
-      MOB.buildBar.querySelector('[data-mb="confirm"]').click(); await stWait(100);
-      MOB.buildBar.querySelector('[data-mb="cancel"]').click();
-      return { ok: bar && mv && checks === 5 && S.buildings.list.length === n0 + 1, detail: d.name + ' placed at ' + spot.x + ',' + spot.y + ' · build bar ' + bar + ' · MOVE mode ' + mv + ' · ' + checks + ' checks (road, power, water, zone, terrain)' };
+    await stStep(6, 'Building (BUILD · tap / drag ghost · ROTATE · CONFIRM)', function () {
+      return stTouch(async function () {
+        const d = BUILDINGS.house || BUILDING_LIST.find(function (x) { return x.cat === 'Residential' && unlockStatus(x).ok; });
+        const spot = stFreeBuildSpot(d); if (!spot) return { ok: false, detail: 'no free spot' };
+        const n0 = S.buildings.list.length;
+        document.querySelector('[data-mbar="build"]').click(); await stWait(100);
+        const cats = document.querySelectorAll('#mSheet [data-mcat]').length;
+        document.querySelector('#mSheet [data-mcat="res"]').click(); await stWait(50);
+        const card = document.querySelector('#mSheet [data-mbuild="' + d.id + '"]'); if (card) card.click(); else startPlacing(d);
+        await stWait(100);
+        const bar = MOB.buildBar && !MOB.buildBar.classList.contains('hidden');
+        MOB.buildBar.querySelector('[data-mb="rotate"]').click(); MOB.buildBar.querySelector('[data-mb="rotate"]').click(); MOB.buildBar.querySelector('[data-mb="rotate"]').click(); MOB.buildBar.querySelector('[data-mb="rotate"]').click();
+        stopCameraMotion(); CAM.rot = 0; CAM.zoom = 1; CAM.x = (spot.x + 0.5) * TILE; CAM.y = (spot.y + 0.5) * TILE; clampCamera(); await stWait(60);   // camera pinned (no fly / easing) before the tap point is computed
+        if (UI.ghost && Math.abs(UI.ghost.x - spot.x) <= 2 && Math.abs(UI.ghost.y - spot.y) <= 2) { UI.ghost = { x: spot.x + 4, y: spot.y + 4 }; renderBuildBar(); }   // start away from the spot
+        const p = worldToScreen((spot.x + 0.5) * TILE, (spot.y + 0.5) * TILE);
+        stPtr('pointerdown', 1, p.x, p.y); await stWait(40); stPtr('pointerup', 1, p.x, p.y); await stWait(60);    // tap → the ghost moves there (nothing is built yet)
+        const moved = !!UI.ghost && UI.ghost.x === spot.x && UI.ghost.y === spot.y && S.buildings.list.length === n0;
+        const checks = $('mbInfo').querySelectorAll('.mChk').length, state = ($('mbInfo').querySelector('.mbState') || {}).textContent || '';
+        const cf = MOB.buildBar.querySelector('[data-mb="confirm"]'); cf.click(); cf.disabled = false; cf.click(); await stWait(100);   // the second fast press is ignored
+        const built = S.buildings.list.length - n0;
+        MOB.buildBar.querySelector('[data-mb="cancel"]').click();
+        return { ok: cats === 8 && bar && moved && checks === 5 && /BUILDABLE/.test(state) && built === 1, detail: cats + ' categories · ' + d.name + ' · build bar ' + bar + ' · tap moved the ghost ' + moved + ' · ' + state.slice(0, 30) + ' · ' + checks + ' checks · CONFIRM ×2 → ' + built + ' building' };
+      });
     });
     await stStep(7, 'Road Building (START → DRAG → END → CONFIRM)', function () {
       return stTouch(async function () {
@@ -586,6 +605,39 @@ async function runAndroidSelfTest(phase) {
     const res = loadGame(3), migrated = S.version === SAVE_VERSION && !!S.origin, backup = premigBackups(3)[0], rb = rollbackMigration(3);
     loadSlot(1);
     return { ok: !res.isNew && migrated && !!backup && rb.ok, detail: 'v11 save → v' + SAVE_VERSION + ' with BACKUP SAVE ' + (backup ? backup.key : 'missing') + ' · ROLLBACK ' + rb.ok };
+  });
+  /* ---- Part 13: mobile UI ---- */
+  await stStep(22, 'Mobile UI Bounds', async function () {
+    closeModal(); clearDialogues(); await stWait(300);
+    const screens = [['gameplay', function () { }], ['build sheet', function () { openBuildSheet(); }], ['inspector', function () { closeSheet(); const b = S.buildings.list.find(function (x) { return x.built; }); selectBuilding(b); }],
+      ['city', function () { closeInspector(); openMobilePage('city'); }], ['economy', function () { openMobilePage('economy'); }], ['map', function () { closeMobilePage(); openCityMap(); }],
+      ['settings', function () { closeCityMap(); openSettings('accessibility'); }], ['pause', function () { closeModal(); openPauseMenu(); }], ['road bar', function () { closeModal(); enterDrawMode('road'); }]];
+    const bad = [];
+    for (let i = 0; i < screens.length; i++) { screens[i][1](); await stWait(450); mobileUiAudit(false).filter(function (a) { return !a.ok; }).forEach(function (a) { bad.push(screens[i][0] + ':' + a.id); }); }
+    exitDrawMode();
+    const sa = RESP.sa;
+    return { ok: !bad.length, detail: screens.length + ' screens inside the safe area (' + [sa.t, sa.r, sa.b, sa.l].map(Math.round).join('/') + ') · ' + window.innerWidth + '×' + window.innerHeight + ' · scale ' + RESP.scale + (RESP.tablet ? ' · tablet' : ' · phone') + ' · HUD fit ' + MOB.fitLevel + (bad.length ? ' · OUT: ' + bad.slice(0, 5).join(', ') : '') };
+  });
+  await stStep(23, 'Touch Input Priority', function () {
+    return stTouch(async function () {
+      const n0 = S.buildings.list.length, x0 = CAM.x;
+      const blk = document.getElementById('stBlock'); if (blk) blk.style.display = 'none';     // the self-test input blocker sits above everything
+      const bar = document.querySelector('[data-mbar="city"]').getBoundingClientRect(), top = document.elementFromPoint(bar.left + bar.width / 2, bar.top + bar.height / 2);
+      if (blk) blk.style.display = '';
+      const uiFirst = !!top && !!top.closest('#mBar');
+      stPtr('pointerdown', 1, CW / 2, CH / 2); stPtr('pointerdown', 2, CW / 2 + 80, CH / 2); await stWait(20);
+      stPtr('pointerup', 2, CW / 2 + 80, CH / 2); stPtr('pointerup', 1, CW / 2, CH / 2); await stWait(60);
+      const noTap = !UI.selected && !MINS.kind && S.buildings.list.length === n0;
+      return { ok: uiFirst && noTap && Math.abs(CAM.x - x0) < 1, detail: 'UI touch above the world ' + uiFirst + ' · two-finger touch fires no tap / selection / placement ' + noTap };
+    });
+  });
+  await stStep(24, 'Map · Pages · Notifications · Save', async function () {
+    openCityMap(); await stWait(200); const map = MMAP.open && document.querySelectorAll('#mMapLayers [data-mml]').length === 6; window.bctOnBack(); await stWait(100);
+    const mapClosed = !MMAP.open;
+    toast('🏗️ Self-test notification', 'good'); openNotificationCenter(); const notes = MNOTE.open && MNOTE.list.length > 0; closeNotificationCenter();
+    openPauseMenu(); await stWait(100); document.querySelector('[data-mp="save"]').click(); await stWait(300);
+    const saved = /CITY SAVED/.test(($('mSaveChip') || {}).textContent || ''); closeModal();
+    return { ok: map && mapClosed && notes && saved, detail: 'CITY MAP 6 layers ' + map + ' · back closes it ' + mapClosed + ' · notification center ' + notes + ' · PAUSE → SAVE → CITY SAVED ' + saved };
   });
   stDone();
 }

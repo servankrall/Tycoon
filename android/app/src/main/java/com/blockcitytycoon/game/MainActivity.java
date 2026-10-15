@@ -70,6 +70,8 @@ import javax.crypto.spec.SecretKeySpec;
  *  - the BCTAndroid bridge: private-storage saves, Storage Access Framework export / import, pictures, log file,
  *    orientation, keep-screen-on, thermal status
  *  - Android back button → the game's back handler, game controller events → the game's gamepad layer
+ *  - Part 13: safe-area insets (cutout, rounded corners, gesture bar) → window.bctInsets, onTrimMemory → window.bctLowMemory,
+ *    WebView render-process crash → the view is recreated and the game reloads (last autosave kept)
  *  - self-test mode (adb: am start -n com.blockcitytycoon.game/.MainActivity --ez selftest true) in an isolated sandbox
  */
 public class MainActivity extends Activity {
@@ -88,6 +90,8 @@ public class MainActivity extends Activity {
     byte[] pendingBytes = null;
     long lastAxes = 0;
     JSONObject selftestRealm = null;
+    volatile String insetsJson = "{}";
+    int renderCrashes = 0;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -110,6 +114,13 @@ public class MainActivity extends Activity {
         w.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
         if (Build.VERSION.SDK_INT >= 28) w.getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
 
+        createWeb();
+        immersive();
+    }
+
+    /* The WebView (re)creation: also used after a render-process crash, so the game reloads instead of the app dying */
+    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
+    void createWeb() {
         web = new WebView(this);
         web.setBackgroundColor(0xFF12152B);
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);         // release builds: no remote debugging
@@ -130,6 +141,17 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) { return serve(req.getUrl()); }
+            /* APK CRASH PROTECTION: the WebView renderer died (out of memory, GPU driver) → recreate it and reload the game;
+               the game then offers the last autosave / recovery snapshot instead of the app closing */
+            @Override
+            public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                boolean crashed = Build.VERSION.SDK_INT >= 26 && detail != null && detail.didCrash();
+                log("error", "WebView render process gone (" + (crashed ? "crash" : "killed for memory") + ") — recreating the game view");
+                if (view == web) { web = null; }
+                try { view.destroy(); } catch (Exception e) { /* already gone */ }
+                if (++renderCrashes <= 3) ui.postDelayed(new Runnable() { @Override public void run() { createWeb(); immersive(); } }, 300);
+                return true;
+            }
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) { return !HOST.equals(req.getUrl().getHost()); }
         });
@@ -143,9 +165,42 @@ public class MainActivity extends Activity {
             }
         });
         setContentView(web);
-        immersive();
+        /* SAFE AREA: display cutout (notch, camera hole), rounded corners and the gesture bar → window.bctInsets (CSS px) */
+        web.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override public WindowInsets onApplyWindowInsets(View v, WindowInsets ins) { pushInsets(ins); return v.onApplyWindowInsets(ins); }
+        });
         web.loadUrl(START_URL + (selftest ? "?selftest=" + selftestPhase : ""));
     }
+    void pushInsets(WindowInsets ins) {
+        if (ins == null) return;
+        float d = getResources().getDisplayMetrics().density;
+        int t = 0, r = 0, b = 0, l = 0;
+        if (Build.VERSION.SDK_INT >= 28 && ins.getDisplayCutout() != null) {
+            android.view.DisplayCutout c = ins.getDisplayCutout();
+            t = c.getSafeInsetTop(); r = c.getSafeInsetRight(); b = c.getSafeInsetBottom(); l = c.getSafeInsetLeft();
+        }
+        if (Build.VERSION.SDK_INT >= 31) {               // rounded corners: keep buttons out of the clipped corner area
+            int[] pos = { android.view.RoundedCorner.POSITION_TOP_LEFT, android.view.RoundedCorner.POSITION_TOP_RIGHT, android.view.RoundedCorner.POSITION_BOTTOM_LEFT, android.view.RoundedCorner.POSITION_BOTTOM_RIGHT };
+            int rc = 0; for (int p : pos) { android.view.RoundedCorner c = ins.getRoundedCorner(p); if (c != null) rc = Math.max(rc, c.getRadius()); }
+            int k = (int) (rc * 0.3f); l = Math.max(l, k); r = Math.max(r, k); t = Math.max(t, k / 2); b = Math.max(b, k / 2);
+        }
+        if (Build.VERSION.SDK_INT >= 30) {               // gesture navigation bar at the bottom (capped: the bars are hidden in immersive mode)
+            android.graphics.Insets g = ins.getInsets(WindowInsets.Type.mandatorySystemGestures());
+            b = Math.max(b, Math.min(g.bottom, (int) (20 * d)));
+        }
+        final String args = String.format(Locale.ROOT, "%.1f,%.1f,%.1f,%.1f", t / d, r / d, b / d, l / d);
+        insetsJson = obj("t", t / d, "r", r / d, "b", b / d, "l", l / d).toString();
+        js("window.bctInsets && bctInsets(" + args + ")");
+    }
+
+    /* LOW MEMORY: the game unloads distant chunks / textures and aggregates far agents (window.bctLowMemory) */
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (level == TRIM_MEMORY_RUNNING_LOW || level == TRIM_MEMORY_RUNNING_CRITICAL || level >= TRIM_MEMORY_MODERATE) { log("warning", "onTrimMemory " + level); js("window.bctLowMemory && bctLowMemory(" + level + ")"); }
+    }
+    @Override
+    public void onLowMemory() { super.onLowMemory(); log("warning", "onLowMemory"); js("window.bctLowMemory && bctLowMemory(80)"); }
 
     /* ---------------- asset server (https://appassets.androidplatform.net/www/…) ---------------- */
     WebResourceResponse serve(Uri u) {
@@ -334,6 +389,8 @@ public class MainActivity extends Activity {
                 "ramMB", mi.totalMem / 1048576, "lowRam", am != null && am.isLowRamDevice(), "cores", Runtime.getRuntime().availableProcessors(),
                 "selftest", selftest, "selftestPhase", selftestPhase).toString();
         }
+        @JavascriptInterface
+        public String insets() { return insetsJson; }
         @JavascriptInterface
         public String storeLoadAll() {
             JSONObject o = new JSONObject();

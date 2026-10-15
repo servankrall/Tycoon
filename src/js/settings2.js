@@ -10,7 +10,7 @@
    - Gamepad 2.0: browser Gamepad API + native Android controller events, remappable actions */
 
 /* ===================================== GLOBAL SETTINGS (per device) ===================================== */
-const GS2_DEFAULTS = { uiScale: 100, textSize: 'M', largeTouch: IS_MOBILE, tutorialHints: true, perfMode: 'AUTO', lowEnd: false, simQuality: IS_MOBILE ? 'MEDIUM' : 'HIGH', orientation: 'landscape', cameraSpeed: 100, invertPan: false, rotateCam: true, edgePan: false, cbHeat: false, setupDone: false, mobileTutDone: false, safeSpeed: true, notify: null, padMap: null, autoPerfLevel: '' };
+const GS2_DEFAULTS = { uiScale: 100, textSize: 'M', largeTouch: IS_MOBILE && Math.min(screen.width, screen.height) < 380, tutorialHints: true, perfMode: 'AUTO', lowEnd: false, simQuality: IS_MOBILE ? 'MEDIUM' : 'HIGH', orientation: 'landscape', cameraSpeed: 100, invertPan: false, rotateCam: true, edgePan: false, cbHeat: false, setupDone: false, mobileTutDone: false, safeSpeed: true, notify: null, padMap: null, autoPerfLevel: '' };
 const NOTIFY_CATS = [['build', '🏗️', 'Construction completed'], ['traffic', '🚦', 'Traffic congestion'], ['population', '👥', 'Population milestones'], ['business', '🏢', 'New companies & business'], ['disaster', '🚨', 'Disasters & emergencies'], ['economy', '💰', 'Economy & budget']];
 const PAD_ACTIONS = [['select', 'Select', 0], ['cancel', 'Cancel / back', 1], ['build', 'Build menu', 2], ['city', 'City panel', 3], ['rotatePlace', 'Rotate building', 4], ['rotateCam', 'Rotate camera', 5], ['zoomOut', 'Zoom out', 6], ['zoomIn', 'Zoom in', 7], ['palette', 'Command palette', 8], ['menu', 'Menu / pause', 9]];
 (function sanitizeGS2() {
@@ -24,6 +24,8 @@ const PAD_ACTIONS = [['select', 'Select', 0], ['cancel', 'Cancel / back', 1], ['
   GSET.orientation = pickIn(GSET.orientation, ['landscape', 'auto', 'portrait'], 'landscape');
   GSET.cameraSpeed = Math.round(n(GSET.cameraSpeed, 100, 40, 250));
   GSET.autoPerfLevel = pickIn(GSET.autoPerfLevel, ['', 'LOW', 'MEDIUM', 'HIGH', 'ULTRA'], '');
+  GSET.camSens = pickIn(GSET.camSens, ['LOW', 'MEDIUM', 'HIGH'], 'MEDIUM');                // Part 13: camera sensitivity (touch)
+  GSET.fpsTarget = pickIn(String(GSET.fpsTarget || 'AUTO'), ['AUTO', '30', '45', '60'], 'AUTO');   // Part 13: FPS target
   const nt = {}; NOTIFY_CATS.forEach(function (c) { nt[c[0]] = !(GSET.notify && GSET.notify[c[0]] === false); }); GSET.notify = nt;
   const pm = {}; PAD_ACTIONS.forEach(function (a) { const v = GSET.padMap && GSET.padMap[a[0]]; pm[a[0]] = (v | 0) === v && v >= 0 && v < 20 ? v : a[2]; }); GSET.padMap = pm;
 })();
@@ -238,7 +240,7 @@ window.openSettings = function (tab) {
         '<p class="small">Distant districts use citizen and traffic aggregation, chunk streaming and LOD in every mode; the quality sets how many citizens and vehicles are simulated individually.</p>' +
         '<div class="small">👥 ' + T('npc') + '</div>' + gsBtns('npcDensity', pct, pct.map(function (x) { return x + '%'; })) + '<div class="small" style="margin-top:6px">🚗 ' + T('traffic2') + '</div>' + gsBtns('trafficDensity', pct, pct.map(function (x) { return x + '%'; })) +
         t2('safeSpeed', '🛡️ Safe speed limit (heavy speeds slow down automatically on a struggling device) — now ' + SAFE.cap + '×') +
-        gsTog('autosave', '💾 ' + T('autosave')) + '<div class="small">' + T('interval') + '</div>' + gsBtns('autosaveInterval', [15, 30, 60, 120, 300], ['15 s', '30 s', '1 min', '2 min', '5 min']) + gsTog('pauseOnBlur', '⏸️ ' + T('pauseBlur')) +
+        gsTog('autosave', '💾 ' + T('autosave')) + '<div class="small">' + T('interval') + '</div>' + gsBtns('autosaveInterval', [15, 30, 60, 120, 300, 600], ['15 s', '30 s', '1 min', '2 min', '5 min', '10 min']) + gsTog('pauseOnBlur', '⏸️ ' + T('pauseBlur')) +
         tog('dynDiff', '🎚️ Dynamic difficulty') + tog('dailyReport', '📰 Daily city report') + tog('autoEvolve', '✨ Auto-evolve buildings') +
         sec('Notifications') + NOTIFY_CATS.map(function (c) { const on = GSET.notify[c[0]] !== false; return '<div class="between s2Row"><span>' + c[1] + ' ' + c[2] + '</span><button class="btn small ' + (on ? 'green' : '') + '" data-gs2="notify" data-v="' + c[0] + '">' + (on ? 'ON' : 'OFF') + '</button></div>'; }).join('') +
         (NOTE.list.length ? '<p class="small">Latest: ' + NOTE.list.slice(0, 4).map(function (n) { return n.icon + ' ' + esc(n.text); }).join(' · ') + '</p>' : '');

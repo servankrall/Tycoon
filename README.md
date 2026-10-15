@@ -1,6 +1,6 @@
 # 🏙️ BLOCK CITY TYCOON — Windows EXE + Android APK
 
-**Build. Manage. Expand.** · Sürüm **2.1.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
+**Build. Manage. Expand.** · Sürüm **2.2.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
 `BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE — ve 2.0.0 ile bir **Android uygulaması** (APK). Windows ve Android **aynı oyun motorunu** kullanır; yalnızca girdi, arayüz, dosya sistemi ve performans katmanı platforma özeldir. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
@@ -39,8 +39,8 @@ Build sonrası:
 ```text
 dist/
 ├── windows/
-│   ├── BLOCK-CITY-TYCOON-Setup-2.1.0.exe       ← kurulum sihirbazı
-│   ├── BLOCK-CITY-TYCOON-Portable-2.1.0.exe    ← kurulumsuz, çift tıkla çalışır
+│   ├── BLOCK-CITY-TYCOON-Setup-2.2.0.exe       ← kurulum sihirbazı
+│   ├── BLOCK-CITY-TYCOON-Portable-2.2.0.exe    ← kurulumsuz, çift tıkla çalışır
 │   └── win-unpacked/BLOCK CITY TYCOON.exe      ← paketlenmiş uygulamanın kendisi
 └── android/
     ├── BLOCK-CITY-TYCOON-Android.apk           ← debug APK (geliştirme)
@@ -131,7 +131,8 @@ BLOCK-CITY-TYCOON/
         ├── build-profile.js    Part 12: build profili (RELEASE / DEVELOPMENT / TEST)
         ├── admin-auth.js       Part 12: GÜVENLİ ADMIN SİSTEMİ — kimlik doğrulama (PBKDF2), roller, izin matrisi, oturum, otomatik kilit, giriş denemesi koruması, admin işlem günlüğü, owner kurtarma, komut koruması
         ├── settings2.js        Part 12: Settings 2.0 (7 sekme), performans modları + AUTO PERFORMANCE, LOW-END MODE, simülasyon kalitesi, güvenli hız limiti, erişilebilirlik, bildirimler, gamepad 2.0
-        ├── mobile.js           Part 12: Android ana menü, mobil HUD, dokunmatik kamera (kaydırma / pinch / döndürme), mobil inşa modu, mobil yol çizici, geri tuşu, yönlendirme, ilk açılış kurulumu, mobil eğitim
+        ├── mobile.js           Part 13: Android mobil arayüz çekirdeği — responsive motor, safe area, HUD, araç çubuğu, dokunmatik giriş katmanı, build / yol / bölge modları, geri tuşu, yönlendirme, ilk açılış kurulumu
+        ├── mobile-panels.js    Part 13: build sayfası, inspector kartları, City / Economy sayfaları, şehir haritası, bildirim merkezi, pause, mobil ayarlar, eğitim, düşük bellek, FPS hedefi, hata kurtarma, UI bounds denetimi
         ├── selftest.js         Part 9–12: otomatik test — Windows EXE 53 adım, Android APK 21 adım (--selftest)
         ├── main.js             döngü, girdi, menüler, açılış adımları
         └── platform-ui.js      çıkış onayı, çökme kurtarma, eski kayıt aktarımı, masaüstü ayarları, kısayollar
@@ -444,6 +445,25 @@ Oyunun tamamı artık **Türkçe** oynanabilir — Windows EXE, Android APK ve t
 - **Nasıl çalışır:** oyun kodu İngilizce kalır; `src/js/i18n.js` ekrana gelen metni yakalar ve `src/js/i18n-tr.js` sözlüğünden (≈3.800 ifade) çevirir. Sayılar `{n}`, bina adları `{b}`, özel adlar `{c}` yer tutucusuyla şablonlanır (`"{b} inşaatı tamamlandı."`); Türkçe sözdizimi farklıysa `{n2}` / `{n1}` ile sıra değiştirilir. Karışık metinler `·`, `—`, `|`, `:` ve `→` noktalarından parçalanıp ayrı ayrı çevrilir. Çeviriler önbelleğe alınır ve yeni arayüz ekrana çizilmeden çevrilir, bu yüzden titreme veya FPS kaybı yoktur.
 - **Yeni metin eklemek:** `src/js/i18n-tr.js` içine `"İngilizce metin": "Türkçe metin",` satırı eklemek yeterli. `npm run check` her ifadenin İngilizce anahtarıyla aynı yer tutucuları taşıdığını doğrular.
 
+## 6h. Android mobil arayüz ve tam oynanabilirlik (2.2.0)
+Android (ve dokunmatik telefon / tablet) kendi arayüzünü kullanır: `src/js/mobile.js` (responsive motor, safe area, HUD, araç çubuğu,
+dokunmatik giriş katmanı, build / yol / bölge modları, geri tuşu) + `src/js/mobile-panels.js` (build sayfası, inspector, City / Economy
+sayfaları, şehir haritası, bildirim merkezi, pause, mobil ayarlar, eğitim, düşük bellek, FPS hedefi, hata kurtarma, UI bounds denetimi)
++ `src/css/mobile.css`. Masaüstü arayüzü değişmedi.
+
+| Konu | Android |
+|---|---|
+| Ölçek | `--u` = ekranın kısa kenarı / 392 (tablet: / 640) × UI SCALE; yazı en az 11.5–12.5 px, dokunma alanı en az 42 px (LARGE TOUCH 52 px) |
+| Safe area | CSS `env(safe-area-inset-*)` ve Android kabuğundan `window.bctInsets(t, r, b, l)` (çentik, yuvarlak köşe, hareket çubuğu) |
+| Giriş önceliği | UI dokunuşu → build dokunuşu → kamera dokunuşu; ikinci parmak her tek parmak işlemini iptal eder |
+| Geri tuşu | oyun → pause · pause → devam · build → iptal · harita / sayfa / panel → kapat · menü → çıkış onayı |
+| Yeni ayarlar | Camera Sensitivity, FPS hedefi (AUTO/30/45/60), UI SCALE 80–140 %, otomatik kayıt 1/2/5/10 dk (Android varsayılanı 5 dk) |
+| Geliştirici | `SHOW UI BOUNDS` (Ayarlar → Graphics, yalnızca DEVELOPMENT build) — her öğenin X · Y · genişlik · yükseklik değeri |
+
+Tarayıcıda önizleme: `src/index.html?platform=android` (telefon boyutlu pencere + dokunmatik emülasyon).
+Otomatik test: `npm run test:mobile-ui` (Playwright gerekir: `npm i --no-save playwright && npx playwright install chromium`) →
+`dist/mobile-ui/mobile-ui-report.json`; hatalı ekranların görüntüleri aynı klasöre yazılır.
+
 ## 7. Pencere ve ayarlar
 
 - Başlangıç 1280×720, en küçük 1024×600; yeniden boyutlandırma, büyütme, küçültme, tam ekran.
@@ -460,7 +480,7 @@ Oyunun tamamı artık **Türkçe** oynanabilir — Windows EXE, Android APK ve t
 `electron/updater.js` dört adımı içerir: **Update Checker → Version Check → Download Update → Install Update**. Açmak için `package.json` içindeki `bctUpdate.manifestUrl` alanına https ile yayınlanan bir JSON adresi yazın:
 
 ```json
-{ "version": "2.0.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-2.1.0.exe", "sha256": "…", "notes": "Yeni binalar" }
+{ "version": "2.0.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-2.2.0.exe", "sha256": "…", "notes": "Yeni binalar" }
 ```
 
 Adres boşsa güncelleme kapalıdır. İnternet yoksa oyun sessizce devam eder. İndirilen installer'ın SHA-256 değeri doğrulanır. Kayıtlar kullanıcı klasöründe durduğu için güncellemeden etkilenmez.
@@ -504,5 +524,5 @@ Windows'ta son kontrol:
 
 ```text
 npm install → npm run dev → NEW CITY → şehir oluşur → Ctrl+S → pencereyi kapat (EXIT)
-→ npm run build:windows → dist\windows\BLOCK-CITY-TYCOON-Setup-2.1.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
+→ npm run build:windows → dist\windows\BLOCK-CITY-TYCOON-Setup-2.2.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
 ```

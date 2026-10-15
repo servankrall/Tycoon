@@ -1,0 +1,409 @@
+/* =====================================================================
+   BLOCK CITY TYCOON — MOBILE UI 2.0 (Part 13)
+   Android / touch phones and tablets. Everything is scoped to body.mobileUI; the desktop UI is unchanged.
+   One scale unit --u (set by mobile.js from the screen's short side × UI SCALE), safe area --sa-* (notch, camera hole,
+   rounded corners, navigation bar), minimum readable font sizes and touch targets that never go below 40 CSS px.
+   ===================================================================== */
+:root{--u:1px;--tk:1;--sa-t:0px;--sa-r:0px;--sa-b:0px;--sa-l:0px;--vh:100vh;--vw:100vw;}   /* set by mobile.js on <html> */
+body.mobileUI{
+  --g:calc(var(--u)*6);
+  --fs-xs:max(10.5px,calc(var(--u)*10.5*var(--tk)));
+  --fs-s:max(11.5px,calc(var(--u)*11.5*var(--tk)));
+  --fs:max(12.5px,calc(var(--u)*13*var(--tk)));
+  --fs-l:max(14px,calc(var(--u)*15*var(--tk)));
+  --fs-xl:max(17px,calc(var(--u)*19*var(--tk)));
+  --touch:max(42px,calc(var(--u)*44));
+  --hud-h:max(40px,calc(var(--u)*40));
+  --bar-h:max(48px,calc(var(--u)*52));
+  --L:calc(var(--sa-l) + var(--g));--R:calc(var(--sa-r) + var(--g));
+  --T:calc(var(--sa-t) + var(--u)*4);--B:calc(var(--sa-b) + var(--u)*4);
+  --below-hud:calc(var(--T) + var(--hud-h) * var(--hud-rows,1) + 4px * (var(--hud-rows,1) - 1) + var(--g));
+  --above-bar:calc(var(--B) + var(--bar-h) + var(--g));
+  --top-h:calc(var(--T) + var(--hud-h));--nav-h:var(--bar-h);--nav-w:0px;--right-w:0px;
+  font-size:var(--fs);
+}
+body.mobileUI.largeTouch{--touch:max(52px,calc(var(--u)*54));--hud-h:max(46px,calc(var(--u)*46));--bar-h:max(58px,calc(var(--u)*62));--g:calc(var(--u)*8);}
+
+/* ---------- the desktop chrome is not used on mobile (PC UI is never shrunk onto the phone) ---------- */
+body.mobileUI #topbar,body.mobileUI #leftnav,body.mobileUI #toolbar,body.mobileUI #rightToggle,body.mobileUI #bottomInfo,
+body.mobileUI #placeBar,body.mobileUI #dashboard,body.mobileUI #tutorial,body.mobileUI #tutObj,body.mobileUI #firstTip,
+body.mobileUI #debugBox,body.mobileUI #zonePicker,body.mobileUI #roadPop,body.mobileUI #overlayLabel{display:none !important;}
+#mHud,#mSide,#mBar,#mSheet.hidden,#mInspect.hidden,#mNotes.hidden,#mPage.hidden,#mMap.hidden,#mBuildBar.hidden,#mRoad.hidden{display:none;}
+body.mobileUI button{touch-action:manipulation;}
+body.mobileUI .mScroll{touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+.mX{flex:0 0 auto;width:var(--touch);height:var(--touch);border-radius:calc(var(--u)*12);background:var(--panel3);border:1px solid var(--line);font-size:max(16px,calc(var(--u)*18));font-weight:900;color:var(--text);display:flex;align-items:center;justify-content:center;}
+.mX.big{width:calc(var(--touch)*1.18);height:calc(var(--touch)*1.18);font-size:max(20px,calc(var(--u)*22));background:linear-gradient(180deg,#ff6b8b,#d8385d);border-color:#ff9db3;color:#fff;}
+
+/* ---------- MOBILE HUD (top) ---------- */
+body.mobileUI.inGame #mHud{display:grid;position:fixed;z-index:30;top:var(--T);left:var(--L);right:var(--R);height:var(--hud-h);grid-template-columns:minmax(0,1fr) max-content minmax(0,1fr);gap:var(--g);pointer-events:none;}
+#mHud .mGrp{display:flex;gap:calc(var(--u)*4);align-items:center;min-width:0;overflow:hidden;}
+#mHud .mL{justify-content:flex-start;} #mHud .mC{justify-content:center;overflow:visible;} #mHud .mR{justify-content:flex-end;}
+.mPill{pointer-events:auto;position:relative;display:flex;align-items:center;gap:calc(var(--u)*4);height:var(--hud-h);min-width:var(--hud-h);padding:0 calc(var(--u)*9);border-radius:calc(var(--u)*12);
+  background:rgba(18,21,43,.88);border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.35);color:var(--text);font-size:var(--fs);font-weight:800;white-space:nowrap;flex:0 0 auto;}
+.mPill::after{content:'';position:absolute;inset:-3px -1px;}
+.mPill i{font-style:normal;font-size:calc(var(--fs) * 1.1);line-height:1;}
+.mPill b{font-weight:800;}
+.mPill small{font-size:var(--fs-xs);color:var(--dim);font-weight:700;max-width:calc(var(--u)*92);overflow:hidden;text-overflow:ellipsis;}
+.mCity b{max-width:calc(var(--u)*118);overflow:hidden;text-overflow:ellipsis;}
+.mPill.bad{border-color:#ef476f;background:rgba(120,20,45,.88);} .mPill.warn{border-color:#ffd166;}
+.mPill.mIco{padding:0;justify-content:center;width:var(--hud-h);font-size:calc(var(--fs) * 1.2);}
+#mBellN{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#ef476f;color:#fff;font-size:10.5px;font-style:normal;font-weight:900;line-height:18px;text-align:center;}
+#mBellN.hidden{display:none;}
+/* compaction levels (mobile.js → fitMobileLayout) */
+#mHud.rows2 .mGrp{overflow:hidden;}
+#mHud.fit1 .mCity b,#mHud.fit1 .mPill small{display:none;}
+#mHud.fit2 .mUtil b{display:none;} #mHud.fit2 .mPill{padding:0 calc(var(--u)*6);}
+#mHud.fit3 .mDate i,#mHud.fit3 [data-mh="city"] i{display:none;} #mHud.fit3 .mGrp{gap:calc(var(--u)*3);}
+#mHud.fit4 .mPill{font-size:var(--fs-s);padding:0 calc(var(--u)*4);min-width:calc(var(--hud-h)*.86);} #mHud.fit4 .mPill.mIco{width:calc(var(--hud-h)*.86);}
+#mHud.fit5 .mPill{font-size:var(--fs-xs);padding:0 3px;min-width:max(36px,calc(var(--hud-h)*.78));gap:2px;} #mHud.fit5 .mPill.mIco{width:max(36px,calc(var(--hud-h)*.78));} #mHud.fit5 .mGrp{gap:2px;} #mHud.fit5 .mPill i{font-size:var(--fs-s);}
+/* side column (left, under the HUD): pause · speed · 🎯 camera reset · 🧭 minimap · ↺ north */
+body.mobileUI.inGame #mSide{display:flex;flex-direction:column;flex-wrap:wrap;align-content:flex-start;gap:calc(var(--u)*6);position:fixed;z-index:29;left:var(--L);top:var(--below-hud);
+  max-height:calc(var(--vh) - var(--below-hud) - var(--above-bar));pointer-events:none;}
+.mFab{pointer-events:auto;width:var(--touch);height:var(--touch);border-radius:calc(var(--u)*14);background:rgba(18,21,43,.88);border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.35);
+  color:var(--text);font-size:max(15px,calc(var(--u)*17));font-weight:900;display:flex;align-items:center;justify-content:center;white-space:nowrap;}
+.mFab.on{border-color:var(--gold);color:var(--gold);}
+#mSpeed{font-size:var(--fs-s);}
+body.mobileUI.mBuilding #mSide,body.mobileUI.mRoading #mSide{opacity:.85;}
+body.mobileUI.phone.mSheetOpen #mSide{display:none;}
+/* minimap (top right, under the HUD) */
+body.mobileUI #minimap{left:auto;right:var(--R) !important;top:var(--below-hud);width:clamp(92px,calc(var(--u)*120),170px);height:clamp(92px,calc(var(--u)*120),170px);z-index:28;border-radius:calc(var(--u)*12);}
+body.mobileUI:not(.inGame) #minimap,body.mobileUI.mInsOpen #minimap,body.mobileUI.mSheetOpen.tablet #minimap{display:none;}
+
+/* ---------- BOTTOM TOOLBAR ---------- */
+body.mobileUI.inGame #mBar{display:flex;position:fixed;z-index:30;left:var(--L);right:var(--R);bottom:var(--B);height:var(--bar-h);gap:calc(var(--u)*4);padding:calc(var(--u)*3);
+  border-radius:calc(var(--u)*16);background:rgba(18,21,43,.93);border:1px solid var(--line);box-shadow:var(--shadow);}
+#mBar .mBtn{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:calc(var(--u)*12);color:var(--dim);}
+#mBar .mBtn span{font-size:max(17px,calc(var(--u)*19));line-height:1;}
+#mBar .mBtn b{font-size:var(--fs-xs);font-weight:900;letter-spacing:.3px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#mBar .mBtn.on{background:var(--panel3);color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
+#mBar .mBtn:active{background:var(--panel2);}
+body.mobileUI.mBuilding #mBar,body.mobileUI.mRoading #mBar{display:none;}
+
+/* ---------- BUILD MODE bar: ghost status + ROTATE · CANCEL · CONFIRM ---------- */
+#mBuildBar,#mRoad{position:fixed;z-index:32;left:var(--L);right:var(--R);bottom:var(--B);background:rgba(20,24,52,.97);border:1px solid var(--line);border-radius:calc(var(--u)*16);box-shadow:var(--shadow);}
+#mBuildBar{display:flex;align-items:center;gap:var(--g);padding:calc(var(--u)*6) calc(var(--u)*8);}
+#mBuildBar .mbInfo{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.mbTop{display:flex;gap:8px;align-items:baseline;min-width:0;}
+.mbName{font-size:var(--fs);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.mbCost{font-size:var(--fs-s);color:var(--dim);white-space:nowrap;}
+.mbState{font-size:var(--fs-s);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.3px;}
+.mbState.ok{color:#8cffc1;} .mbState.bad{color:#ff8fa3;}
+.mChecks{display:flex;gap:4px;flex-wrap:nowrap;overflow:hidden;}
+.mChk{flex:0 0 auto;font-size:var(--fs-xs);padding:1px 6px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);white-space:nowrap;}
+.mChk em{font-style:normal;margin:0 3px;}
+.mChk.ok{border-color:#06d6a0;color:#8cffc1;} .mChk.warn{border-color:#ffd166;color:#ffd166;} .mChk.bad{border-color:#ef476f;color:#ff8fa3;} .mChk.na{opacity:.5;}
+body.phone:not(.portrait) .mChk em{display:none;}
+#mBuildBar .mbBtns{display:flex;gap:calc(var(--u)*6);flex:0 0 auto;}
+#mBuildBar .mbBtns .btn{min-height:var(--touch);min-width:calc(var(--touch) * 1.9);font-size:var(--fs-s);}
+#mBuildBar .btn:disabled{opacity:.45;filter:grayscale(.5);}
+
+/* ---------- ROAD / ZONE bar: types · START → DRAG → END → CONFIRM ---------- */
+#mRoad{display:flex;flex-direction:column;gap:calc(var(--u)*5);padding:calc(var(--u)*6) calc(var(--u)*8);}
+.mrHead{display:flex;align-items:center;gap:var(--g);min-width:0;}
+.mrHead>b{font-size:var(--fs-s);white-space:nowrap;}
+.mrTypes{flex:1;min-width:0;}
+.mrTypes button{flex:0 0 auto;min-height:var(--touch);min-width:calc(var(--u)*76);padding:2px 8px;border-radius:calc(var(--u)*10);background:var(--panel2);border:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:var(--fs-s);font-weight:800;color:var(--text);line-height:1.1;}
+.mrTypes button span{font-size:max(14px,calc(var(--u)*15));}
+.mrTypes button small{font-size:var(--fs-xs);color:var(--dim);font-weight:600;white-space:nowrap;}
+.mrTypes button.on{border-color:var(--gold);color:var(--gold);background:var(--panel3);} .mrTypes button.dis{opacity:.45;}
+.mrRow{display:flex;align-items:center;gap:var(--g);min-width:0;}
+.mrSteps{display:flex;gap:3px;align-items:center;flex:0 0 auto;font-weight:800;}
+.mrSteps span{font-size:var(--fs-xs);padding:3px 6px;border-radius:7px;background:var(--panel2);color:var(--dim);white-space:nowrap;}
+.mrSteps span.cur{background:var(--gold);color:#1a1300;} .mrSteps span.done{color:#8cffc1;} .mrSteps i{font-style:normal;color:var(--dim);font-size:var(--fs-xs);}
+.mrTip{flex:1;min-width:0;font-size:var(--fs-s);color:var(--dim);line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.mrTip b{color:var(--text);}
+.mrBtns{display:flex;gap:6px;flex:0 0 auto;}
+.mrBtns .btn{min-height:var(--touch);min-width:calc(var(--touch) * 1.8);font-size:var(--fs-s);}
+body.phone.shortScreen .mrSteps{display:none;}
+
+/* ---------- CHIPS & SHEETS ---------- */
+.mChips{flex:0 0 auto;display:flex;gap:calc(var(--u)*6);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;touch-action:pan-x;padding:2px 0;min-width:0;}
+.mChips::-webkit-scrollbar{display:none;}
+.mChip{flex:0 0 auto;min-height:var(--touch);padding:0 calc(var(--u)*12);border-radius:999px;background:var(--panel2);border:1px solid var(--line);font-size:var(--fs-s);font-weight:800;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;color:var(--text);}
+.mChip span{font-size:max(14px,calc(var(--u)*15));}
+.mChip.on{background:var(--panel3);border-color:var(--gold);color:var(--gold);}
+.mChip.small{min-height:calc(var(--touch) * .82);padding:0 10px;}
+#mSheet{position:fixed;z-index:40;left:var(--L);right:var(--R);bottom:var(--above-bar);max-height:calc(var(--vh) - var(--below-hud) - var(--above-bar));display:flex;flex-direction:column;
+  background:var(--panel-solid);border:1px solid var(--line);border-radius:calc(var(--u)*18);box-shadow:0 -6px 30px rgba(0,0,0,.5);animation:mSheetIn .2s ease;}
+.mSheetHead{display:flex;align-items:center;gap:var(--g);padding:calc(var(--u)*10) calc(var(--u)*8) calc(var(--u)*4) calc(var(--u)*12);position:relative;touch-action:none;}
+.mGrab{position:absolute;left:50%;top:4px;width:42px;height:4px;border-radius:4px;background:var(--panel3);transform:translateX(-50%);}
+.mSheetTitle{font-size:var(--fs-l);font-weight:900;white-space:nowrap;}
+.mSheetTools{flex:1;display:flex;justify-content:flex-end;gap:6px;min-width:0;}
+.mSheetTools .btn{min-height:calc(var(--touch) * .9);font-size:var(--fs-s);}
+.mSheetBody{overflow-y:auto;padding:0 calc(var(--u)*10) calc(var(--u)*10);flex:1 1 auto;min-height:0;}
+.mCats{position:sticky;top:0;z-index:2;background:var(--panel-solid);padding-bottom:4px;}
+.mCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*132),1fr));gap:var(--g);margin-top:var(--g);}
+.mCard{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:calc(var(--u)*8) calc(var(--u)*10);border-radius:calc(var(--u)*14);background:var(--panel2);border:1px solid var(--line);
+  text-align:left;min-height:calc(var(--u)*112);color:var(--text);min-width:0;position:relative;}
+.mcIcon{font-size:max(22px,calc(var(--u)*26));line-height:1.1;}
+.mcName{font-weight:900;font-size:var(--fs);line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;min-height:2.4em;width:100%;}
+.mcMeta{display:flex;justify-content:space-between;width:100%;gap:4px;align-items:center;min-width:0;}
+.mcCost{color:var(--gold);font-size:var(--fs);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.mcLvl{font-style:normal;flex:0 0 auto;font-size:var(--fs-xs);font-weight:800;padding:1px 6px;border-radius:6px;background:var(--panel3);color:var(--dim);}
+.mcLvl.no{color:#ff8fa3;}
+.mcGo{margin-top:auto;width:100%;text-align:center;font-size:var(--fs-xs);font-weight:900;letter-spacing:.6px;padding:4px;border-radius:8px;background:rgba(6,214,160,.18);color:#8cffc1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mCard.locked{opacity:.62;} .mCard.locked .mcGo{background:rgba(239,71,111,.15);color:#ff8fa3;}
+.mCard.poor .mcGo{background:rgba(255,209,102,.15);color:var(--gold);}
+.mCard:active{transform:scale(.97);}
+.shake{animation:mShake .32s;}
+.mActs{display:flex;flex-wrap:wrap;gap:var(--g);margin-top:var(--g);}
+.mActs .btn{min-height:var(--touch);flex:1 1 calc(var(--u)*150);font-size:var(--fs-s);white-space:normal;line-height:1.15;}
+@keyframes mSheetIn{from{transform:translateY(40px);opacity:0;}to{transform:none;opacity:1;}}
+@keyframes mShake{0%,100%{translate:0;}25%{translate:-5px 0;}75%{translate:5px 0;}}
+@keyframes mSlideL{from{transform:translateX(30px);opacity:0;}to{transform:none;opacity:1;}}
+
+/* ---------- INSPECTOR & NOTIFICATION CENTER (right side, never covers the whole screen) ---------- */
+#mInspect,#mNotes{position:fixed;z-index:45;right:var(--R);top:var(--below-hud);width:min(calc(var(--u)*300),46vw);max-height:calc(var(--vh) - var(--below-hud) - var(--above-bar));
+  display:flex;flex-direction:column;background:rgba(22,26,54,.97);border:1px solid var(--line);border-radius:calc(var(--u)*16);box-shadow:var(--shadow);animation:mSlideL .18s ease;}
+.miHead{display:flex;align-items:center;gap:8px;padding:calc(var(--u)*7) calc(var(--u)*7) calc(var(--u)*4) calc(var(--u)*10);}
+.miIcon{font-size:max(22px,calc(var(--u)*26));line-height:1;}
+.miTitle{flex:1;min-width:0;}
+.miTitle b{display:block;font-size:var(--fs-l);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.miTitle small{display:block;font-size:var(--fs-xs);color:var(--dim);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.miBody{overflow-y:auto;padding:0 calc(var(--u)*10) calc(var(--u)*6);flex:1 1 auto;min-height:min(calc(var(--u)*96),40%);}
+.miRow{display:flex;justify-content:space-between;gap:8px;padding:calc(var(--u)*5) 0;border-bottom:1px solid rgba(140,150,255,.08);font-size:var(--fs);}
+.miRow span{color:var(--dim);white-space:nowrap;} .miRow b{text-align:right;min-width:0;overflow-wrap:anywhere;}
+.miStatus{font-size:var(--fs-s);font-weight:800;border:1px solid;border-radius:8px;padding:4px 8px;margin:2px 0 4px;}
+.miBar{display:grid;grid-template-columns:minmax(0,auto) 1fr auto;gap:6px;align-items:center;font-size:var(--fs-s);padding:3px 0;}
+.miBar span{white-space:nowrap;} .miBar i{height:6px;border-radius:4px;background:var(--panel3);overflow:hidden;display:block;} .miBar em{display:block;height:100%;}
+.miActs{display:flex;flex-wrap:wrap;gap:6px;padding:calc(var(--u)*8);border-top:1px solid var(--line);}
+.miActs{flex:0 0 auto;} .miActs .btn{flex:1 1 0;min-width:calc(var(--u)*64);min-height:var(--touch);padding:4px 6px;font-size:var(--fs-xs);white-space:normal;line-height:1.1;}
+.mNoteTabs{padding:0 calc(var(--u)*8) 4px;}
+.mNote{padding:calc(var(--u)*7) 2px;border-bottom:1px solid rgba(140,150,255,.08);font-size:var(--fs);line-height:1.3;}
+.mNote span{display:block;overflow-wrap:anywhere;} .mNote small{color:var(--mute);font-size:var(--fs-xs);}
+.mNote.bad span{color:#ff8fa3;} .mNote.good span{color:#8cffc1;} .mNote.gold span{color:var(--gold);}
+.mMoreStats{display:flex;flex-direction:column;gap:4px;font-size:var(--fs);} .mMoreStats span{display:block;padding:3px 0;border-bottom:1px solid rgba(140,150,255,.08);}
+.mMoreActs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;} .mMoreActs .btn{min-height:var(--touch);}
+#mToolHint{position:fixed;z-index:33;left:50%;top:var(--below-hud);transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border-radius:999px;background:rgba(120,20,45,.92);border:1px solid #ef476f;font-weight:800;font-size:var(--fs-s);max-width:calc(var(--vw) - var(--L) - var(--R) - 2*var(--touch));}
+#mToolHint span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;} #mToolHint .btn{min-height:calc(var(--touch) * .85);}
+#mToolHint.hidden{display:none;}
+body.mobileUI:not(.mBulldoze) #mToolHint{display:none;}
+
+/* ---------- PAGES (City, Economy) & CITY MAP: full screen inside the safe area ---------- */
+#mPage,#mMap{position:fixed;inset:0;z-index:100;background:linear-gradient(180deg,#141838,#0d1027);display:flex;flex-direction:column;padding:var(--T) var(--R) var(--B) var(--L);}
+.mPageHead,.mMapHead{display:flex;align-items:center;gap:var(--g);min-height:calc(var(--touch) * 1.18);padding:2px 0 6px;}
+.mPageTitle{flex:1;min-width:0;font-size:var(--fs-l);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mPageTools .btn{min-height:calc(var(--touch) * .9);font-size:var(--fs-s);}
+.mPageBody{flex:1;min-height:0;overflow-y:auto;padding-bottom:8px;}
+.mStatGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*170),1fr));gap:var(--g);}
+.mStatCard{background:var(--panel);border:1px solid var(--line);border-radius:calc(var(--u)*14);padding:calc(var(--u)*10) calc(var(--u)*12);min-width:0;}
+.mStatCard.warn{border-color:rgba(255,209,102,.65);}
+.msTop{display:flex;gap:6px;align-items:center;color:var(--dim);font-size:var(--fs-s);font-weight:800;text-transform:uppercase;letter-spacing:.5px;min-width:0;}
+.msTop .msLabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.msIcon{font-size:max(15px,calc(var(--u)*16));}
+.msValue{display:block;font-size:var(--fs-xl);font-weight:900;margin:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.msSub{display:block;font-size:var(--fs-s);color:var(--dim);line-height:1.3;overflow-wrap:anywhere;}
+.msSub em{font-style:normal;font-weight:800;}
+.msBar{display:block;height:6px;border-radius:4px;background:var(--panel3);margin-top:6px;overflow:hidden;}
+.msBar em{display:block;height:100%;background:linear-gradient(90deg,#06d6a0,#4cc9f0);}
+.mGraphBlock{margin-top:var(--g);background:var(--panel);border:1px solid var(--line);border-radius:calc(var(--u)*14);padding:calc(var(--u)*8);min-width:0;}
+.mGraphWrap{width:100%;height:calc(var(--u)*170);max-height:46vh;min-height:110px;touch-action:none;margin-top:6px;position:relative;overflow:hidden;}
+.mGraphWrap canvas{display:block;}
+.mGraphFoot{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;}
+.mRange{display:flex;gap:4px;}
+.mMapHead>b{font-size:var(--fs-l);white-space:nowrap;}
+#mMapLayers{flex:1;}
+.mMapBody{flex:1;min-height:0;position:relative;border-radius:calc(var(--u)*12);overflow:hidden;background:#0b0e1f;}
+#mMapCv{display:block;touch-action:none;}
+.mMapLegend{position:absolute;left:6px;bottom:6px;right:6px;background:rgba(8,10,25,.78);padding:4px 8px;border-radius:8px;pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* ---------- MODALS, PAUSE, SETTINGS, SYSTEM DIALOGS ---------- */
+body.mobileUI #modalWrap{padding:var(--T) var(--R) var(--B) var(--L);}
+body.mobileUI #modal{width:100%;max-width:min(780px,100%);max-height:100%;border-radius:calc(var(--u)*16);}
+body.mobileUI #modal.mSettings{max-width:1000px;height:100%;}
+body.mobileUI #modal.p10Wide{max-width:100%;height:100%;}
+body.mobileUI #modalHead{min-height:calc(var(--touch) + 10px);padding:5px 6px 5px 14px;}
+body.mobileUI #modalHead h2{font-size:var(--fs-l);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+body.mobileUI .closeX{width:var(--touch);height:var(--touch);font-size:max(16px,calc(var(--u)*18));flex:0 0 auto;color:var(--text);background:var(--panel3);}
+body.mobileUI #modalBody{font-size:var(--fs);overflow:auto;touch-action:pan-x pan-y;overscroll-behavior:contain;padding:0 calc(var(--u)*12) calc(var(--u)*12);min-height:0;}
+body.mobileUI #modalBody table,body.mobileUI #lpBody table,body.mobileUI #admBody table{display:block;overflow-x:auto;max-width:100%;touch-action:pan-x pan-y;}
+body.mobileUI #modalBody .btn,body.mobileUI #lpBody .btn,body.mobileUI #rpBody .btn{min-height:max(36px,calc(var(--touch) * .82));}
+body.mobileUI #modalBody input,body.mobileUI #modalBody select,body.mobileUI .menuBox input{min-height:var(--touch);font-size:16px;}
+body.mobileUI .grid3,body.mobileUI .grid4,body.mobileUI .grid5{grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*130),1fr)) !important;}
+body.mobileUI canvas#worldCanvas{width:100%;max-height:48vh;}
+.mPause{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,calc(var(--u)*180)),1fr));gap:calc(var(--u)*8);}
+.mPause .btn{min-height:calc(var(--touch) * 1.15);font-size:var(--fs-l);}
+.mPause [data-mp="resume"]{grid-column:1/-1;}
+.mPauseMore{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;} .mPauseMore .btn{min-height:max(38px,calc(var(--touch) * .85));flex:1 1 auto;}
+#mSaveState{margin-top:8px;min-height:1.2em;font-weight:800;color:var(--gold);}
+.mHelp{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,calc(var(--u)*260)),1fr));gap:8px;}
+.mHelpRow{display:flex;gap:10px;align-items:flex-start;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;}
+.mHelpRow>span{font-size:max(22px,calc(var(--u)*24));} .mHelpRow b{font-size:var(--fs);} .mHelpRow p{font-size:var(--fs-s);color:var(--dim);line-height:1.3;}
+.mSetTabs{position:sticky;top:0;background:var(--panel-solid);z-index:2;padding-bottom:6px;}
+.mSetList{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,calc(var(--u)*330)),1fr));gap:var(--g);}
+.mSetCard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:calc(var(--u)*14);padding:calc(var(--u)*10) calc(var(--u)*12);flex-wrap:wrap;min-width:0;}
+.mscText{flex:1 1 calc(var(--u)*150);min-width:0;}
+.mscText b{display:block;font-size:var(--fs);overflow-wrap:anywhere;}
+.mscText span{display:block;font-size:var(--fs-s);color:var(--dim);line-height:1.3;margin-top:2px;overflow-wrap:anywhere;}
+.mscCtl{flex:0 1 auto;max-width:100%;}
+.mSeg,.mBtns{display:flex;flex-wrap:wrap;gap:4px;}
+.mSeg button{min-height:var(--touch);min-width:var(--touch);padding:0 10px;border-radius:10px;background:var(--panel3);border:1px solid var(--line);font-size:var(--fs-s);font-weight:800;}
+.mSeg button.on{background:linear-gradient(180deg,#ffd166,#e9b340);color:#2a1d00;border-color:#ffe199;}
+.mBtns .btn{min-height:var(--touch);}
+.mTog{min-height:var(--touch);min-width:calc(var(--touch) * 1.75);display:flex;align-items:center;justify-content:center;gap:6px;padding:0 10px;border-radius:999px;background:var(--panel3);border:1px solid var(--line);font-weight:900;font-size:var(--fs-s);}
+.mTog i{width:16px;height:16px;border-radius:50%;background:var(--dim);}
+.mTog.on{background:rgba(6,214,160,.22);border-color:#06d6a0;color:#8cffc1;} .mTog.on i{background:#06d6a0;}
+.mSlider{width:min(calc(var(--u)*260),100%);}
+.mSlider input[type=range]{width:100%;height:var(--touch);accent-color:var(--gold);touch-action:pan-y;}
+.mSliderLbl{display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--dim);font-weight:800;}
+body.mobileUI #sysDialog{padding:var(--T) var(--R) var(--B) var(--L);}
+body.mobileUI #sysBox{max-height:100%;overflow-y:auto;touch-action:pan-y;padding:calc(var(--u)*14) calc(var(--u)*16);width:min(560px,100%);}
+body.mobileUI #sysTitle{font-size:var(--fs-l);}
+body.mobileUI #sysText{font-size:var(--fs);}
+body.mobileUI #sysBtns{flex-wrap:wrap;} body.mobileUI #sysBtns .btn{min-height:var(--touch);flex:1 1 auto;}
+body.mobileUI .flRow{margin:6px 0;} body.mobileUI .flSeg button{min-height:var(--touch);font-size:var(--fs-s);}
+
+/* ---------- desktop deep panels inside a mobile container (Companies, Research, World, statistics) ---------- */
+body.mobileUI #leftPanel{position:fixed;z-index:60;left:var(--L);right:var(--R);top:var(--T);bottom:var(--B);width:auto;height:auto;max-height:none;border-radius:calc(var(--u)*16);border:1px solid var(--line);
+  transform:translateY(calc(100% + 40px));display:flex;flex-direction:column;visibility:hidden;transition:transform .22s ease,visibility 0s .22s;}
+body.mobileUI #leftPanel.open{transform:none;visibility:visible;transition:transform .22s ease;}
+body.mobileUI #leftPanel .panelHead{min-height:calc(var(--touch) + 8px);padding:4px 6px 4px 14px;}
+body.mobileUI #leftPanel .panelHead h2{font-size:var(--fs-l);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+body.mobileUI #lpTabs{flex-wrap:nowrap;overflow-x:auto;touch-action:pan-x;scrollbar-width:none;padding:0 10px 6px;}
+body.mobileUI #lpTabs .tab,body.mobileUI #rpTabs .tab{flex:0 0 auto;min-height:max(38px,calc(var(--touch) * .9));font-size:var(--fs-s);}
+body.mobileUI #lpBody{flex:1;min-height:0;overflow:auto;touch-action:pan-y;overscroll-behavior:contain;font-size:var(--fs);}
+body.mobileUI #rightPanel{display:none;}
+body.mobileUI.mRightOpen #rightPanel{display:flex;flex-direction:column;position:fixed;z-index:55;left:auto;right:var(--R);top:var(--below-hud);bottom:var(--above-bar);width:min(calc(var(--u)*340),62vw);transform:none;border-radius:calc(var(--u)*16);border:1px solid var(--line);}
+body.mobileUI #rpBody{flex:1;min-height:0;overflow:auto;touch-action:pan-y;}
+body.mobileUI #advisor{display:none;}
+#mRpClose{display:none;}
+body.mobileUI #mRpClose{display:flex;position:absolute;top:6px;right:6px;z-index:3;}
+body.mobileUI #rpTabs{padding-right:calc(var(--touch) + 12px) !important;flex-wrap:nowrap;overflow-x:auto;}
+body.mobileUI .popover{left:var(--L) !important;top:var(--below-hud) !important;max-height:calc(var(--vh) - var(--below-hud) - var(--above-bar));overflow-y:auto;z-index:70;}
+body.mobileUI .popover button{min-height:max(38px,calc(var(--touch) * .85));font-size:var(--fs-s);}
+
+/* ---------- toasts, held notifications, save chip, story dialogue, issues, FPS ---------- */
+body.mobileUI #toasts{top:var(--below-hud);width:min(62vw,420px);z-index:130;}
+body.mobileUI .toast{font-size:var(--fs-s);padding:6px 12px;max-width:100%;overflow-wrap:anywhere;}
+body.mobileUI .toast:nth-last-child(n+3){display:none;}
+#mHeld{position:fixed;z-index:131;left:50%;transform:translateX(-50%);bottom:calc(var(--above-bar) + 4px);min-height:36px;padding:0 12px;border-radius:999px;background:rgba(20,24,52,.96);border:1px solid var(--gold);color:var(--gold);font-weight:900;font-size:var(--fs-s);}
+#mHeld.hidden{display:none;}
+#mSaveChip{position:fixed;z-index:1200;left:50%;top:var(--below-hud);transform:translateX(-50%);padding:8px 16px;border-radius:999px;background:rgba(20,24,52,.97);border:1px solid var(--gold);color:var(--gold);font-weight:900;font-size:var(--fs);letter-spacing:.5px;box-shadow:var(--shadow);white-space:nowrap;}
+#mSaveChip.good{border-color:#06d6a0;color:#8cffc1;} #mSaveChip.bad{border-color:#ef476f;color:#ff8fa3;} #mSaveChip.hidden{display:none;}
+body.mobileUI #dialogBox{left:var(--L);right:auto;transform:none;bottom:var(--above-bar);width:min(560px,calc(var(--vw) - var(--L) - var(--R)));max-height:calc(var(--vh) - var(--below-hud) - var(--above-bar));overflow-y:auto;padding:10px 12px;font-size:var(--fs);}
+body.mobileUI #dialogBox .btn{min-height:var(--touch);}
+body.mobileUI #issuesBar{top:var(--below-hud);left:calc(var(--L) + var(--touch) * 2 + 18px);right:calc(var(--R) + clamp(92px,calc(var(--u)*120),170px) + 12px);max-height:34px;overflow:hidden;justify-content:flex-start;}
+body.mobileUI #issuesBar > *:nth-child(n+2){display:none;}
+body.mobileUI #issuesBar > *{font-size:var(--fs-xs);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+body.mobileUI.mSheetOpen #issuesBar,body.mobileUI.mInsOpen #issuesBar,body.mobileUI.mBuilding #issuesBar,body.mobileUI.mRoading #issuesBar{display:none !important;}
+body.mobileUI:not(.inGame) #issuesBar{display:none !important;}
+body.mobileUI #fpsBox{top:auto;right:auto;left:calc(var(--L) + var(--touch) + 10px);bottom:var(--above-bar);font-size:10.5px;}
+body.mobileUI #levelFlash div{font-size:max(24px,calc(var(--u)*30));}
+body.mobileUI #dailyCard{right:var(--R);left:auto;bottom:var(--above-bar);width:min(300px,calc(var(--vw) - var(--L) - var(--R)));max-height:calc(var(--vh) - var(--below-hud) - var(--above-bar));overflow-y:auto;}
+body.mobileUI #heatLegend{left:calc(var(--L) + var(--touch) + 10px);top:var(--below-hud);}
+body.mobileUI #admPill{right:var(--R);bottom:calc(var(--above-bar) + 4px);min-height:36px;}
+body.mobileUI #photoBar{bottom:var(--B);left:var(--L);right:var(--R);flex-wrap:wrap;}
+body.mobileUI #photoBar .btn{min-height:var(--touch);}
+body.mobileUI #paletteWrap{padding:var(--T) var(--R) var(--B) var(--L);}
+
+/* ---------- PLEASE ROTATE YOUR DEVICE ---------- */
+#mRotateMsg{position:fixed;inset:0;z-index:2000;background:radial-gradient(ellipse at 50% 30%,#2a3170 0%,#0d1027 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;}
+#mRotateMsg.hidden{display:none;}
+#mRotateMsg .mrIcon{font-size:64px;animation:mRot 2.2s ease-in-out infinite;} #mRotateMsg b{font-size:20px;letter-spacing:1px;color:var(--gold);} #mRotateMsg p{color:var(--dim);font-size:14px;}
+#mRotateMsg .btn{min-height:44px;}
+@keyframes mRot{0%,30%{transform:rotate(0);}60%,100%{transform:rotate(-90deg);}}
+
+/* ---------- MOBILE TUTORIAL ---------- */
+#mTut{position:fixed;inset:0;z-index:1100;background:rgba(5,6,18,.55);}
+#mTut .mtRing{position:absolute;border:3px solid var(--gold);border-radius:14px;box-shadow:0 0 0 4px rgba(255,209,102,.25),0 0 26px rgba(255,209,102,.7);animation:mPulse 1.2s ease-in-out infinite;pointer-events:none;}
+#mTut .mtCard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(calc(var(--u)*440),calc(100% - var(--L) - var(--R)));max-height:calc(100% - var(--T) - var(--B) - 8px);overflow-y:auto;
+  background:linear-gradient(180deg,#1b1f40,#12152b);border:1px solid var(--line);border-radius:18px;padding:calc(var(--u)*14);text-align:center;box-shadow:var(--shadow);}
+#mTut .mtCard.up{top:calc(var(--T) + 8px);transform:translateX(-50%);}
+#mTut .mtIcon{font-size:max(36px,calc(var(--u)*44));line-height:1.1;} #mTut .mtTitle{font-weight:900;letter-spacing:1px;color:var(--gold);margin:4px 0;font-size:var(--fs-l);}
+#mTut p{font-size:var(--fs);line-height:1.45;}
+#mTut .mtDots{display:flex;justify-content:center;gap:5px;margin:8px 0;} #mTut .mtDots i{width:8px;height:8px;border-radius:50%;background:var(--panel3);} #mTut .mtDots i.on{background:var(--gold);}
+#mTut .mtBtns{display:flex;gap:8px;} #mTut .mtBtns .btn{flex:1;min-height:var(--touch);font-size:var(--fs);}
+@keyframes mPulse{0%,100%{opacity:1;}50%{opacity:.55;}}
+
+/* ---------- SHOW UI BOUNDS (development builds only) ---------- */
+#mBounds{position:fixed;inset:0;z-index:5000;pointer-events:none;}
+#mBounds i{position:absolute;outline:1px solid rgba(0,255,200,.9);}
+#mBounds i.bad{outline:2px solid #ff2d55;}
+#mBounds i.mbSafe{outline:1px dashed rgba(255,209,102,.9);}
+#mBounds b{position:absolute;left:0;top:0;font:9px/1.2 ui-monospace,monospace;background:rgba(0,0,0,.75);color:#7fffd4;padding:1px 3px;white-space:nowrap;}
+#mBounds i.bad b{color:#ff8fa3;}
+
+/* ---------- MAIN MENU, NEW CITY, LOAD, LOADING ---------- */
+body.mobileUI #titleScreen{overflow-y:auto;touch-action:pan-y;justify-content:flex-start;padding:calc(var(--T) + 6px) var(--R) calc(var(--B) + 6px) var(--L);gap:calc(var(--u)*10);}
+body.mobileUI #titleScreen > *{flex-shrink:0;}
+body.mobileUI #titleLogo{margin-top:auto;}
+body.mobileUI .menuBox{width:min(760px,100%);max-height:none;overflow:visible;padding:calc(var(--u)*12);font-size:var(--fs);}
+body.mobileUI .menuBox:last-of-type{margin-bottom:auto;}
+body.mobileUI .menuBox h2{font-size:var(--fs-l);}
+body.mobileUI .menuBox .btn{min-height:var(--touch);font-size:var(--fs-s);}
+body.mobileUI .menuBox .seg{flex-wrap:wrap;} body.mobileUI .menuBox .seg button{min-height:var(--touch);font-size:var(--fs-s);}
+body.mobileUI .menuBox .fld{font-size:var(--fs-s);}
+body.mobileUI #slotList .btn{min-height:var(--touch);}
+#menuMain.mobMenu .menuRow .menuBtn:not([data-menu="sandbox"]):not([data-menu="scenario"]):not([data-menu="challenges"]),#menuMain.mobMenu #menuImportOld,#menuMain.mobMenu #menuExportAll{display:none;}
+#menuMain.mobMenu .menuBtn{min-height:calc(var(--touch) * 1.05);font-size:var(--fs-l);}
+#menuMain.mobMenu .menuRow{gap:6px;flex-wrap:wrap;} #menuMain.mobMenu .menuRow .menuBtn{flex:1 1 calc(var(--u)*130);}
+#menuMain.mobMenu #playBtn:not(.hidden),#menuMain.mobMenu [data-menu="new"]{font-size:var(--fs-l);}
+body.mobileUI #titleHint{display:none;}
+@media (orientation:landscape) and (max-height:520px){
+  body.mobileUI #titleLogo{font-size:clamp(26px,7vh,40px);margin-top:4px;} body.mobileUI #titleSub{font-size:11px;letter-spacing:4px;} body.mobileUI #titleBlocks{display:none;} body.mobileUI #titleVersion{margin:0;}
+  #menuMain.mobMenu{display:grid;grid-template-columns:1fr 1fr;gap:calc(var(--u)*6);align-items:start;}
+  #menuMain.mobMenu #continueCard,#menuMain.mobMenu .menuRow{grid-column:1/-1;}
+  #menuMain.mobMenu #continueCard{display:none;}
+  body.mobileUI .menuBox .fld{display:grid;grid-template-columns:minmax(110px,24%) 1fr;align-items:center;gap:6px;}
+}
+@media (max-height:520px){
+  #bootSplash{gap:6px;padding:10px;flex-wrap:wrap;}
+  #bsIcon{width:56px;height:56px;} .bsLogo{font-size:clamp(24px,7vh,40px);} .bsSub{font-size:10px;letter-spacing:3px;line-height:1.3;}
+  .bsSub br{display:none;}
+  #bsList{columns:2;column-gap:18px;width:min(460px,86vw);font-size:11px;line-height:1.5;}
+}
+body.mobileUI #wgProgress{padding:var(--T) var(--R) var(--B) var(--L);}
+body.mobileUI #wgBox{max-height:100%;display:flex;flex-direction:column;padding:calc(var(--u)*12) calc(var(--u)*14);width:min(600px,100%);}
+body.mobileUI #wgTitle{font-size:var(--fs);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+body.mobileUI #wgRows{overflow-y:auto;min-height:0;flex:1 1 auto;touch-action:pan-y;}
+body.mobileUI .wgRow{font-size:var(--fs-xs);}
+#wgHead{display:none;}
+body.mobileUI #wgHead{display:block;margin:6px 0 8px;}
+body.mobileUI #wgHead b{display:block;font-size:var(--fs-l);color:var(--gold);}
+body.mobileUI #wgHead i{display:block;height:8px;border-radius:5px;background:var(--panel3);overflow:hidden;margin-top:4px;}
+body.mobileUI #wgHead em{display:block;height:100%;background:linear-gradient(90deg,#06d6a0,#ffd166);transition:width .2s;}
+
+/* ---------- ADMIN (authorised admins only): responsive — phone 1 column, tablet 2–3 columns ---------- */
+body.mobileUI #adminCenter{display:flex;flex-direction:column;padding:var(--T) var(--R) var(--B) var(--L);}
+body.mobileUI #admTop{flex-wrap:wrap;gap:6px;padding:6px 8px;}
+body.mobileUI #admBrand{font-size:var(--fs);} body.mobileUI #admSearch{flex:1 1 180px;min-height:var(--touch);font-size:16px;min-width:0;}
+body.mobileUI #admTop .btn,body.mobileUI #admTop .closeX{min-height:var(--touch);}
+body.mobileUI #admHero{display:flex;overflow-x:auto;gap:6px;touch-action:pan-x;padding:6px 8px;flex:0 0 auto;}
+body.mobileUI #admHero .btn{flex:0 0 auto;min-height:var(--touch);}
+body.mobileUI #admWorldStatus{flex:0 0 auto;max-height:22vh;overflow:auto;}
+body.mobileUI #admMain{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}
+body.mobileUI #admNavList{display:flex;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;max-height:none;border-right:0;border-bottom:1px solid var(--line);touch-action:pan-x;flex:0 0 auto;}
+body.mobileUI #admNavList .admNav,body.mobileUI #admNavList button{flex:0 0 auto;width:auto;min-height:max(38px,calc(var(--touch) * .9));white-space:nowrap;}
+body.mobileUI #admBody{flex:1 1 auto;min-height:0;overflow:auto;touch-action:pan-y;font-size:var(--fs);}
+body.mobileUI #admBody .btn{min-height:max(36px,calc(var(--touch) * .82));}
+body.mobileUI.phone #admBody [class*="grid"],body.mobileUI.phone #admBody .admCustom{grid-template-columns:1fr !important;}
+body.mobileUI #admConsole{flex:0 0 auto;max-height:26vh;overflow:auto;}
+body.mobileUI #admCmd{min-height:var(--touch);font-size:16px;}
+body.mobileUI.tablet #admMain{display:grid;grid-template-columns:minmax(170px,230px) 1fr;}
+body.mobileUI.tablet #admNavList{flex-direction:column;overflow-y:auto;overflow-x:hidden;border-right:1px solid var(--line);border-bottom:0;touch-action:pan-y;}
+body.mobileUI.tablet #admBody .grid3,body.mobileUI.tablet #admBody .grid4{grid-template-columns:repeat(3,minmax(0,1fr)) !important;}
+body.mobileUI #admLoginBox{max-height:calc(var(--vh) - var(--T) - var(--B));overflow-y:auto;}
+
+/* ---------- TABLET: Build menu left · world centre · inspector right · toolbar bottom ---------- */
+body.mobileUI.tablet #mSheet{right:auto;width:min(calc(var(--u)*400),42vw);top:var(--below-hud);bottom:var(--above-bar);max-height:none;animation:mSlideL .2s ease;}
+body.mobileUI.tablet .mGrab{display:none;}
+body.mobileUI.tablet #mInspect,body.mobileUI.tablet #mNotes{width:min(calc(var(--u)*340),36vw);bottom:var(--above-bar);}
+body.mobileUI.tablet.mSheetOpen #mSide{left:calc(var(--L) + min(calc(var(--u)*400),42vw) + var(--g));}
+body.mobileUI.tablet #mBuildBar,body.mobileUI.tablet #mRoad{left:50%;right:auto;transform:translateX(-50%);width:min(860px,calc(var(--vw) - var(--L) - var(--R)));}
+body.mobileUI.tablet .mStatGrid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));}
+
+/* ---------- PORTRAIT (only when the player chose portrait, or on tablets) ---------- */
+/* two-row HUD: portrait, or a very large UI SCALE on a small phone (set by fitMobileLayout when one row can't fit) */
+body.mobileUI.inGame #mHud.rows2{grid-template-columns:minmax(0,1fr) max-content;grid-template-rows:var(--hud-h) var(--hud-h);height:calc(var(--hud-h) * 2 + 4px);row-gap:4px;}
+body.mobileUI #mHud.rows2 .mL{grid-column:1;grid-row:1;} body.mobileUI #mHud.rows2 .mC{grid-column:2;grid-row:1;justify-content:flex-end;} body.mobileUI #mHud.rows2 .mR{grid-column:1/-1;grid-row:2;}
+body.mobileUI.portrait #mInspect,body.mobileUI.portrait #mNotes{left:var(--L);width:auto;top:auto;bottom:var(--above-bar);max-height:min(56vh,calc(var(--vh) - var(--below-hud) - var(--above-bar)));}
+body.mobileUI.portrait #mBuildBar{flex-direction:column;align-items:stretch;}
+body.mobileUI.portrait #mBuildBar .mbBtns .btn{flex:1;min-width:0;}
+body.mobileUI.portrait .mrRow{flex-wrap:wrap;} body.mobileUI.portrait .mrBtns{width:100%;} body.mobileUI.portrait .mrBtns .btn{flex:1;}
+body.mobileUI.portrait #mBar .mBtn b{font-size:max(9.5px,calc(var(--u)*9.5));letter-spacing:0;}
+body.mobileUI.portrait #mSheet{max-height:calc(var(--vh) * .62);}
+body.mobileUI.portrait #toasts{width:calc(var(--vw) - var(--L) - var(--R) - 2*var(--touch));}
+/* chip rows that share a row with a title / close button take the remaining width and scroll */
+.mrHead .mrTypes,.mMapHead #mMapLayers{flex:1 1 auto;min-width:0;}
