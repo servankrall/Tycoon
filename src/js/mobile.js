@@ -10,7 +10,7 @@
    - BOTTOM TOOLBAR: BUILD · ROAD · ZONE · TRANSPORT · CITY · ECONOMY · MAP
    - INPUT LAYER: UI touch > build touch > camera touch. One finger: camera (or the ghost / road being drawn), two fingers:
      pan + pinch zoom OR twist rotate (whichever starts first), taps never fire after a multi-touch gesture
-   - BUILD MODE (ghost preview, BUILDABLE / CANNOT BUILD, ROTATE · CANCEL · CONFIRM), ROAD and ZONE modes
+   - BUILD MODE (ghost preview, VALID / INVALID with written reasons, ROTATE · CANCEL · BUILD), ROAD and ZONE modes
      (START → DRAG → END → CONFIRM), the Android back button, orientation and the UI bounds audit.
    Panels, inspectors, map, settings, pause, notifications and the tutorial: mobile-panels.js. */
 
@@ -20,6 +20,7 @@ const MOB = {
 };
 const RESP = { w: 0, h: 0, short: 0, tablet: false, portrait: false, scale: 1, sa: { t: 0, r: 0, b: 0, l: 0 }, native: null };
 const CAM_SENS = { LOW: 0.6, MEDIUM: 1, HIGH: 1.55 };
+const CAM_RATE = { LOW: 0.6, MEDIUM: 1, HIGH: 1.5 };                 // Settings → Camera: Zoom Speed · Rotation Speed
 function camSens() { return (CAM_SENS[GSET.camSens] || 1) * ((GSET.cameraSpeed || 100) / 100); }
 function mobOn() { return IS_MOBILE && document.body.classList.contains('mobileUI'); }
 
@@ -123,35 +124,39 @@ function updateRotateOverlay() {
 function buildMobileHud() {
   if (!IS_MOBILE || MOB.hud) return;
   const top = document.createElement('div'); top.id = 'mHud';
+  /* HUD 2.0 — left: level · city · date · centre: population · happiness · right: money · power · water · 🔔 · ≡ (HUD mode) */
   top.innerHTML =
     '<div class="mGrp mL">' +
+    '<button class="mPill mLvlP" data-mh="city" aria-label="City level"><i>🏆</i><b id="mLvl">1</b><small id="mLvlN"></small></button>' +
     '<button class="mPill mCity" data-mh="cityhall" aria-label="City"><i>🏙</i><b id="mCity" class="noTr">Block City</b></button>' +
-    '<button class="mPill" data-mh="economy" data-mstat="money" aria-label="Money"><i>💰</i><b id="mMoney">$0</b></button>' +
-    '<button class="mPill" data-mh="city" data-mstat="pop" aria-label="Population"><i>👥</i><b id="mPop">0</b></button></div>' +
+    '<button class="mPill mDate" data-mh="speed" aria-label="Date and speed"><i>📅</i><b id="mDate">Day 1</b></button></div>' +
     '<div class="mGrp mC">' +
-    '<button class="mPill" data-mh="city" aria-label="City level"><i>🏆</i><b id="mLvl">1</b><small id="mLvlN"></small></button>' +
-    '<button class="mPill mDate" data-mh="pause" aria-label="Date"><i>📅</i><b id="mDate">Day 1</b></button></div>' +
+    '<button class="mPill" data-mh="city" data-mstat="pop" aria-label="Population"><i>👥</i><b id="mPop">0</b></button>' +
+    '<button class="mPill mHapP" data-mh="city" data-mstat="hap" aria-label="Happiness"><i id="mHapI">😊</i><b id="mHap">0%</b></button></div>' +
     '<div class="mGrp mR">' +
-    '<button class="mPill" data-mh="city" data-mstat="hap" aria-label="Happiness"><i id="mHapI">😊</i><b id="mHap">0%</b></button>' +
+    '<button class="mPill" data-mh="economy" data-mstat="money" aria-label="Money"><i>💰</i><b id="mMoney">$0</b></button>' +
     '<button class="mPill mUtil" data-mh="power" data-mstat="power" aria-label="Power"><i>⚡</i><b id="mPow">0%</b></button>' +
     '<button class="mPill mUtil" data-mh="water" data-mstat="water" aria-label="Water"><i>💧</i><b id="mWat">0%</b></button>' +
     '<button class="mPill mIco" id="mBell" aria-label="Notifications">🔔<em id="mBellN" class="hidden">0</em></button>' +
-    '<button class="mPill mIco" id="mMenu" aria-label="Pause menu">☰</button></div>';
+    '<button class="mPill mIco" id="mHudMode" aria-label="HUD size">≡</button></div>';
   document.body.appendChild(top); MOB.hud = top;
   const side = document.createElement('div'); side.id = 'mSide';
-  side.innerHTML = '<button class="mFab" id="mPause" aria-label="Pause">⏸</button><button class="mFab" id="mSpeed" aria-label="Speed">1×</button>' +
+  side.innerHTML = '<button class="mFab" id="mPause" aria-label="Pause menu">⏸</button><button class="mFab" id="mSpeed" aria-label="Speed">1×</button>' +
     '<button class="mFab" id="mCamReset" aria-label="Reset camera">🎯</button><button class="mFab" id="mMiniBtn" aria-label="Minimap">🧭</button>' +
-    '<button class="mFab hidden" id="mRotReset" aria-label="North up">↺</button>';
+    '<button class="mFab" id="mSearchBtn" aria-label="Search">🔍</button><button class="mFab hidden" id="mRotReset" aria-label="North up">↺</button>';
   document.body.appendChild(side); MOB.side = side;
   const bar = document.createElement('nav'); bar.id = 'mBar';
   bar.innerHTML = [['build', '🏗️', 'BUILD'], ['road', '🛣️', 'ROAD'], ['zone', '🟩', 'ZONE'], ['transport', '🚇', 'TRANSPORT'], ['city', '🏙️', 'CITY'], ['economy', '💰', 'ECONOMY'], ['map', '🗺️', 'MAP']]
     .map(function (x) { return '<button class="mBtn" data-mbar="' + x[0] + '"><span>' + x[1] + '</span><b>' + x[2] + '</b></button>'; }).join('');
   document.body.appendChild(bar); MOB.bar = bar;
+  const handle = document.createElement('button'); handle.id = 'mBarHandle'; handle.setAttribute('aria-label', 'Show toolbar'); handle.innerHTML = '<span>🏗️</span> TOOLS ▲';
+  handle.onclick = function () { document.body.classList.toggle('mBarPeek'); sfx('click'); if (typeof haptic === 'function') haptic('tap'); };
+  document.body.appendChild(handle);
   top.addEventListener('click', function (e) {
     if (!STARTED) return;
     const p = e.target.closest('[data-mh]'), id = e.target.closest('button') ? e.target.closest('button').id : '';
-    sfx('click');
-    if (id === 'mMenu') { openPauseMenu(); return; }
+    sfx('click'); if (typeof haptic === 'function') haptic('tap');
+    if (id === 'mHudMode') { cycleHudMode(); return; }
     if (id === 'mBell') { openNotificationCenter(); return; }
     if (!p) return;
     const k = p.dataset.mh;
@@ -159,18 +164,35 @@ function buildMobileHud() {
     else if (k === 'city') openMobilePage('city');
     else if (k === 'cityhall') openCityHall();
     else if (k === 'power' || k === 'water') openCityMap(k === 'power' ? 'power' : 'water');
-    else if (k === 'pause') openPauseMenu();
+    else if (k === 'speed') { if (typeof openSpeedSheet === 'function') openSpeedSheet(); }
   });
-  side.querySelector('#mPause').onclick = function () { if (!STARTED) return; setSpeed(S.settings.speed === 0 ? (UI.lastSpeed || 1) : (UI.lastSpeed = S.settings.speed, 0)); refreshMobileHud(true); sfx('click'); };
-  side.querySelector('#mSpeed').onclick = function () { if (!STARTED) return; const L = [1, 2, 5, 10, 25, 50, 100], i = L.indexOf(S.settings.speed); setSpeed(L[(i + 1) % L.length]); refreshMobileHud(true); sfx('click'); };
-  side.querySelector('#mCamReset').onclick = function () { if (STARTED) { resetCamera(); sfx('click'); } };
+  side.querySelector('#mPause').onclick = function () { if (!STARTED) return; sfx('click'); Actions.run(Action.Pause, 'touch'); };                 // ⏸ → PAUSED menu
+  side.querySelector('#mSpeed').onclick = function () { if (!STARTED) return; sfx('click'); Actions.run(Action.Speed, 'touch'); };
+  side.querySelector('#mCamReset').onclick = function () { if (STARTED) { Actions.run(Action.ResetCamera, 'touch'); sfx('click'); } };
   side.querySelector('#mMiniBtn').onclick = function () { if (!STARTED) return; S.settings.minimap = !S.settings.minimap; $('minimap').classList.toggle('hidden', !S.settings.minimap); syncGSETFromGame(); drawMinimap(true); refreshMobileHud(true); sfx('click'); };
+  side.querySelector('#mSearchBtn').onclick = function () { if (STARTED) { sfx('click'); Actions.run(Action.Search, 'touch'); } };
   side.querySelector('#mRotReset').onclick = function () { setCamRot(0); sfx('click'); };
   bar.addEventListener('click', function (e) {
     const b = e.target.closest('[data-mbar]'); if (!b || !STARTED) return;
-    sfx('click');
+    sfx('click'); if (typeof haptic === 'function') haptic('tap');
+    document.body.classList.remove('mBarPeek');
     mobileToolbar(b.dataset.mbar);
   });
+  applyHudMode();
+}
+/* COLLAPSIBLE HUD: FULL → COMPACT → MINIMAL (money · population · date · pause; the toolbar folds into a TOOLS handle) */
+const HUD_MODES = ['full', 'compact', 'minimal'];
+function applyHudMode() {
+  const m = HUD_MODES.indexOf(GSET.hudMode) >= 0 ? GSET.hudMode : 'full', b = document.body;
+  HUD_MODES.forEach(function (x) { b.classList.toggle('hud-' + x, x === m); });
+  b.classList.remove('mBarPeek');
+  const btn = document.getElementById('mHudMode'); if (btn) btn.title = 'HUD: ' + m.toUpperCase();
+  if (MOB.hud) requestAnimationFrame(fitMobileLayout);
+}
+function cycleHudMode() {
+  const i = HUD_MODES.indexOf(GSET.hudMode);
+  GSET.hudMode = HUD_MODES[(i + 1) % HUD_MODES.length]; saveGSET(); applyHudMode();
+  toast('≡ ' + ({ full: 'FULL HUD', compact: 'COMPACT HUD', minimal: 'MINIMAL HUD' })[GSET.hudMode], '');
 }
 function mobileToolbar(k) {
   const was = activeBarKey();
@@ -221,7 +243,6 @@ function refreshMobileHud(force) {
   if (wa) { wa.classList.toggle('bad', wu > wg); wa.classList.toggle('warn', wu <= wg && wp >= 85); }
   const mo = MOB.hud.querySelector('[data-mstat="money"]'); if (mo) mo.classList.toggle('bad', S.money < 0);
   set('mSpeed', (safeSpeedCap() < S.settings.speed ? safeSpeedCap() + '×*' : (S.settings.speed || 1) + '×'));
-  set('mPause', S.settings.speed === 0 ? '▶' : '⏸');
   const pz = document.getElementById('mPause'); if (pz) pz.classList.toggle('on', S.settings.speed === 0);
   const mm = document.getElementById('mMiniBtn'); if (mm) mm.classList.toggle('on', !!S.settings.minimap);
   if (typeof refreshBell === 'function') refreshBell();
@@ -248,7 +269,7 @@ function resetCamera() {
    world. States: idle → pending → pan | ghost | draw; any second finger → multi (pinch zoom or twist rotate + pan),
    and the gesture stays "multi" until every finger is lifted, so no tap, placement or road fires by accident. */
 const GST = { pts: new Map(), mode: 'idle', st: null, multi: null, hadMulti: false, grab: null, draw0: null };
-function gstReset() { GST.pts.clear(); GST.mode = 'idle'; GST.st = null; GST.multi = null; GST.hadMulti = false; GST.grab = null; MOB.rot = null; }
+function gstReset() { clearTimeout(GST.lp); GST.pts.clear(); GST.mode = 'idle'; GST.st = null; GST.multi = null; GST.hadMulti = false; GST.grab = null; MOB.rot = null; }
 function gstIntercept(e) {
   if (!mobOn() || e.pointerType === 'mouse') return false;
   if (typeof WB !== 'undefined' && (WB.on || (typeof RS !== 'undefined' && RS.on))) return false;   // admin world brush / region selector
@@ -269,8 +290,9 @@ function gstMultiMove() {
   const ls = Math.log(d / g.d);
   if (!g.lock) { if (Math.abs(ls) > 0.12) g.lock = 'zoom'; else if (Math.abs(da) > 0.22 && GSET.rotateCam !== false && !PHOTO.on) g.lock = 'rotate'; }
   const sens = camSens();
-  if (g.lock === 'zoom') CAM.zoom = clamp(g.zoom * Math.exp(ls * Math.min(1.4, Math.max(0.6, sens))), 0.3, 2.6);
-  if (g.lock === 'rotate') setCamRot(g.rot0 + da);
+  if (GSET.gestureCam === false) g.lock = 'pan';                          // Gesture Camera OFF → two fingers only pan (🔍＋/－ buttons zoom)
+  if (g.lock === 'zoom') CAM.zoom = clamp(g.zoom * Math.exp(ls * Math.min(1.4, Math.max(0.6, sens)) * (CAM_RATE[GSET.zoomSpeed] || 1)), 0.3, 2.6);
+  if (g.lock === 'rotate') setCamRot(g.rot0 + da * (CAM_RATE[GSET.rotSpeed] || 1));
   const target = { x: g.mid0.x + (mid.x - g.mid0.x) * sens, y: g.mid0.y + (mid.y - g.mid0.y) * sens };   // two-finger pan
   const now = screenToWorld(target.x, target.y);
   CAM.x += g.world.x - now.x; CAM.y += g.world.y - now.y; clampCamera();
@@ -307,6 +329,8 @@ function gstDown(e) {
     MOB.road.step = 1; updateRoadSheet(); return;
   }
   GST.mode = 'pending';
+  clearTimeout(GST.lp); const lx = e.clientX, ly = e.clientY;                 // LONG PRESS (550 ms without moving)
+  GST.lp = setTimeout(function () { if (GST.mode === 'pending' && GST.pts.size === 1 && typeof mobileLongPress === 'function' && mobileLongPress(lx, ly)) GST.mode = 'ignore'; }, 550);
 }
 function gstMove(e) {
   if (!gstIntercept(e) || !GST.pts.has(e.pointerId)) return;
@@ -316,13 +340,14 @@ function gstMove(e) {
   if (GST.mode === 'multi') { gstMultiMove(); return; }
   const st = GST.st; if (!st || e.pointerId !== st.id) return;
   const dx = e.clientX - st.x, dy = e.clientY - st.y, far = Math.hypot(dx, dy) > 10;
-  if (GST.mode === 'pending' && far) GST.mode = 'pan';
+  if (GST.mode === 'pending' && far) { GST.mode = 'pan'; clearTimeout(GST.lp); }
   if (GST.mode === 'pan') {
     const s = camSens();
     let px = dx * s, py = dy * s;
     const pr = PHOTO.on ? PHOTO.rot : CAM.rot;
     if (pr) { const c = Math.cos(-pr), sn = Math.sin(-pr); const x = px * c - py * sn; py = px * sn + py * c; px = x; }
-    if (GSET.invertPan) { px = -px; py = -py; }
+    if (GSET.invertPan || GSET.invertH) px = -px;
+    if (GSET.invertPan || GSET.invertV) py = -py;
     CAM.tx = null; CAM.ty = null;
     CAM.x = st.camX - px / CAM.zoom; CAM.y = st.camY - py / CAM.zoom; clampCamera();
     UI.hover = UI.ghost ? { x: UI.ghost.x, y: UI.ghost.y } : null;
@@ -331,7 +356,7 @@ function gstMove(e) {
     if (!UI.ghost || g.x !== UI.ghost.x || g.y !== UI.ghost.y) { UI.ghost = g; UI.hover = { x: g.x, y: g.y }; renderBuildBar(); }
   } else if (GST.mode === 'draw') {
     const t = tileAtScreen(e.clientX, e.clientY), dr = UI.tool === 'road' ? UI.roadDrag : UI.zoneDrag;
-    if (dr && (dr.x1 !== t.x || dr.y1 !== t.y)) { dr.x1 = clamp(t.x, 0, MAP.W - 1); dr.y1 = clamp(t.y, 0, MAP.H - 1); UI.hover = { x: dr.x1, y: dr.y1 }; if (MOB.road.step !== 2) { MOB.road.step = 2; updateRoadSheet(); } }
+    if (dr && (dr.x1 !== t.x || dr.y1 !== t.y)) { dr.x1 = clamp(t.x, 0, MAP.W - 1); dr.y1 = clamp(t.y, 0, MAP.H - 1); UI.hover = { x: dr.x1, y: dr.y1 }; MOB.road.step = 2; updateRoadSheet(); }
   }
 }
 function gstUp(e) {
@@ -349,7 +374,11 @@ function gstUp(e) {
   const st = GST.st, mode = GST.mode;
   if (GST.pts.size) return;
   if (mode === 'draw') { finishDrawStroke(); gstReset(); return; }
-  if (mode === 'pending' && st && !GST.hadMulti && performance.now() - st.t < 650) mobileTap(e.clientX, e.clientY);
+  if (mode === 'pending' && st && !GST.hadMulti && performance.now() - st.t < 650) {
+    const lt = GST.lastTap, now = performance.now();                       // DOUBLE TAP (select tool, nothing being placed) → zoom in
+    if (lt && now - lt.t < 400 && Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < 34 && UI.tool === 'select' && !UI.placing && typeof mobileDoubleTap === 'function') { GST.lastTap = null; mobileDoubleTap(e.clientX, e.clientY); }
+    else { GST.lastTap = { t: now, x: e.clientX, y: e.clientY }; mobileTap(e.clientX, e.clientY); }
+  }
   gstReset();
 }
 function gstCancel(e) { if (!gstIntercept(e)) return; e.stopImmediatePropagation(); if (GST.mode === 'draw') cancelDrawStroke(); else if (GST.mode === 'ghost' && GST.grab) { UI.ghost = GST.grab.orig; renderBuildBar(); } gstReset(); }
@@ -363,16 +392,50 @@ function bindTouchCamera() {
   document.addEventListener('touchmove', function (e) { if (!mobOn()) return; if (!e.target.closest || !e.target.closest('.mScroll,#modalBody,#lpBody,#rpBody,#sysText,.mSheetBody,.mPageBody,#admBody,#admNavList,#slotList,.menuBox,#titleScreen,#mNotesList,#mInspectBody,.mChips,.mGraphWrap')) e.preventDefault(); }, { passive: false });
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
 }
+/* TOUCH SELECTION: the touch area is larger than the drawing (visual size != touch size) for small buildings, citizens
+   and vehicles; when a tap is really ambiguous (e.g. a car passing a small shop) a SELECT OBJECT chooser appears. */
+const TOUCH_HIT = { finger: 26, fingerLarge: 34, smallBuilding: 44, agentExact: 12, agentNear: 24 };
+function touchCandidates(sx, sy) {
+  const t = tileAtScreen(sx, sy), z = Math.max(0.3, CAM.zoom), out = [];
+  const finger = (GSET.largeTouch ? TOUCH_HIT.fingerLarge : TOUCH_HIT.finger) / z;
+  let b = pickBuilding(t.wx, t.wy); const exact = !!b;
+  if (!b) {                                                     // small buildings: expanded touch box
+    let best = null, bd = finger;
+    S.buildings.list.forEach(function (x) {
+      const d = bdef(x); if (Math.min(d.w, d.h) * TILE * z >= TOUCH_HIT.smallBuilding) return;
+      const x0 = x.x * TILE, y0 = x.y * TILE, dx = Math.max(x0 - t.wx, 0, t.wx - (x0 + d.w * TILE)), dy = Math.max(y0 - t.wy, 0, t.wy - (y0 + d.h * TILE)), dist = Math.hypot(dx, dy);
+      if (dist < bd) { bd = dist; best = x; }
+    });
+    b = best;
+  }
+  if (b) out.push({ kind: 'building', ref: b, d: exact ? 0 : 1 });
+  const ar = (exact ? TOUCH_HIT.agentExact : TOUCH_HIT.agentNear) / z;
+  let bc = null, bcd = ar, bv = null, bvd = ar;
+  AG.citizens.forEach(function (c) { if (c.inside || c.driving) return; const d = Math.hypot(c.x - t.wx, c.y - t.wy + 5); if (d < bcd) { bcd = d; bc = c; } });
+  AG.vehicles.forEach(function (v) { const d = Math.hypot(v.x - t.wx, v.y - t.wy); if (d < bvd) { bvd = d; bv = v; } });
+  if (bc) out.push({ kind: 'citizen', ref: bc, d: bcd });
+  if (bv) out.push({ kind: 'vehicle', ref: bv, d: bvd });
+  if (!exact && inMap(t.x, t.y) && MAP.roads[idx(t.x, t.y)]) out.push({ kind: 'road', ref: { x: t.x, y: t.y }, d: 0.5 });
+  return out;
+}
+function selectCandidate(c, sx, sy) {
+  if (c.kind === 'building') { if (pickBuilding(tileAtScreen(sx, sy).wx, tileAtScreen(sx, sy).wy) === c.ref) handleTap(sx, sy); else { selectBuilding(c.ref); sfx('click'); } }
+  else if (c.kind === 'citizen') showAgentInfo({ c: c.ref });
+  else if (c.kind === 'vehicle') showAgentInfo({ v: c.ref });
+  else if (c.kind === 'road') { selectBuilding(null); if (typeof showRoadInspector === 'function') showRoadInspector(c.ref.x, c.ref.y); sfx('click'); }
+}
 /* A clean single tap on the world */
 function mobileTap(sx, sy) {
   const t = tileAtScreen(sx, sy);
   UI.hover = { x: t.x, y: t.y };
-  if (UI.tool === 'build' && UI.placing) { moveGhostTo(sx, sy); return; }        // tap moves the ghost — CONFIRM builds
+  if (UI.tool === 'build' && UI.placing) { moveGhostTo(sx, sy); return; }        // tap moves the ghost — BUILD confirms
   if (drawModeOn()) return;
-  if (UI.tool === 'select' && !(typeof ADM !== 'undefined' && ADM.pick)) {
-    const b = pickBuilding(t.wx, t.wy), ag = b ? null : pickAgent(t.wx, t.wy);
-    if (!b && !ag && inMap(t.x, t.y) && MAP.roads[idx(t.x, t.y)]) { selectBuilding(null); if (typeof showRoadInspector === 'function') showRoadInspector(t.x, t.y); sfx('click'); return; }
-    if (!b && !ag && typeof closeInspector === 'function') closeInspector();
+  if (UI.tool === 'select' && !(typeof ADM !== 'undefined' && ADM.pick) && !(typeof WB !== 'undefined' && WB.on)) {
+    if (typeof stopTracking === 'function') stopTracking();
+    const c = touchCandidates(sx, sy);
+    if (!c.length) { if (typeof closeInspector === 'function') closeInspector(); handleTap(sx, sy); return; }
+    if (c.length === 1 || typeof openSelectChooser !== 'function') { selectCandidate(c[0], sx, sy); return; }
+    openSelectChooser(c, sx, sy); return;
   }
   handleTap(sx, sy);
 }
@@ -392,7 +455,10 @@ function placementChecks(d, x, y) {
 }
 function checksHtml(d, x, y) {
   const r = placementChecks(d, x, y);
-  return '<div class="mChecks">' + r.list.map(function (c) { return '<span class="mChk ' + c[2] + '" title="' + c[1] + '">' + c[0] + '<em>' + c[1] + '</em>' + ({ ok: '✓', warn: '!', bad: '✗', na: '–' })[c[2]] + '</span>'; }).join('') + '</div>';
+  /* not colour only: every check says what it means (✓ Road · ✕ No electricity · ! Low water …) */
+  const BAD = { Road: 'No road', Power: 'No electricity', Water: 'No water', Zone: (r.chk.code === 'land' ? 'Locked zone' : 'Wrong zone'), Terrain: 'Bad terrain' };
+  const WARN = { Power: 'Low power', Water: 'Low water' };
+  return '<div class="mChecks">' + r.list.map(function (c) { const txt = c[2] === 'bad' ? BAD[c[1]] : c[2] === 'warn' ? WARN[c[1]] || c[1] : c[1]; return '<span class="mChk ' + c[2] + '" title="' + txt + '">' + ({ ok: '✓', warn: '!', bad: '✕', na: '–' })[c[2]] + ' ' + c[0] + '<em>' + txt + '</em></span>'; }).join('') + '</div>';
 }
 function ghostTile(sx, sy) { const d = fpDef(UI.placing, UI.rot | 0), t = tileAtScreen(sx, sy); return { x: t.x - Math.floor((d.w - 1) / 2), y: t.y - Math.floor((d.h - 1) / 2) }; }
 /* The ghost starts on the nearest buildable spot around the screen centre (spiral search), else at the centre */
@@ -413,7 +479,7 @@ function openBuildBar() {
     const el = document.createElement('div'); el.id = 'mBuildBar'; el.className = 'hidden';
     el.innerHTML = '<div class="mbInfo" id="mbInfo"></div><div class="mbBtns">' +
       '<button class="btn blue" data-mb="rotate">↻ ROTATE</button><button class="btn red" data-mb="cancel">✕ CANCEL</button>' +
-      '<button class="btn green" data-mb="confirm">✓ CONFIRM</button></div>';
+      '<button class="btn green" data-mb="confirm">✓ BUILD</button></div>';
     document.body.appendChild(el); MOB.buildBar = el;
     el.addEventListener('click', function (e) {
       const b = e.target.closest('[data-mb]'); if (!b) return; sfx('click');
@@ -440,7 +506,7 @@ function renderBuildBar() {
   }
   const d = fpDef(UI.placing, UI.rot | 0), chk = canPlace(d, UI.ghost.x, UI.ghost.y);
   $('mbInfo').innerHTML = '<div class="mbTop"><b class="mbName">' + d.icon + ' ' + esc(d.name) + '</b><span class="mbCost">' + money(buildCost(d)) + ' · ' + d.w + '×' + d.h + ' · ↻' + ((UI.rot | 0) * 90) + '°</span></div>' +
-    '<div class="mbState ' + (chk.ok ? 'ok' : 'bad') + '">' + (chk.ok ? '✓ BUILDABLE' + (chk.warn ? ' · ' + esc(chk.warn) : '') : '✗ CANNOT BUILD — ' + esc(chk.reason)) + '</div>' + checksHtml(d, UI.ghost.x, UI.ghost.y);
+    '<div class="mbState ' + (chk.ok ? 'ok' : 'bad') + '">' + (chk.ok ? '✓ VALID · Can build' + (chk.warn ? ' · ' + esc(chk.warn) : '') : '✕ INVALID — ' + esc(chk.reason)) + '</div>' + checksHtml(d, UI.ghost.x, UI.ghost.y);
   const cf = MOB.buildBar.querySelector('[data-mb="confirm"]'); if (cf) cf.disabled = !chk.ok || performance.now() < MOB.placeLock;
 }
 /* CONFIRM: one building per press — the button locks briefly and the ghost then moves to the next free spot */
@@ -522,6 +588,27 @@ function confirmDrawStroke() {
   if (f) { if (UI.tool === 'zone' && UI.zoneDrag) { const n = rectTiles(UI.zoneDrag.x0, UI.zoneDrag.y0, UI.zoneDrag.x1, UI.zoneDrag.y1).length; f(); toast(ZONES[UI.zoneType].icon + ' ' + n + ' tiles ' + (UI.zoneType ? 'zoned ' + ZONES[UI.zoneType].name : 'unzoned'), 'good'); } else f(); }
   UI.roadDrag = null; UI.zoneDrag = null; MOB.road.step = 0; updateRoadSheet();
 }
+/* ROAD GHOST PREVIEW: length · cost · capacity · slope · connection · terrain, live while dragging */
+function roadPreviewStats(rd) {
+  const all = lineTiles(rd.x0, rd.y0, rd.x1, rd.y1), ok = all.filter(function (t) { return canRoad(t[0], t[1]); }), rt = ROAD_TYPES[UI.roadType || 1];
+  let cost = 0, hills = 0, water = 0, rock = 0;
+  ok.forEach(function (t) { const i = idx(t[0], t[1]); cost += tileRoadCost(t[0], t[1]); if (MAP.terrain[i] === TERRAIN.HILL) hills++; if (MAP.nature[i] === 2) water++; if (MAP.terrain[i] === TERRAIN.ROCK) rock++; });
+  const touches = function (x, y) { for (let k = 0; k < 4; k++) { const nx = x + [1, -1, 0, 0][k], ny = y + [0, 0, 1, -1][k]; if (isRoad(nx, ny)) return true; } return isRoad(x, y); };
+  const connected = all.some(function (t) { return touches(t[0], t[1]); });
+  return { tiles: ok.length, blocked: all.length - ok.length, len: Math.round(ok.length * TILE_METERS), cost: cost, cap: Math.round(rt.cap * rt.lanes * 50), slope: hills / Math.max(1, ok.length), bridges: water, tunnels: rock, connected: connected, rt: rt };
+}
+function roadPreviewHtml() {
+  const rd = UI.roadDrag; if (!rd) return '';
+  const r = roadPreviewStats(rd), afford = S.budget >= r.cost;
+  return '<b>' + esc(r.rt.name.toUpperCase()) + '</b> · ' + r.len + ' m · <b>' + money(r.cost) + '</b> · ' + fmt(r.cap) + ' vehicles/h · slope ' + (r.slope > 0.4 ? 'steep' : r.slope > 0.1 ? 'gentle' : 'flat') +
+    (r.bridges ? ' · 🌉 ' + r.bridges : '') + (r.tunnels ? ' · 🚇 ' + r.tunnels : '') +
+    '<br><span class="' + (r.connected ? 'pos' : 'neg') + '">' + (r.connected ? '✓ Connected' : '✕ Not connected to the road network') + '</span> · <span class="' + (r.blocked ? 'neg' : 'pos') + '">' + (r.blocked ? '✕ ' + r.blocked + ' tile(s) blocked' : '✓ Valid terrain') + '</span>' + (afford ? '' : ' · <span class="neg">✕ Budget too low</span>');
+}
+function zonePreviewHtml() {
+  const zd = UI.zoneDrag; if (!zd) return '';
+  const n = rectTiles(zd.x0, zd.y0, zd.x1, zd.y1).length, z = ZONES[UI.zoneType || 0];
+  return '<b>' + z.icon + ' ' + esc(z.name.toUpperCase()) + '</b> · ' + n + ' tiles · ' + (UI.zoneType ? money(n * zoneCost()) : 'free');
+}
 function updateRoadSheet() {
   if (!MOB.roadSheet) return;
   const zone = MOB.draw === 'zone', steps = ['START', 'DRAG', 'END', 'CONFIRM'], s = MOB.road.step;
@@ -529,10 +616,10 @@ function updateRoadSheet() {
   if (zone) types = ZONES.map(function (z) { return '<button class="' + (UI.zoneType === z.id ? 'on' : '') + '" data-mzone="' + z.id + '"><span>' + z.icon + '</span>' + esc(z.name) + '<small>' + (z.id ? '$' + zoneCost() + '/tile' : 'free') + '</small></button>'; }).join('');
   else types = MOB_ROADS.map(function (r) { const def = ROAD_TYPES[r[2]], lock = def.unlock && S.city.peakPop < def.unlock.pop && !S.city.sandbox; return '<button class="' + (MOB.road.kind === r[0] ? 'on' : '') + (lock ? ' dis' : '') + '" data-mroad="' + r[0] + '"><span>' + ({ bridge: '🌉', tunnel: '🚇' }[r[0]] || def.icon) + '</span>' + r[1] + '<small>' + (lock ? '🔒 ' + fmt(def.unlock.pop) + ' pop' : money(roadTypeCost(r[2])) + '/tile') + '</small></button>'; }).join('');
   const tip = zone ? 'Touch a corner (START), DRAG to the opposite corner, lift (END), then CONFIRM.' : ({ bridge: 'Drag across a river or lake — water tiles become a bridge.', tunnel: 'Drag through rock — rock tiles become a tunnel.' }[MOB.road.kind] || 'Touch the map (START), DRAG your finger, lift (END), then CONFIRM.');
-  const info = s >= 3 ? esc((($('placeInfo') || {}).textContent || '').replace(/^\s+/, '')) : '';
+  const info = s >= 1 ? (zone ? zonePreviewHtml() : roadPreviewHtml()) : '';
   MOB.roadSheet.innerHTML = '<div class="mrHead"><b>' + (zone ? '🟩 ZONE' : '🛣️ ROAD') + '</b><div class="mrTypes mChips">' + types + '</div><button class="mX" data-mra="close" aria-label="Close">✕</button></div>' +
     '<div class="mrRow"><div class="mrSteps">' + steps.map(function (n, i) { return '<span class="' + (i < s ? 'done' : i === s ? 'cur' : '') + '">' + (i + 1) + ' ' + n + '</span>'; }).join('<i>→</i>') + '</div>' +
-    '<div class="mrTip">' + (info ? '<b>' + info + '</b>' : tip + ' Two fingers move the camera.') + '</div>' +
+    '<div class="mrTip">' + (info || tip + ' Two fingers move the camera.') + '</div>' +
     '<div class="mrBtns">' + (s > 0 ? '<button class="btn" data-mra="cancel">↺ REDO</button>' : '') + (s >= 3 ? '<button class="btn green" data-mra="confirm">✓ CONFIRM</button>' : '') + '</div></div>';
 }
 

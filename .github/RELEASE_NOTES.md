@@ -20,6 +20,21 @@
 ## Eski tarayıcı kayıtları
 Oyunu Chrome/Edge'de oynadıysanız: tarayıcıda Ayarlar → **📦 Export all saves** (veya **⬇️ Download .json**), sonra EXE'de **📦 Import old browser save** ile dosyayı seçin.
 
+## 2.3.0 — Part 14: Mobile 2.0, dokunmatik UX, performans ve sürüm kalitesi
+- **Platform adapter:** ortak oyun motoru + `AndroidPlatformAdapter` / `WindowsPlatformAdapter`; dağınık `if Android` kontrolleri yerine tek katman. Ortak **Action** sistemi (dokunma · fare · klavye · kontrolcü).
+- **HUD 2.0:** seviye · şehir · tarih / nüfus · mutluluk / para · elektrik · su; **≡** ile FULL → COMPACT → MINIMAL (araç çubuğu TOOLS ▲ tutamacına katlanır).
+- **Akıllı seçim:** SELECT OBJECT seçici, daha büyük dokunma alanları, uzun bas (kare bilgisi), çift dokunarak yakınlaştırma.
+- **Inspector 2.0:** sekmeler; yol trafiği (Traffic %, araç/saat, ortalama hız) ve yol düzenleme (tür, uzat, böl, trafik ışığı, göbek, sil); vatandaş / araç TRACK, ROUTE, ETA.
+- **UNDO:** yol, bina, bölge ve yıkım geri alınır (Android: ↶ UNDO, Windows: Ctrl+Z); yıkım her zaman KEEP / DEMOLISH sorar.
+- **Hız sayfası** (⏸ … 100×), **arama** (bina, vatandaş, yol, ilçe, şirket, araç, konum), **görevler** (GO TO LOCATION), **günlük rapor**, **HELP**.
+- **Kritik uyarılar** (VIEW · DISPATCH · IGNORE, oyun durmaz), konumlu bildirimler, başarım açılır kutusu, 💡 akıllı danışman, vatandaş yorumları.
+- **Minimap 2.0** (boyut, tam harita, kapat, acil durum işaretleri) ve tam haritada 11 ısı haritası.
+- **Ayarlar 11 kategori:** güç modları (Performance / Balanced / Quality / Battery Saver), kamera hızları ve ters çevirme, Gesture Camera (kapalı → ＋/－), ses kanalları (Music / SFX / UI / Environment), titreşim, UI Scale 80–130 %, otomatik kayıt OFF / 5 / 10 / 15 / 30 dk, olay anlık görüntüleri.
+- **Kayıt güvenliği:** Android'de doğrulamalı atomik yazma + `.bak` yedeği, arka planda kayıt, olay öncesi/sonrası otomatik anlık görüntüler, dostça hata ekranı (RETURN / RECOVER SAVE).
+- **Pil ve performans:** menüde / boşta 30 FPS, arka planda 15 FPS ve ses durur; Battery Saver; dokunmatik fotoğraf modu (HIDE UI).
+- **Güvenlik:** MOBILE STRESS TEST yalnızca geliştirici / test build'lerinde veya yetkili admin oturumunda; normal oyuncu admin / debug arayüzü görmez.
+- **Testler:** mobil UI testi 9 ekran × 30 kontrol; Android self-test 28 adım. Windows EXE davranışı değişmedi.
+
 ## 2.2.0 — Part 13: Android mobil arayüz, dokunmatik kontroller ve tam oynanabilirlik
 - **Gerçek mobil arayüz (PC arayüzü küçültülmedi):** Android'de masaüstü üst çubuk, sol menü, araç çubuğu ve paneller kapanır; oyun mantığı aynı, arayüz katmanı platforma göre değişir.
 - **Responsive UI motoru:** ekranın kısa kenarına göre tek ölçek birimi, **UI SCALE** (80–140 %), **LARGE TOUCH BUTTONS**, cihaz DPI'sına göre en küçük okunabilir yazı ve en az 42 px dokunma alanı. HUD kendini sıkıştırır; hiçbir öğe üst üste binmez veya ekran dışına çıkmaz (otomatik **UI bounds** denetimi + düzeltme).

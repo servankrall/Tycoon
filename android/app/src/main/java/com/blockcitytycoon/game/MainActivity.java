@@ -257,6 +257,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() { super.onResume(); if (web != null) web.onResume(); js("window.bctOnResume && bctOnResume()"); immersive(); }
     @Override
+    protected void onStop() { js("window.bctOnStop && bctOnStop()"); super.onStop(); }
+    @Override
+    protected void onRestart() { super.onRestart(); js("window.bctOnRestart && bctOnRestart()"); }
+    @Override
     protected void onDestroy() { if (web != null) { web.destroy(); web = null; } super.onDestroy(); }
 
     /* ---------------- back button → the game's own back handler ---------------- */
@@ -311,6 +315,7 @@ public class MainActivity extends Activity {
         while ((n = in.read(buf)) > 0) { tot += n; if (tot > max) throw new Exception("file too large"); b.write(buf, 0, n); }
         in.close(); return new String(b.toByteArray(), StandardCharsets.UTF_8);
     }
+    static boolean isSaveKey(String key) { return key.startsWith("bct_pro_save") || key.startsWith("bct_settings") || key.startsWith("bct_profile"); }
     File keyFile(String key) throws Exception { return new File(storeDir, URLEncoder.encode(key, "UTF-8") + ".dat"); }
     void rotateLog() { File l = new File(logDir, "latest.log"); if (l.exists()) { File p = new File(logDir, "previous.log"); p.delete(); l.renameTo(p); } }
     synchronized void log(String level, String msg) {
@@ -391,27 +396,51 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface
         public String insets() { return insetsJson; }
+        /* HAPTIC FEEDBACK: short patterns only (button, build, invalid, notification, alert) — off in Settings → Haptics */
+        @JavascriptInterface
+        public void vibrate(String json) {
+            try {
+                JSONArray a = new JSONArray(json); long[] p = new long[a.length() + 1]; p[0] = 0;
+                for (int i = 0; i < a.length(); i++) p[i + 1] = Math.min(120, Math.max(1, a.getLong(i)));
+                android.os.Vibrator v = (android.os.Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+                if (v == null || !v.hasVibrator()) return;
+                if (Build.VERSION.SDK_INT >= 26) v.vibrate(android.os.VibrationEffect.createWaveform(p, -1)); else v.vibrate(p, -1);
+            } catch (Exception e) { /* no vibrator */ }
+        }
         @JavascriptInterface
         public String storeLoadAll() {
             JSONObject o = new JSONObject();
             File[] files = storeDir.listFiles();
             if (files != null) for (File f : files) {
                 String n = f.getName(); if (!n.endsWith(".dat")) continue;
-                try { o.put(URLDecoder.decode(n.substring(0, n.length() - 4), "UTF-8"), readAll(new FileInputStream(f), 128 * 1024 * 1024)); } catch (Exception e) { log("error", "Store read " + n + ": " + e); }
+                try { o.put(URLDecoder.decode(n.substring(0, n.length() - 4), "UTF-8"), readAll(new FileInputStream(f), 128 * 1024 * 1024)); }
+                catch (Exception e) {
+                    log("error", "Store read " + n + ": " + e);           // NO DATA LOSS: fall back to the previous good copy
+                    File bak = new File(f.getPath() + ".bak");
+                    try { if (bak.exists()) { o.put(URLDecoder.decode(n.substring(0, n.length() - 4), "UTF-8"), readAll(new FileInputStream(bak), 128 * 1024 * 1024)); log("warning", "Store " + n + ": restored from .bak"); } } catch (Exception e2) { log("error", "Store .bak " + n + ": " + e2); }
+                }
+            }
+            if (files != null) for (File f : files) {                     // a key whose .dat vanished mid-rename still has its .bak
+                String n = f.getName(); if (!n.endsWith(".dat.bak")) continue;
+                try { String k = URLDecoder.decode(n.substring(0, n.length() - 8), "UTF-8"); if (!o.has(k)) { o.put(k, readAll(new FileInputStream(f), 128 * 1024 * 1024)); log("warning", "Store " + k + ": only the .bak existed — restored"); } } catch (Exception e) { log("error", "Store .bak " + n + ": " + e); }
             }
             return o.toString();
         }
         @JavascriptInterface
         public String storeWrite(String key, String value) {
             try {
-                File f = keyFile(key), tmp = new File(f.getPath() + ".tmp");
-                FileOutputStream out = new FileOutputStream(tmp); out.write(value.getBytes(StandardCharsets.UTF_8)); out.getFD().sync(); out.close();
+                /* ATOMIC SAVE: save.tmp → validate (read back, byte-exact) → keep the previous file as .bak → rename */
+                File f = keyFile(key), tmp = new File(f.getPath() + ".tmp"), bak = new File(f.getPath() + ".bak");
+                byte[] data = value.getBytes(StandardCharsets.UTF_8);
+                FileOutputStream out = new FileOutputStream(tmp); out.write(data); out.getFD().sync(); out.close();
+                if (tmp.length() != data.length || !readAll(new FileInputStream(tmp), data.length + 16).equals(value)) { tmp.delete(); throw new Exception("validation failed (written file differs)"); }
+                if (f.exists() && isSaveKey(key)) { bak.delete(); if (!f.renameTo(bak)) log("warning", "Store " + key + ": could not keep .bak"); }
                 if (!tmp.renameTo(f)) { f.delete(); if (!tmp.renameTo(f)) throw new Exception("rename failed"); }
                 return obj("ok", true).toString();
             } catch (Exception e) { log("error", "Store write " + key + ": " + e); return obj("ok", false, "error", String.valueOf(e.getMessage())).toString(); }
         }
         @JavascriptInterface
-        public void storeRemove(String key) { try { keyFile(key).delete(); } catch (Exception e) { /* already gone */ } }
+        public void storeRemove(String key) { try { File f = keyFile(key); f.delete(); new File(f.getPath() + ".bak").delete(); } catch (Exception e) { /* already gone */ } }
         @JavascriptInterface
         public void log(String level, String msg) { MainActivity.this.log(level, "[game] " + msg); }
         @JavascriptInterface

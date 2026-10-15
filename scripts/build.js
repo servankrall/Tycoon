@@ -4,7 +4,8 @@
      npm run build:android   → dist/android/  BLOCK-CITY-TYCOON-Android.apk (debug), BLOCK-CITY-TYCOON-Android-Release.apk
      npm run build:all       → both
    Build profiles (--profile=…): RELEASE (default — admin hidden, debug off, production UI, optimized),
-   DEVELOPMENT (DevTools, debug panel, profiler without login), TEST (automated tests and performance tests).
+   DEVELOPMENT (DevTools, debug panel, profiler without login), STAGING (the release game labelled STAGING, for testers),
+   TEST (automated tests and performance tests).
    The profile is written to src/js/build-profile.js (git-ignored; a missing file means RELEASE).
    Android needs JDK 17+ and the Android SDK (ANDROID_HOME); the Gradle wrapper downloads Gradle on first use. */
 const fs = require('fs'), path = require('path'), cp = require('child_process');
@@ -12,7 +13,7 @@ const ROOT = path.join(__dirname, '..');
 const args = process.argv.slice(2);
 const cmd = args.find(function (a) { return a.indexOf('--') !== 0; }) || 'help';
 const profArg = (args.find(function (a) { return a.indexOf('--profile=') === 0; }) || '').split('=')[1];
-const profile = ['development', 'test', 'release'].indexOf(profArg) >= 0 ? profArg : (cmd === 'profile' ? (args[1] || 'release') : 'release');
+const profile = ['development', 'staging', 'test', 'release'].indexOf(profArg) >= 0 ? profArg : (cmd === 'profile' ? (args[1] || 'release') : 'release');
 const pkg = require(path.join(ROOT, 'package.json'));
 
 function writeProfile(target) {
@@ -63,5 +64,5 @@ switch (cmd) {
   case 'windows': buildWindows(); break;
   case 'android': buildAndroid(); break;
   case 'all': buildWindows(); buildAndroid(); break;
-  default: console.log('Usage: node scripts/build.js <windows|android|all|profile <development|test|release>> [--profile=release|test|development]');
+  default: console.log('Usage: node scripts/build.js <windows|android|all|profile <development|staging|test|release>> [--profile=release|staging|test|development]');
 }

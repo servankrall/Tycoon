@@ -17,6 +17,7 @@ const PAD_ACTIONS = [['select', 'Select', 0], ['cancel', 'Cancel / back', 1], ['
   const pickIn = function (v, list, def) { return list.indexOf(v) >= 0 ? v : def; };
   const n = function (v, def, lo, hi) { v = Number(v); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def; };
   GSET.uiScale = Math.round(n(GSET.uiScale, GS2_DEFAULTS.uiScale, 70, 150));
+  if (IS_MOBILE && GSET.uiScale > 130) GSET.uiScale = 130;            // Part 14: mobile UI SCALE is 80–130 %
   GSET.textSize = pickIn(GSET.textSize, ['S', 'M', 'L', 'XL'], 'M');
   ['largeTouch', 'tutorialHints', 'lowEnd', 'invertPan', 'rotateCam', 'edgePan', 'cbHeat', 'setupDone', 'mobileTutDone', 'safeSpeed'].forEach(function (k) { GSET[k] = GSET[k] === undefined ? GS2_DEFAULTS[k] : !!GSET[k]; });
   GSET.perfMode = pickIn(GSET.perfMode, ['AUTO', 'LOW', 'MEDIUM', 'HIGH', 'ULTRA'], 'AUTO');
@@ -26,6 +27,16 @@ const PAD_ACTIONS = [['select', 'Select', 0], ['cancel', 'Cancel / back', 1], ['
   GSET.autoPerfLevel = pickIn(GSET.autoPerfLevel, ['', 'LOW', 'MEDIUM', 'HIGH', 'ULTRA'], '');
   GSET.camSens = pickIn(GSET.camSens, ['LOW', 'MEDIUM', 'HIGH'], 'MEDIUM');                // Part 13: camera sensitivity (touch)
   GSET.fpsTarget = pickIn(String(GSET.fpsTarget || 'AUTO'), ['AUTO', '30', '45', '60'], 'AUTO');   // Part 13: FPS target
+  /* Part 14 */
+  ['zoomSpeed', 'rotSpeed'].forEach(function (k) { GSET[k] = pickIn(GSET[k], ['LOW', 'MEDIUM', 'HIGH'], 'MEDIUM'); });
+  ['invertV', 'invertH'].forEach(function (k) { GSET[k] = GSET[k] === undefined ? !!GSET.invertPan : !!GSET[k]; });
+  ['gestureCam', 'haptics', 'autoSnap', 'critAlerts', 'comments'].forEach(function (k) { GSET[k] = GSET[k] === undefined ? true : !!GSET[k]; });
+  ['volMusic', 'volSfx', 'volUi', 'volEnv'].forEach(function (k) { GSET[k] = Math.round(n(GSET[k], 100, 0, 100)); });
+  GSET.hudMode = pickIn(GSET.hudMode, ['full', 'compact', 'minimal'], 'full');
+  GSET.powerMode = pickIn(GSET.powerMode, ['performance', 'balanced', 'quality', 'battery'], 'balanced');
+  GSET.tutStep = Math.round(n(GSET.tutStep, 0, 0, 20));
+  GSET.miniSize = pickIn(GSET.miniSize, ['s', 'm', 'l'], 'm');                           // minimap 2.0 size
+  GSET.touchTrainDone = !!GSET.touchTrainDone;
   const nt = {}; NOTIFY_CATS.forEach(function (c) { nt[c[0]] = !(GSET.notify && GSET.notify[c[0]] === false); }); GSET.notify = nt;
   const pm = {}; PAD_ACTIONS.forEach(function (a) { const v = GSET.padMap && GSET.padMap[a[0]]; pm[a[0]] = (v | 0) === v && v >= 0 && v < 20 ? v : a[2]; }); GSET.padMap = pm;
 })();

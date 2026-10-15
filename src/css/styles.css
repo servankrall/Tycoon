@@ -685,3 +685,10 @@ body.cbHeat .hlBar{filter:hue-rotate(0deg);}
 /* ---- Mobile UI: see css/mobile.css (Part 13) ---- */
 /* very wide screens (ultrawide) and 1440p: keep panels readable */
 @media (min-width:2200px){ #modal{max-width:1200px;} }
+
+/* Part 14 — UNDO toast (all platforms): "Building demolished [↶ UNDO]" */
+#undoBar{position:fixed;z-index:115;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h, 56px) + 74px);display:flex;align-items:center;gap:10px;padding:6px 8px 6px 14px;border-radius:999px;background:rgba(20,24,52,.97);border:1px solid var(--gold);box-shadow:0 6px 24px rgba(0,0,0,.45);font-weight:800;max-width:min(92vw,520px);}
+#undoBar.hidden{display:none;}
+#undoBar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+#undoBar .closeX{background:none;border:0;color:var(--dim);font-size:16px;padding:4px 8px;cursor:pointer;}
+body.mobileUI #undoBar{bottom:calc(var(--above-bar) + 4px);font-size:var(--fs-s);} body.mobileUI #undoBar .btn{min-height:var(--touch);} body.mobileUI #undoBar .closeX{min-width:var(--touch);min-height:var(--touch);}

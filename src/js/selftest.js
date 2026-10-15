@@ -434,7 +434,7 @@ async function part12DesktopSteps() {
 
 /* ===================================== Part 12/13: Android APK self-test (24 steps) ===================================== */
 async function runAndroidSelfTest(phase) {
-  SELFTEST.total = 24;
+  SELFTEST.total = 28;
   const native = IS_ANDROID_APP;
   if (phase === 1) {
     SELFTEST.t0 = Date.now(); SELFTEST.steps = []; SELFTEST.data = {};
@@ -490,7 +490,7 @@ async function runAndroidSelfTest(phase) {
         const cf = MOB.buildBar.querySelector('[data-mb="confirm"]'); cf.click(); cf.disabled = false; cf.click(); await stWait(100);   // the second fast press is ignored
         const built = S.buildings.list.length - n0;
         MOB.buildBar.querySelector('[data-mb="cancel"]').click();
-        return { ok: cats === 8 && bar && moved && checks === 5 && /BUILDABLE/.test(state) && built === 1, detail: cats + ' categories · ' + d.name + ' · build bar ' + bar + ' · tap moved the ghost ' + moved + ' · ' + state.slice(0, 30) + ' · ' + checks + ' checks · CONFIRM ×2 → ' + built + ' building' };
+        return { ok: cats === 8 && bar && moved && checks === 5 && /✓ VALID/.test(state) && built === 1, detail: cats + ' categories · ' + d.name + ' · build bar ' + bar + ' · tap moved the ghost ' + moved + ' · ' + state.slice(0, 30) + ' · ' + checks + ' checks · CONFIRM ×2 → ' + built + ' building' };
       });
     });
     await stStep(7, 'Road Building (START → DRAG → END → CONFIRM)', function () {
@@ -591,7 +591,8 @@ async function runAndroidSelfTest(phase) {
   await stStep(19, 'Gamepad', async function () {
     PADN.t = 0; PAD.active = false;
     if (native) BCTA.selftestNativePad(); else { window.bctPadKey(96, true); setTimeout(function () { window.bctPadKey(96, false); }, 100); }
-    await stWait(500); pollGamepad(0.016);
+    for (let i = 0; i < 30 && !PADN.t; i++) await stWait(100);          // the native key event reaches the WebView asynchronously (slow emulators)
+    await stWait(100); pollGamepad(0.016);
     return { ok: PADN.t > 0 && PAD.active, detail: (native ? 'native controller event (KEYCODE_BUTTON_A via MainActivity.dispatchKeyEvent)' : 'controller event') + ' → game gamepad layer · connected ' + PAD.active };
   });
   await stStep(20, 'Windows Save → Android', function () {
@@ -638,6 +639,41 @@ async function runAndroidSelfTest(phase) {
     openPauseMenu(); await stWait(100); document.querySelector('[data-mp="save"]').click(); await stWait(300);
     const saved = /CITY SAVED/.test(($('mSaveChip') || {}).textContent || ''); closeModal();
     return { ok: map && mapClosed && notes && saved, detail: 'CITY MAP 6 layers ' + map + ' · back closes it ' + mapClosed + ' · notification center ' + notes + ' · PAUSE → SAVE → CITY SAVED ' + saved };
+  });
+  /* ---------- Part 14: MOBILE 2.0 ---------- */
+  await stStep(25, 'Platform Adapter & Lifecycle', async function () {
+    const A = PLATFORM_ADAPTER, sa = A.safeArea(), keys = ['safeLeft', 'safeRight', 'safeTop', 'safeBottom'].every(function (k) { return typeof sa[k] === 'number'; });
+    const acts = Object.keys(Action).every(function (k) { return Actions.has(Action[k]); });
+    Lifecycle.emit('background'); updateFpsCap(); const bgCap = window.BCT_FPS_CAP; Lifecycle.emit('foreground'); updateFpsCap(); const fgCap = window.BCT_FPS_CAP;
+    return { ok: A.kind === 'android' && A.input === 'touch' && MOBILE_MODE && keys && acts && bgCap > 0 && bgCap <= 15 && (fgCap === 0 || fgCap >= 30), detail: 'AndroidPlatformAdapter (touch, mobile UI) · safe area ' + keys + ' · ' + Object.keys(Action).length + ' actions registered ' + acts + ' · background FPS cap ' + bgCap + ' → foreground ' + (fgCap || 60) };
+  });
+  await stStep(26, 'UNDO (road · demolish)', async function () {
+    let rt = null; for (let y = 2; y < MAP.H - 2 && !rt; y++) for (let x = 2; x < MAP.W - 2 && !rt; x++) if (!MAP.roads[idx(x, y)] && canRoad(x, y)) rt = [x, y];
+    const bb = S.buildings.list.find(function (x) { return x.built && !isAI(x) && !bdef(x).noDemolish && bdef(x).w <= 2 && bdef(x).cost > 0; });
+    if (!rt || !bb) return { ok: false, detail: 'no free tile / building' };
+    const m0 = S.money, b0 = S.budget;
+    UNDO.lastInput = performance.now(); const n = placeRoads([rt]);
+    const bar = !!UNDO.bar && !UNDO.bar.classList.contains('hidden'), label = UNDO.bar ? UNDO.bar.textContent.replace(/[↶✕]|UNDO/g, '').trim() : '';
+    const u1 = undoLast(), back = !MAP.roads[idx(rt[0], rt[1])] && Math.abs(S.money - m0) < 1 && Math.abs(S.budget - b0) < 1;
+    UNDO.lastInput = performance.now(); demolish(bb); const gone = !MAP.byId.has(bb.id);
+    const u2 = undoLast(), again = MAP.byId.has(bb.id);
+    hideUndoBar();
+    return { ok: n > 0 && bar && u1.ok && back && gone && u2.ok && again, detail: 'road → "' + label + '" · UNDO → tile and money restored ' + back + ' · demolish ' + bdef(bb).name + ' → UNDO brings it back ' + again };
+  });
+  await stStep(27, 'Speed · Search · HUD · Critical Alert', async function () {
+    openSpeedSheet(); await stWait(80); const sp = document.querySelectorAll('#mSheet [data-mspd]').length; document.querySelector('#mSheet [data-mspd="2"]').click(); const s2 = S.settings.speed; setSpeed(0);
+    openSearch(); await stWait(60); const inp = $('mSearchQ'); inp.value = 'house'; inp.dispatchEvent(new Event('input')); const res = document.querySelectorAll('#mSearchRes [data-msr]').length; closeModal(); MSEARCH.q = '';
+    const modes = []; for (let i = 0; i < 3; i++) { cycleHudMode(); modes.push(GSET.hudMode); } GSET.hudMode = 'full'; applyHudMode();
+    const sp0 = S.settings.speed; showCriticalAlert('disaster', { id: 'storm', icon: '⛈️', name: 'Storm', desc: 'Self-test alert' }, true); await stWait(60);
+    const alert = !!document.getElementById('mCrit') && !$('mCrit').classList.contains('hidden') && document.querySelectorAll('#mCrit [data-mcr]').length >= 2 && S.settings.speed === sp0;
+    hideCriticalAlert();
+    return { ok: sp === 9 && s2 === 2 && res > 0 && modes.indexOf('minimal') >= 0 && alert, detail: sp + ' speeds, 2× → ' + s2 + '× · search "house" → ' + res + ' · HUD ' + modes.join('/') + ' · CRITICAL ALERT without pausing ' + alert };
+  });
+  await stStep(28, 'Atomic Save · Settings · Recovery', async function () {
+    const ok = saveGame(true), raw = Store.getItem(slotKey(S.slot || 1));
+    let valid = false; try { const o = JSON.parse(raw); valid = !!o && !validateSaveObject(o).length; } catch (e) { valid = false; }
+    const set = Store.getItem('bct_settings') !== null || Store.keys().some(function (k) { return /settings/.test(k); });
+    return { ok: ok && valid && set, detail: 'save written atomically and validated ' + valid + ' (' + Math.round((raw || '').length / 1024) + ' KB) · settings stored separately ' + set + ' · autosave 5/10/15/30 min · ' + esc(SaveProviders.active.name) };
   });
   stDone();
 }

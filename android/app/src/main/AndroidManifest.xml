@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- BLOCK CITY TYCOON — Android. Offline-first: no INTERNET permission, no runtime permissions.
+<!-- BLOCK CITY TYCOON — Android. Offline-first: no INTERNET permission, no runtime permissions
+     (VIBRATE is a normal install-time permission for the optional haptic feedback).
      Saves live in the app's private storage; export / import use the Storage Access Framework (system file picker). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
     <application

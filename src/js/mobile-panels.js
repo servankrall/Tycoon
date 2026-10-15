@@ -55,21 +55,26 @@ function closeSheet() {
 }
 
 /* ===================================== BUILD MENU: 8 categories, touch cards ===================================== */
-const MCATS = [['res', '🏠', 'Residential', ['Residential']], ['com', '🏢', 'Commercial', ['Commercial']], ['ind', '🏭', 'Industrial', ['Industry', 'Resources', 'Logistics']],
-  ['svc', '🏥', 'Services', ['Services', 'Waste', 'Science']], ['park', '🌳', 'Parks', ['Leisure']], ['util', '⚡', 'Utilities', ['Utilities']], ['tr', '🚉', 'Transport', ['Transport']], ['spec', '⭐', 'Special', ['Landmarks']]];
-function mcatOf(d) { for (let i = 0; i < MCATS.length; i++) if (MCATS[i][3].indexOf(d.cat) >= 0) return MCATS[i][0]; return 'spec'; }
+const MCATS = [['res', '🏠', 'Residential'], ['com', '🛍️', 'Commercial'], ['ind', '🏭', 'Industrial'], ['off', '🏢', 'Office'],
+  ['svc', '🏥', 'Service'], ['park', '🌳', 'Park'], ['util', '⚡', 'Utility'], ['spec', '⭐', 'Special']];
+const MCAT_OF_CAT = { Residential: 'res', Commercial: 'com', Industry: 'ind', Resources: 'ind', Logistics: 'ind', Services: 'svc', Waste: 'svc', Science: 'svc', Transport: 'svc', Leisure: 'park', Utilities: 'util', Landmarks: 'spec' };
+const OFFICE_IDS = ['office', 'bank', 'stockexchange', 'techcampus', 'datacenter', 'bankhq', 'startup'];
+function mcatOf(d) { if (OFFICE_IDS.indexOf(d.id) >= 0 || ((d.sector === 'TECHNOLOGY' || d.sector === 'FINANCE') && d.cat !== 'Science')) return 'off'; return MCAT_OF_CAT[d.cat] || 'spec'; }
 function reqLevel(d) {
   const u = d.unlock || {};
   if (u.cityLevel) return u.cityLevel;
   if (u.pop) { for (let i = 0; i < CITY_LEVEL_POP.length; i++) if (CITY_LEVEL_POP[i] >= u.pop) return i + 1; return 20; }
   return 1;
 }
+function cardCapacity(d) { return d.housing ? '🏠 ' + fmt(d.housing) : d.beds ? '🛏 ' + fmt(d.beds) : d.transit ? '🚌 ' + fmt(d.transit) : d.power > 0 ? '⚡ ' + fmt(d.power) : d.water > 0 ? '💧 ' + fmt(d.water) : d.edu ? '🎓 ' + fmt(d.edu) : d.cap && d.sector !== 'NONE' ? '📦 ' + fmt(d.cap) : '—'; }
+/* Card: icon · name · cost · workers · capacity · required level · BUILD — the whole card is the touch target */
 function buildCardHtml(d) {
   const st = unlockStatus(d), cost = buildCost(d), poor = funds(payerFor(d)) < cost, ban = S.p5 && challengeBans(d);
   const lock = !st.ok || ban, lvl = reqLevel(d);
   return '<button class="mCard' + (lock ? ' locked' : poor ? ' poor' : '') + '" data-mbuild="' + d.id + '">' +
     '<span class="mcIcon">' + d.icon + '</span><span class="mcName">' + esc(d.name) + '</span>' +
     '<span class="mcMeta"><b class="mcCost">' + money(cost) + (d.public ? ' 🏛' : '') + '</b><i class="mcLvl' + (cityLevel() < lvl ? ' no' : '') + '">LV ' + lvl + '</i></span>' +
+    '<span class="mcStats"><span>👷 ' + fmt(d.workers || 0) + '</span><span>' + cardCapacity(d) + '</span></span>' +
     '<span class="mcGo">' + (ban ? '🚫 BANNED' : !st.ok ? '🔒 ' + esc(st.reason) : poor ? '💸 NEED FUNDS' : 'BUILD') + '</span></button>';
 }
 function buildSheetHtml() {
@@ -117,7 +122,7 @@ function showToolHint(text, onClose) {
 function hideToolHint() { const el = document.getElementById('mToolHint'); if (el) el.classList.add('hidden'); }
 
 /* ===================================== INSPECTOR CARDS ===================================== */
-const MINS = { kind: null, ref: null, el: null, demo: 0, timer: null };
+const MINS = { kind: null, ref: null, el: null, demo: 0, timer: null, tab: 'overview' };
 function inspectorEl() {
   if (MINS.el) return MINS.el;
   const el = document.createElement('div'); el.id = 'mInspect'; el.className = 'hidden';
@@ -129,6 +134,7 @@ function openInspector(kind, ref) {
   inspectorEl();
   if (MSHEET.open) closeSheet();
   closeNotificationCenter();
+  if (MINS.kind !== kind || MINS.ref !== ref) MINS.tab = 'overview';
   MINS.kind = kind; MINS.ref = ref; MINS.demo = 0;
   renderInspector();
   MINS.el.classList.remove('hidden'); document.body.classList.add('mInsOpen');
@@ -147,75 +153,141 @@ function closeInspector(fromSelect) {
 function insRow(label, value, cls) { return '<div class="miRow"><span>' + label + '</span><b class="' + (cls || '') + '">' + value + '</b></div>'; }
 function insBar(label, v) { v = clamp(v || 0, 0, 100); return '<div class="miBar"><span>' + label + '</span><i><em style="width:' + v + '%;background:' + (v > 50 ? '#06d6a0' : v > 25 ? '#ffd166' : '#ef476f') + '"></em></i><b>' + Math.round(v) + '%</b></div>'; }
 function importantBuilding(b) { const d = bdef(b); return !!(d.landmark || d.unique || d.id === 'townhall' || buildCost(d) >= 50000 || (b.level || 1) >= 5); }
+/* road helpers: same-type connected segment (length), traffic on and around a tile */
+function roadSegment(x, y) {
+  const t0 = MAP.roads[idx(x, y)], seen = new Set([idx(x, y)]), q = [[x, y]];
+  while (q.length && seen.size < 600) { const c = q.shift(); [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (o) { const nx = c[0] + o[0], ny = c[1] + o[1]; if (!inMap(nx, ny)) return; const i = idx(nx, ny); if (seen.has(i) || MAP.roads[i] !== t0 || MAP.inter[i]) return; seen.add(i); q.push([nx, ny]); }); }
+  return Array.from(seen);
+}
+function roadTraffic(x, y, rt) {
+  const vs = AG.vehicles.filter(function (v) { return Math.abs(v.x / TILE - (x + 0.5)) < 1.5 && Math.abs(v.y / TILE - (y + 0.5)) < 1.5; });
+  const avg = vs.length ? vs.reduce(function (a, v) { return a + (v.speed || 0) / Math.max(1, v.maxSpeed || 1); }, 0) / vs.length : 1;
+  const load = clamp(Math.round(vs.length / Math.max(1, rt.cap) * 100), 0, 100);
+  return { n: vs.length, load: load, perHour: Math.round(vs.length * 60 * rt.speed * 3.2 + rt.cap * rt.lanes * load / 2), kmh: Math.round(rt.speed * 50 * avg) };
+}
+function agentEta(v) {
+  if (!v.path || !v.path.length) return null;
+  let tiles = Math.max(0, v.path.length - 1 - (v.seg || 0));
+  return Math.round(tiles * TILE / Math.max(8, v.speed || v.maxSpeed || 20) * (TIME_SCALE ? 1 : 1));
+}
+/* UNIFIED INSPECTOR — one card for buildings, companies, utilities, roads, citizens and vehicles:
+   tabs (Overview · Statistics · Economy · Connections) + quick actions; never covers the whole screen */
+const INS_TABS = { building: [['overview', 'Overview'], ['stats', 'Statistics'], ['economy', 'Economy'], ['links', 'Connections']], road: [['overview', 'Overview'], ['edit', 'Edit']], citizen: [['overview', 'Overview'], ['needs', 'Needs']], vehicle: [['overview', 'Overview']] };
 function renderInspector() {
   const el = MINS.el; if (!el || !MINS.kind) return;
   let head = '', body = '', acts = '';
+  const tabs = INS_TABS[MINS.kind] || [];
+  if (!tabs.some(function (t) { return t[0] === MINS.tab; })) MINS.tab = 'overview';
+  const tab = MINS.tab;
   if (MINS.kind === 'building') {
     const b = MINS.ref; if (!b || !MAP.byId.has(b.id)) { closeInspector(); return; }
-    const d = bdef(b), st = buildingStatus(b), net = (b._rev || 0) - (b._cost || 0);
-    head = '<span class="miIcon">' + d.icon + '</span><div class="miTitle"><b>' + esc(d.name) + '</b><small>BUILDING INFO · ' + esc(ownerLabel(b.owner)) + '</small></div>';
-    body = '<div class="miStatus" style="color:' + st[1] + ';border-color:' + st[1] + '66">' + st[0] + '</div>' +
+    const d = bdef(b), st = buildingStatus(b), net = (b._rev || 0) - (b._cost || 0), dist = districtOf(b.x, b.y);
+    head = '<span class="miIcon">' + d.icon + '</span><div class="miTitle"><b>' + esc(d.name) + '</b><small>BUILDING SELECTED · LV ' + b.level + ' · ' + esc(ownerLabel(b.owner)) + '</small></div>';
+    if (tab === 'overview') body = '<div class="miStatus" style="color:' + st[1] + ';border-color:' + st[1] + '66">' + st[0] + '</div>' +
       insRow('🏆 Level', b.level + ' / ' + MAX_LEVEL) +
-      insRow('🛠 Condition', b.health !== undefined ? Math.round(b.health) + '%' + (b.damaged ? ' · damaged' : '') : (b.damaged ? 'Damaged' : b.built ? 'Good' : 'Building ' + Math.floor((b.progress || 0) * 100) + '%'), b.damaged || (b.health !== undefined && b.health < 30) ? 'neg' : '') +
-      (d.workers ? insRow('👷 Workers', Math.round(b._actW || 0) + ' / ' + b.workers) : d.housing ? insRow('🏠 Residents', fmt(Math.round(b._cust || 0)) + ' / ' + fmt(Math.round(b._hcap || 0))) : '') +
-      insRow('💵 Income', (net >= 0 ? '+' : '') + money(net * 60) + '/min', net >= 0 ? 'pos' : 'neg') +
-      insRow('⚡ Power', d.power > 0 ? '+' + fmt(Math.round(b._gen || d.power)) : d.power < 0 ? (b._powered === false ? '✗ No power' : '✓ ' + fmt(-d.power * lvlMult(b.level))) : '—', d.power < 0 && b._powered === false ? 'neg' : '') +
-      insRow('💧 Water', d.water > 0 ? '+' + fmt(d.water * lvlMult(b.level)) : d.water < 0 ? '✓ ' + fmt(-d.water * lvlMult(b.level)) : '—');
-    if (!isAI(b) && b.built && b.level < MAX_LEVEL && !b.upg && d.cost > 0) acts += '<button class="btn gold' + (funds(ownerPayer(b)) < upgradeCost(b) ? ' dis' : '') + '" data-mi="upgrade">⬆ UPGRADE ' + money(upgradeCost(b)) + '</button>';
+      (d.workers ? insRow('👷 Employees', Math.round(b._actW || 0) + ' / ' + b.workers) : d.housing ? insRow('🏠 Residents', fmt(Math.round(b._cust || 0)) + ' / ' + fmt(Math.round(b._hcap || 0))) : '') +
+      insRow('💵 Income', money((b._rev || 0) * 60) + '/min', 'pos') + insRow('🛠 Maintenance', money((b._cost || 0) * 60) + '/min', 'neg') +
+      insRow('🧰 Condition', b.health !== undefined ? Math.round(b.health) + '%' + (b.damaged ? ' · damaged' : '') : (b.damaged ? 'Damaged' : b.built ? 'Good' : 'Building ' + Math.floor((b.progress || 0) * 100) + '%'), b.damaged || (b.health !== undefined && b.health < 30) ? 'neg' : '');
+    else if (tab === 'stats') body = insRow('⚙️ Efficiency', pct((b._eff || 0) * 100)) + (d.housing ? insRow('🏠 Housing', fmt(d.housing) + ' · Q' + d.quality) : '') + (b._cust > 0 && !d.housing ? insRow(d.transit ? '🚌 Riders' : '🛍 Customers/h', fmt(Math.round(b._cust))) : '') +
+      (d.edu ? insRow('🎓 Students', fmt(d.edu * lvlMult(b.level))) : '') + (d.beds ? insRow('🛏 Beds', fmt(d.beds)) : '') + (d.cover ? insRow('📡 Coverage', Math.round(coverRadius(b) * TILE_METERS) + ' m') : '') + (d.pol ? insRow('🏭 Pollution', (d.pol > 0 ? '+' : '') + d.pol, d.pol > 0 ? 'neg' : 'pos') : '') + insRow('📐 Size', d.w + '×' + d.h + ' · ↻' + ((b.rot | 0) * 90) + '°');
+    else if (tab === 'economy') body = insRow('💵 Revenue', money((b._rev || 0) * 60) + '/min', 'pos') + insRow('🛠 Costs', money((b._cost || 0) * 60) + '/min', 'neg') + insRow('📊 Net', (net >= 0 ? '+' : '') + money(net * 60) + '/min', net >= 0 ? 'pos' : 'neg') +
+      insRow('🏷 Value', money(typeof buildingValue === 'function' ? buildingValue(b) : buildCost(d))) + (dist ? insRow('🗺 Land value', '×' + landValue(b).toFixed(2)) : '') + (!isAI(b) && b.level < MAX_LEVEL ? insRow('⬆ Next level', money(upgradeCost(b))) : '');
+    else body = insRow('⚡ Power', d.power > 0 ? '+' + fmt(Math.round(b._gen || d.power)) : d.power < 0 ? (b._powered === false ? '✕ No power' : '✓ ' + fmt(-d.power * lvlMult(b.level))) : '—', d.power < 0 && b._powered === false ? 'neg' : '') +
+      insRow('💧 Water', d.water > 0 ? '+' + fmt(d.water * lvlMult(b.level)) : d.water < 0 ? '✓ ' + fmt(-d.water * lvlMult(b.level)) : '—') + insRow('🛣 Road access', d.noRoad || b._road ? '✓ Connected' : '✕ No road', d.noRoad || b._road ? 'pos' : 'neg') +
+      insRow('🗺 District', esc(districtName(b.x, b.y))) + insRow('📍 Location', b.x + ', ' + b.y);
+    if (!isAI(b) && b.built && b.level < MAX_LEVEL && !b.upg && d.cost > 0) acts += '<button class="btn gold' + (funds(ownerPayer(b)) < upgradeCost(b) ? ' dis' : '') + '" data-mi="upgrade">⬆ UPGRADE</button>';
     if (b._tip > S.clock.runSec) acts += '<button class="btn gold" data-mi="tip">💰 COLLECT</button>';
-    if (!d.noDemolish) acts += '<button class="btn red" data-mi="demolish">' + (MINS.demo > performance.now() ? '⚠ CONFIRM DEMOLISH' : '🗑 DEMOLISH') + '</button>';
-    acts += '<button class="btn" data-mi="more">⋯ MORE</button>';
+    acts += '<button class="btn" data-mi="more">ℹ INFO</button>';
+    if (!d.noDemolish) acts += '<button class="btn red" data-mi="demolish">🗑 DEMOLISH</button>';
   } else if (MINS.kind === 'citizen') {
     const c = MINS.ref, n = c.needs || {};
+    if (typeof citizenProfile === 'function') citizenProfile(c);
     const home = citizenBuilding(c.home), work = citizenBuilding(c.work), dest = c.target ? citizenBuilding(c.target) : null;
-    head = '<span class="miIcon">' + (c.tourist ? '🧳' : '🧑') + '</span><div class="miTitle"><b>' + (c.tourist ? 'Tourist #' : 'Citizen #') + c.id + '</b><small>CITIZEN · ' + esc(String(c.state || 'IDLE').replace(/_/g, ' ')) + '</small></div>';
-    body = insRow('💼 Job', c.tourist ? 'On vacation' : work ? esc(bdef(work).name) : 'Unemployed', work || c.tourist ? '' : 'neg') + insRow('🏠 Home', home ? esc(bdef(home).name) : '—') +
-      insRow('📍 Destination', dest ? esc(bdef(dest).name) : 'Wandering') + insRow('😊 Happiness', Math.round(c.happiness || 0) + '%') + insRow('💰 Money', money(c.money || 0)) +
-      '<div class="miNeeds">' + insBar('🍔 Food', n.food) + insBar('🏠 Housing', n.housing) + insBar('🎉 Fun', n.fun) + insBar('💼 Work', n.work) + insBar('🛍 Shopping', n.shopping) + insBar('😴 Energy', c.energy) + '</div>';
-    acts = '<button class="btn" data-mi="follow">🎥 FOLLOW</button><button class="btn" data-mi="more">⋯ MORE</button>';
+    head = '<span class="miIcon">' + (c.tourist ? '🧳' : '🧑') + '</span><div class="miTitle"><b>' + (c.tourist ? 'Tourist #' : 'Citizen #') + c.id + '</b><small>CITIZEN · ' + esc(String(c.state || 'IDLE').replace(/_/g, ' ')) + (MOBX.track === c ? ' · 🎥 TRACKING' : '') + '</small></div>';
+    if (tab === 'overview') body = insRow('🎂 Age', c.age || '—') + insRow('💼 Job', esc(typeof citizenJob === 'function' ? citizenJob(c).title : work ? bdef(work).name : 'Unemployed')) +
+      insRow('🏠 Home', home ? esc(districtName(home.x, home.y)) : '—') + insRow('🏢 Workplace', work ? esc(districtName(work.x, work.y)) : c.tourist ? 'On vacation' : '—') +
+      insRow('📍 Destination', dest ? esc(bdef(dest).name) : 'Wandering') + insRow('😊 Happiness', Math.round(c.happiness || 0) + '%') + insRow('💰 Money', money(c.money || 0));
+    else body = '<div class="miNeeds">' + insBar('🍔 Food', n.food) + insBar('🏠 Housing', n.housing) + insBar('🎉 Fun', n.fun) + insBar('💼 Work', n.work) + insBar('🛍 Shopping', n.shopping) + insBar('😴 Energy', c.energy) + '</div>';
+    acts = '<button class="btn blue" data-mi="track">🎥 TRACK</button><button class="btn" data-mi="more">👤 PROFILE</button>' + (work ? '<button class="btn" data-mi="gowork">💼 WORK</button>' : '') + (home ? '<button class="btn" data-mi="gohome">🏠 HOME</button>' : '');
   } else if (MINS.kind === 'vehicle') {
-    const v = MINS.ref;
-    head = '<span class="miIcon">' + ({ car: '🚗', taxi: '🚕', bus: '🚌', truck: '🚚', ambulance: '🚑', firetruck: '🚒', police: '🚓', garbage: '🚛', tanker: '⛽', tram: '🚋', shuttle: '🚐', maint: '🛠️' }[v.type] || '🚗') + '</span><div class="miTitle"><b>' + esc(String(v.type || 'vehicle').toUpperCase()) + '</b><small>VEHICLE</small></div>';
-    body = insRow('📍 Destination', v.dest && v.dest.type ? esc(bdef(v.dest).name) : v.type === 'bus' ? 'Next stop' : 'Roaming') + insRow('💨 Speed', Math.round(v.speed || 0) + ' / ' + Math.round(v.maxSpeed || 0)) + insRow('🚦 State', esc(v.state || 'moving')) +
-      (v.line && typeof lineById === 'function' && lineById(v.line) ? insRow('🚌 Line', esc(lineById(v.line).name)) : '');
-    acts = '<button class="btn" data-mi="follow">🎥 FOLLOW</button><button class="btn" data-mi="more">⋯ MORE</button>';
+    const v = MINS.ref, emerg = ['ambulance', 'firetruck', 'police'].indexOf(v.type) >= 0, eta = agentEta(v);
+    head = '<span class="miIcon">' + ({ car: '🚗', taxi: '🚕', bus: '🚌', truck: '🚚', ambulance: '🚑', firetruck: '🚒', police: '🚓', garbage: '🚛', tanker: '⛽', tram: '🚋', shuttle: '🚐', maint: '🛠️' }[v.type] || '🚗') + '</span><div class="miTitle"><b>' + esc(String(v.type || 'vehicle').toUpperCase()) + '</b><small>VEHICLE' + (MOBX.track === v ? ' · 🎥 TRACKING' : '') + '</small></div>';
+    body = insRow('🚦 Status', esc(emerg ? (v.dest ? 'Responding' : 'Returning') : (v.state || 'moving'))) + insRow('📍 Destination', v.dest && v.dest.type ? esc(bdef(v.dest).name) : v.type === 'bus' ? 'Next stop' : 'Roaming') +
+      (eta !== null ? insRow('⏱ ETA', eta + ' sec') : '') + insRow('💨 Speed', Math.round(v.speed || 0) + ' / ' + Math.round(v.maxSpeed || 0)) + (v.line && typeof lineById === 'function' && lineById(v.line) ? insRow('🚌 Line', esc(lineById(v.line).name)) : '') +
+      (v.routeInfo && typeof routeInfoText === 'function' ? '<p class="small miNote">🧭 ' + esc(routeInfoText(v.routeInfo)) + '</p>' : '');
+    acts = '<button class="btn blue" data-mi="track">🎥 TRACK</button><button class="btn" data-mi="route">🧭 ROUTE</button><button class="btn" data-mi="more">ℹ STATUS</button>';
   } else if (MINS.kind === 'road') {
     const r = MINS.ref, i = idx(r.x, r.y), t = MAP.roads[i]; if (!t) { closeInspector(); return; }
-    const rt = ROAD_TYPES[t], nv = AG.vehicles.filter(function (v) { return Math.abs(v.x / TILE - (r.x + 0.5)) < 1.5 && Math.abs(v.y / TILE - (r.y + 0.5)) < 1.5; }).length;
-    const load = clamp(Math.round(nv / Math.max(1, rt.cap) * 100), 0, 100);
+    const rt = ROAD_TYPES[t], tr = roadTraffic(r.x, r.y, rt), seg = roadSegment(r.x, r.y);
     const inc = S.p9 && S.p9.traffic ? S.p9.traffic.incidents.find(function (x) { return x.tile === i; }) : null;
     const next = ROAD_TYPES[t + 1], nlock = next && next.unlock && S.city.peakPop < next.unlock.pop && !S.city.sandbox;
-    head = '<span class="miIcon">' + (MAP.nature[i] === 2 ? '🌉' : MAP.terrain[i] === TERRAIN.ROCK ? '🚇' : rt.icon) + '</span><div class="miTitle"><b>' + esc(rt.name) + '</b><small>ROAD · ' + r.x + ',' + r.y + (MAP.nature[i] === 2 ? ' · bridge' : MAP.terrain[i] === TERRAIN.ROCK ? ' · tunnel' : '') + '</small></div>';
-    body = insRow('🛣️ Road type', esc(rt.name) + ' · ' + rt.lanes + ' lane' + (rt.lanes > 1 ? 's' : '')) + insRow('📦 Capacity', rt.cap + ' vehicles') + insBar('🚗 Traffic', load) +
-      insRow('🛠 Condition', inc ? '⚠ ' + esc((INCIDENT_TYPES[inc.type] || {}).name || inc.type) : MAP.blocked[i] ? '🚧 Closed' : '✓ Good', inc || MAP.blocked[i] ? 'neg' : 'pos') + insRow('💨 Speed', Math.round(rt.speed * 50) + ' km/h');
-    if (next) acts += '<button class="btn gold' + (nlock || S.budget < roadTypeCost(t + 1) ? ' dis' : '') + '" data-mi="roadup">⬆ UPGRADE → ' + esc(next.name) + ' ' + (nlock ? '🔒' : money(roadTypeCost(t + 1))) + '</button>';
-    acts += '<button class="btn red" data-mi="roaddel">' + (MINS.demo > performance.now() ? '⚠ CONFIRM REMOVE' : '🗑 REMOVE') + '</button>';
+    const rname = MAP.rnames && MAP.rnames[i] ? MAP.rnames[i] : (typeof roadNameAt === 'function' ? roadNameAt(r.x, r.y) : '');
+    head = '<span class="miIcon">' + (MAP.nature[i] === 2 ? '🌉' : MAP.terrain[i] === TERRAIN.ROCK ? '🚇' : rt.icon) + '</span><div class="miTitle"><b>' + esc(rname || rt.name) + '</b><small>ROAD · ' + esc(rt.name) + (MAP.inter[i] ? ' · junction' : '') + '</small></div>';
+    if (tab === 'overview') body = insBar('🚗 Traffic', tr.load) + insRow('🚙 Vehicles/hour', fmt(tr.perHour)) + insRow('💨 Average speed', tr.kmh + ' km/h') + insRow('📏 Length', fmt(seg.length * TILE_METERS) + ' m') +
+      insRow('📦 Capacity', fmt(rt.cap * rt.lanes * 50) + ' vehicles/h · ' + rt.lanes + ' lane' + (rt.lanes > 1 ? 's' : '')) + insRow('🛠 Condition', inc ? '⚠ ' + esc((INCIDENT_TYPES[inc.type] || {}).name || inc.type) : MAP.blocked[i] ? '🚧 Closed' : '✓ Good', inc || MAP.blocked[i] ? 'neg' : 'pos');
+    else {
+      const jt = MAP.inter[i] && typeof junctionType === 'function' ? junctionType(i) : null;
+      body = '<div class="miSub">CHANGE TYPE (whole segment, ' + seg.length + ' tiles)</div><div class="mChips miTypes">' + ROAD_TYPES.slice(1).map(function (R) { const lock = R.unlock && S.city.peakPop < R.unlock.pop && !S.city.sandbox; return '<button class="mChip small' + (R.id === t ? ' on' : '') + (lock ? ' dis' : '') + '" data-mrt="' + R.id + '">' + esc(R.name) + '</button>'; }).join('') + '</div>' +
+        '<div class="mActs miEdit"><button class="btn" data-mi="extend">➕ Extend</button><button class="btn" data-mi="split">✂ Split here</button>' +
+        '<button class="btn' + (MAP.inter[i] ? '' : ' dis') + '" data-mi="signal">🚦 Traffic light' + (jt === 'signal' ? ' ✓' : '') + '</button><button class="btn' + (MAP.inter[i] ? '' : ' dis') + '" data-mi="roundabout">⭕ Roundabout' + (jt === 'roundabout' ? ' ✓' : '') + '</button>' +
+        '<button class="btn red" data-mi="roadsegdel">🗑 Delete segment</button></div>' + (MAP.inter[i] ? '' : '<p class="small miNote">Traffic lights and roundabouts go on junctions (3–4 roads meeting).</p>');
+    }
+    if (next) acts += '<button class="btn gold' + (nlock || S.budget < roadTypeCost(t + 1) ? ' dis' : '') + '" data-mi="roadup">⬆ UPGRADE ' + (nlock ? '🔒' : money(roadTypeCost(t + 1))) + '</button>';
+    acts += '<button class="btn' + (tab === 'edit' ? ' blue' : '') + '" data-mi="edit">✏ EDIT</button><button class="btn" data-mi="traffic">🚦 TRAFFIC</button><button class="btn red" data-mi="roaddel">🗑 DEMOLISH</button>';
   }
-  el.innerHTML = '<div class="miHead">' + head + '<button class="mX" data-mi="close" aria-label="Close">✕</button></div><div class="miBody mScroll" id="mInspectBody">' + body + '</div>' + (acts ? '<div class="miActs">' + acts + '</div>' : '');
+  el.innerHTML = '<div class="miHead">' + head + '<button class="mX" data-mi="close" aria-label="Close">✕</button></div>' +
+    (tabs.length > 1 ? '<div class="mChips miTabs">' + tabs.map(function (t) { return '<button class="mChip small' + (t[0] === tab ? ' on' : '') + '" data-mitab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' : '') +
+    '<div class="miBody mScroll" id="mInspectBody">' + body + '</div>' + (acts ? '<div class="miActs">' + acts + '</div>' : '');
+}
+/* SAFE DEMOLISH: always asks first (KEEP / DEMOLISH); right after, the UNDO toast can bring the building back */
+function confirmDemolish(b) {
+  const d = bdef(b), refund = isAI(b) ? 0 : Math.round(buildCost(d) * (b.built ? 0.5 : 0.9));
+  sysDialog('🗑 DEMOLISH ' + (importantBuilding(b) ? 'IMPORTANT BUILDING' : 'BUILDING') + '?', '<p><b>' + esc(d.name) + '</b>' + (b.level > 1 ? ' (level ' + b.level + ')' : '') + ' will be removed.' + (refund ? ' You get back <b>' + money(refund) + '</b>.' : '') + '</p><p class="small">You can UNDO right after demolishing.</p>',
+    [['KEEP', 'green', null], ['DEMOLISH', 'red', function () { demolish(b); closeInspector(); if (typeof haptic === 'function') haptic('success'); }]], 0);
 }
 function inspectorClick(e) {
+  const tb = e.target.closest('[data-mitab]'); if (tb) { MINS.tab = tb.dataset.mitab; renderInspector(); sfx('click'); return; }
+  const rtb = e.target.closest('[data-mrt]');
+  if (rtb && MINS.kind === 'road') { roadChangeType(MINS.ref, +rtb.dataset.mrt); return; }
   const a = e.target.closest('[data-mi]'); if (!a) return;
-  const k = a.dataset.mi; sfx('click'); UI.busyUntil = 0;
+  const k = a.dataset.mi; sfx('click'); UI.busyUntil = 0; if (typeof haptic === 'function') haptic('tap');
   if (k === 'close') { closeInspector(); return; }
   if (MINS.kind === 'building') {
     const b = MINS.ref; if (!b) return;
     if (k === 'upgrade') { upgradeBuilding(b); renderInspector(); }
     else if (k === 'tip') { collectTip(b); renderInspector(); }
     else if (k === 'more') { renderBottomInfo(); showModal(bdef(b).icon + ' ' + esc(bdef(b).name), '<div class="mMoreStats">' + $('biStats').innerHTML + '</div><div class="mMoreActs">' + $('biActions').innerHTML.replace(/<button class="btn small" data-act="deselect">✕<\/button>/, '') + '</div>'); }
-    else if (k === 'demolish') {
-      if (MINS.demo < performance.now()) { MINS.demo = performance.now() + 4000; renderInspector(); setTimeout(function () { if (MINS.kind) renderInspector(); }, 4100); return; }
-      MINS.demo = 0;
-      const d = bdef(b), refund = isAI(b) ? 0 : Math.round(buildCost(d) * (b.built ? 0.5 : 0.9));
-      const go = function () { demolish(b); closeInspector(); };
-      if (importantBuilding(b)) sysDialog('🚜 DEMOLISH ' + d.name.toUpperCase() + '?', '<p>This is an important building' + (b.level > 1 ? ' (level ' + b.level + ')' : '') + '. ' + (refund ? 'You get back <b>' + money(refund) + '</b>.' : '') + '</p><p class="small">This cannot be undone.</p>', [['DEMOLISH', 'red', go], ['CANCEL', '', null]], 1);
-      else go();
-    }
+    else if (k === 'demolish') confirmDemolish(b);
   } else if (MINS.kind === 'road') {
-    const r = MINS.ref;
-    if (k === 'roadup') { const t = MAP.roads[idx(r.x, r.y)], keep = UI.roadType; UI.roadType = t + 1; const n = placeRoads([[r.x, r.y]]); UI.roadType = keep; if (n) toast('⬆ Road upgraded to ' + ROAD_TYPES[t + 1].name, 'good'); renderInspector(); }
-    else if (k === 'roaddel') { if (MINS.demo < performance.now()) { MINS.demo = performance.now() + 4000; renderInspector(); setTimeout(function () { if (MINS.kind) renderInspector(); }, 4100); return; } MINS.demo = 0; bulldozeTile(r.x, r.y); closeInspector(); }
-  } else if (k === 'more') { const ref = MINS.kind === 'vehicle' ? { v: MINS.ref } : { c: MINS.ref }; MOBP.showAgentInfo0(ref); }
-  else if (k === 'follow') { const o = MINS.ref; if (o && isFinite(o.x)) { CAM.x = o.x; CAM.y = o.y; CAM.zoom = Math.max(CAM.zoom, 1.3); clampCamera(); } }
+    const r = MINS.ref, i = idx(r.x, r.y);
+    if (k === 'roadup') { const t = MAP.roads[i], keep = UI.roadType; UI.roadType = t + 1; const n = placeRoads([[r.x, r.y]]); UI.roadType = keep; if (n) toast('⬆ Road upgraded to ' + ROAD_TYPES[t + 1].name, 'good'); renderInspector(); }
+    else if (k === 'edit') { MINS.tab = MINS.tab === 'edit' ? 'overview' : 'edit'; renderInspector(); }
+    else if (k === 'traffic') { closeInspector(); openCityMap('heat:TRAFFIC'); }
+    else if (k === 'extend') { closeInspector(); enterDrawMode('road'); UI.roadType = MAP.roads[i] || UI.roadType; UI.roadDrag = { x0: r.x, y0: r.y, x1: r.x, y1: r.y, touch: true }; MOB.road.step = 1; updateRoadSheet(); toast('➕ Drag from the highlighted road end, then CONFIRM', ''); }
+    else if (k === 'split') { const ok = roadSplit(r); toast(ok ? '✂ Road split — the two parts can now get different types' : '✂ Split needs a straight road tile (not a junction)', ok ? 'good' : 'bad'); renderInspector(); }
+    else if (k === 'signal' || k === 'roundabout') { if (!MAP.inter[i]) return; const ok = typeof setJunctionType === 'function' && setJunctionType(i, k); toast(ok ? (k === 'signal' ? '🚦 Traffic lights installed' : '⭕ Roundabout built') : '❌ Not available here', ok ? 'good' : 'bad'); renderInspector(); }
+    else if (k === 'roaddel') sysDialog('🗑 DEMOLISH ROAD TILE?', '<p>The road tile is removed (40% refund). You can UNDO right after.</p>', [['KEEP', 'green', null], ['DEMOLISH', 'red', function () { bulldozeTile(r.x, r.y); closeInspector(); }]], 0);
+    else if (k === 'roadsegdel') { const seg = roadSegment(r.x, r.y); sysDialog('🗑 DELETE ROAD SEGMENT?', '<p>' + seg.length + ' road tiles of this segment are removed.</p>', [['KEEP', 'green', null], ['DELETE', 'red', function () { seg.forEach(function (j) { bulldozeTile(j % MAP.W, Math.floor(j / MAP.W)); }); closeInspector(); }]], 0); }
+  } else {
+    const o = MINS.ref;
+    if (k === 'more') { const ref = MINS.kind === 'vehicle' ? { v: o } : { c: o }; MOBP.showAgentInfo0(ref); }
+    else if (k === 'track') { if (typeof startTracking === 'function') startTracking(o); renderInspector(); }
+    else if (k === 'gowork' || k === 'gohome') { const bb = citizenBuilding(k === 'gowork' ? o.work : o.home); if (bb) { const c = buildingCenter(bb); camFlyTo(c.x, c.y, Math.max(CAM.zoom, 1.2)); } }
+    else if (k === 'route') { if (o.dest && o.dest.type) { const c = buildingCenter(o.dest); camFlyTo(c.x, c.y, Math.max(CAM.zoom, 1)); toast('🧭 Destination: ' + bdef(o.dest).name + (agentEta(o) !== null ? ' · ETA ' + agentEta(o) + ' s' : ''), ''); } else toast('🧭 No fixed destination (roaming / line service)', ''); }
+  }
+}
+/* ROAD EDIT: change the type of the whole segment, split it into two segments */
+function roadChangeType(r, t) {
+  const R = ROAD_TYPES[t]; if (!R) return;
+  if (R.unlock && S.city.peakPop < R.unlock.pop && !S.city.sandbox) { toast('🔒 ' + R.name + ' unlocks at ' + fmt(R.unlock.pop) + ' population', 'bad'); return; }
+  const seg = roadSegment(r.x, r.y), keep = UI.roadType; UI.roadType = t;
+  const n = placeRoads(seg.map(function (j) { return [j % MAP.W, Math.floor(j / MAP.W)]; })); UI.roadType = keep;
+  toast(n ? '🛣️ ' + n + ' tiles → ' + R.name : '❌ City budget too low', n ? 'good' : 'bad'); renderInspector();
+}
+function roadSplit(r) {
+  const i = idx(r.x, r.y); if (MAP.inter[i]) return false;
+  const t = MAP.roads[i], other = t === 1 ? 2 : t - 1, keep = UI.roadType; UI.roadType = other;     // one tile of a neighbouring type is the split point
+  const n = placeRoads([[r.x, r.y]]); UI.roadType = keep; return !!n;
 }
 function showRoadInspector(x, y) { openInspector('road', { x: x, y: y }); }
 
@@ -252,33 +324,48 @@ function renderMobilePage(first) {
   const body = el.querySelector('.mPageBody'), st = body.scrollTop;
   let title = '', h = '', tools = '';
   if (MPAGE.kind === 'city') {
-    const c = S.city, hf = (SIM.hapFactors || []).slice().sort(function (a, b) { return a[1] - b[1]; });
-    title = '🏙️ ' + esc(c.name) + ' · LV ' + cityLevel() + ' ' + esc(cityLevelName());
+    const c = S.city, hf = (SIM.hapFactors || []).slice().sort(function (a, b) { return a[1] - b[1]; }), inc = SIM.income || 0, ex = SIM.expenses || 0;
+    const pg = SIM.powerGen || 0, pu = SIM.powerUse || 0, wg = SIM.waterGen || 0, wu = SIM.waterUse || 0, safety = clamp(100 - (c.crime || 0), 0, 100);
+    title = '🏙️ CITY OVERVIEW · ' + esc(c.name) + ' · LV ' + cityLevel();
     tools = '<button class="btn small" data-mpg="hall">🏛 City Hall</button>';
     h = '<div class="mStatGrid">' +
       statCard('👥', 'Population', fmt(Math.floor(c.population)), 'peak ' + fmt(Math.floor(c.peakPop)) + ' · ' + trendTxt(histTrend('pop')) + ' · homes ' + fmt(Math.round(SIM.housingCap || 0))) +
-      statCard('💼', 'Jobs', fmt(Math.round(SIM.jobs || 0)), 'employed ' + fmt(Math.round(SIM.employed || 0)) + ' · unemployment ' + pct((SIM.unemployment || 0) * 100), 100 - (SIM.unemployment || 0) * 100, (SIM.unemployment || 0) > 0.12 ? 'warn' : '') +
-      statCard(c.happiness >= 70 ? '😊' : c.happiness >= 45 ? '😐' : '😠', 'Happiness', pct(c.happiness), hf.length ? 'worst: ' + esc(hf[0][0]) + ' ' + (hf[0][1] > 0 ? '+' : '') + hf[0][1].toFixed(0) : '', c.happiness, c.happiness < 45 ? 'warn' : '') +
-      statCard('🎓', 'Education', Math.round(c.education || 0) + ' / 100', 'schools, universities and research', c.education) +
-      statCard('🏥', 'Healthcare', pct((SIM.cov.health || 0) * 100), 'coverage of homes · 🚒 fire ' + pct((SIM.cov.fire || 0) * 100) + ' · 🚓 police ' + pct((SIM.cov.police || 0) * 100), (SIM.cov.health || 0) * 100, (SIM.cov.health || 0) < 0.5 ? 'warn' : '') +
-      statCard('🚦', 'Traffic', pct(SIM.traffic || 0), (SIM.traffic || 0) > 70 ? 'congestion — add roads or transit' : 'flowing · ' + fmt(AG.vehicles.length) + ' vehicles', SIM.traffic || 0, (SIM.traffic || 0) > 70 ? 'warn' : '') +
-      statCard('🏷️', 'Land Value', '×' + avgLandValue().toFixed(2), 'average of all buildings') +
-      statCard('🏭', 'Pollution · Crime', Math.round(c.pollution || 0) + ' · ' + Math.round(c.crime || 0), 'lower is better') +
-      '</div><div class="mActs"><button class="btn blue" data-mpg="stats">📊 All statistics</button><button class="btn" data-mpg="services">🚒 Services</button><button class="btn" data-mpg="housing">🏘 Housing & education</button><button class="btn" data-mpg="research">🔬 Research</button><button class="btn" data-mpg="companies">🏢 Companies</button><button class="btn" data-mpg="world">🌍 World</button><button class="btn" data-mpg="quests">🎯 Quests</button></div>';
-  } else if (MPAGE.kind === 'economy') {
-    const inc = SIM.income || 0, ex = SIM.expenses || 0, infl = S.p6 && S.p6.econ ? S.p6.econ.infl || 0 : 0, rate = typeof interestRate === 'function' ? interestRate() : 0;
-    title = '💰 ECONOMY';
-    tools = '<button class="btn small" data-mpg="taxes">🏛 Taxes & budget</button>';
-    h = '<div class="mStatGrid">' +
-      statCard('💰', 'Money', money(S.money), 'your companies · ' + trendTxt(histTrend('money')), null, S.money < 0 ? 'warn' : '') +
-      statCard('🏛', 'City Budget', money(S.budget), signMoney((SIM.bNet || 0) * 60) + '/min', null, (SIM.bNet || 0) < 0 ? 'warn' : '') +
+      statCard('💰', 'Money', money(S.money), 'city budget ' + money(S.budget), null, S.money < 0 ? 'warn' : '') +
       statCard('📈', 'Income', money(inc * 60) + '/min', 'taxes, rent and sales') +
       statCard('📉', 'Expenses', money(ex * 60) + '/min', 'maintenance, wages, services', null, ex > inc ? 'warn' : '') +
-      statCard('🌍', 'GDP', money(hudGdp()), 'per year') +
-      statCard('💹', 'Inflation', (infl * 100).toFixed(1) + '%', 'CPI ' + (S.p6 && S.p6.econ ? S.p6.econ.cpi.toFixed(1) : '—'), null, Math.abs(infl) > 0.05 ? 'warn' : '') +
-      statCard('🏦', 'Interest', (rate * 100).toFixed(2) + '%', 'central bank rate') +
-      statCard('🏢', 'Companies', fmt(foundedCompanies()) + ' yours', fmt(AI_DEFS.length) + ' rival companies') +
-      '</div>' + graphBlockHtml() +
+      statCard(c.happiness >= 70 ? '😊' : c.happiness >= 45 ? '😐' : '😠', 'Happiness', pct(c.happiness), hf.length ? 'worst: ' + esc(hf[0][0]) + ' ' + (hf[0][1] > 0 ? '+' : '') + hf[0][1].toFixed(0) : '', c.happiness, c.happiness < 45 ? 'warn' : '') +
+      statCard('💼', 'Employment', pct((1 - (SIM.unemployment || 0)) * 100), fmt(Math.round(SIM.employed || 0)) + ' of ' + fmt(Math.round(SIM.labor || 0)) + ' workers · ' + fmt(Math.round(SIM.jobs || 0)) + ' jobs', 100 - (SIM.unemployment || 0) * 100, (SIM.unemployment || 0) > 0.12 ? 'warn' : '') +
+      statCard('🚦', 'Traffic', pct(SIM.traffic || 0), (SIM.traffic || 0) > 70 ? 'congestion — add roads or transit' : 'flowing · ' + fmt(AG.vehicles.length) + ' vehicles', SIM.traffic || 0, (SIM.traffic || 0) > 70 ? 'warn' : '') +
+      statCard('🏭', 'Pollution', Math.round(c.pollution || 0), 'lower is better', clamp(c.pollution || 0, 0, 100), (c.pollution || 0) > 50 ? 'warn' : '') +
+      statCard('⚡', 'Power', fmt(Math.round(pu)) + ' / ' + fmt(Math.round(pg)), pu > pg ? '✕ shortage — build power plants' : '✓ ' + pct(pg ? pu / pg * 100 : 0) + ' used', pg ? clamp(pu / pg * 100, 0, 100) : 100, pu > pg ? 'warn' : '') +
+      statCard('💧', 'Water', fmt(Math.round(wu)) + ' / ' + fmt(Math.round(wg)), wu > wg ? '✕ shortage — build water towers' : '✓ ' + pct(wg ? wu / wg * 100 : 0) + ' used', wg ? clamp(wu / wg * 100, 0, 100) : 100, wu > wg ? 'warn' : '') +
+      statCard('🎓', 'Education', Math.round(c.education || 0) + ' / 100', 'schools, universities and research', c.education) +
+      statCard('🏥', 'Health', pct((SIM.cov.health || 0) * 100), 'healthcare coverage of homes', (SIM.cov.health || 0) * 100, (SIM.cov.health || 0) < 0.5 ? 'warn' : '') +
+      statCard('🚓', 'Safety', pct(safety), 'police ' + pct((SIM.cov.police || 0) * 100) + ' · fire ' + pct((SIM.cov.fire || 0) * 100) + ' · crime ' + Math.round(c.crime || 0), safety, safety < 60 ? 'warn' : '') +
+      statCard('🏷️', 'Land Value', '×' + avgLandValue().toFixed(2), 'average of all buildings') +
+      '</div><div class="mActs"><button class="btn blue" data-mpg="stats">📊 All statistics</button><button class="btn" data-mpg="services">🚒 Services</button><button class="btn" data-mpg="housing">🏘 Housing & education</button><button class="btn" data-mpg="research">🔬 Research</button><button class="btn" data-mpg="companies">🏢 Companies</button><button class="btn" data-mpg="world">🌍 World</button><button class="btn" data-mpg="quests">🎯 Quests</button><button class="btn" data-mpg="report">📰 Daily report</button></div>';
+  } else if (MPAGE.kind === 'economy') {
+    const inc = SIM.income || 0, ex = SIM.expenses || 0, infl = S.p6 && S.p6.econ ? S.p6.econ.infl || 0 : 0, rate = typeof interestRate === 'function' ? interestRate() : 0;
+    const debt = (S.bank && S.bank.loans ? S.bank.loans.reduce(function (a, l) { return a + l.remaining; }, 0) : 0);
+    const stocks = typeof stockOf === 'function' ? AI_DEFS.map(function (a) { try { return stockOf(a.id).price; } catch (e) { return 0; } }).filter(Boolean) : [];
+    const stockIdx = stocks.length ? stocks.reduce(function (a, v) { return a + v; }, 0) / stocks.length : 0;
+    const ET = MPAGE.etab || 'overview';
+    title = '💰 ECONOMY';
+    tools = '<button class="btn small" data-mpg="taxes">🏛 Taxes & budget</button>';
+    const tabsH = '<div class="mChips mEcoTabs">' + [['overview', '💰 Treasury'], ['market', '📈 Market'], ['trade', '🚢 Trade & production']].map(function (t) { return '<button class="mChip' + (ET === t[0] ? ' on' : '') + '" data-metab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    let cards = '';
+    if (ET === 'overview') cards = statCard('💰', 'Treasury', money(S.money), 'your companies · ' + trendTxt(histTrend('money')), null, S.money < 0 ? 'warn' : '') +
+      statCard('🏛', 'City Budget', money(S.budget), signMoney((SIM.bNet || 0) * 60) + '/min', null, (SIM.bNet || 0) < 0 ? 'warn' : '') +
+      statCard('📈', 'Income', money(inc * 60) + '/min', 'taxes, rent and sales') + statCard('📉', 'Expenses', money(ex * 60) + '/min', 'maintenance, wages, services', null, ex > inc ? 'warn' : '') +
+      statCard('🧾', 'Debt', money(debt), (S.bank && S.bank.loans ? S.bank.loans.length : 0) + ' active loan(s)', null, debt > Math.max(1, S.money) * 2 ? 'warn' : '') + statCard('🌍', 'GDP', money(hudGdp()), 'per year');
+    else if (ET === 'market') cards = statCard('💹', 'Inflation', (infl * 100).toFixed(1) + '%', 'CPI ' + (S.p6 && S.p6.econ ? S.p6.econ.cpi.toFixed(1) : '—'), null, Math.abs(infl) > 0.05 ? 'warn' : '') +
+      statCard('🏦', 'Interest Rate', (rate * 100).toFixed(2) + '%', 'central bank rate') + statCard('🧮', 'Tax', (S.city.tax || 0) + '%', 'income tax rate') +
+      statCard('📊', 'Stock Market', stockIdx ? '$' + stockIdx.toFixed(2) : '—', 'average share price of ' + stocks.length + ' companies') +
+      statCard('🏢', 'Companies', fmt(foundedCompanies()) + ' yours', fmt(AI_DEFS.length) + ' rival companies') + statCard('🌍', 'GDP', money(hudGdp()), 'per year');
+    else cards = statCard('🚢', 'Trade', money((SIM.exportValue || 0) * 60) + '/min', 'exports · imports ' + money((SIM.importValue || 0) * 60) + '/min') +
+      statCard('🏭', 'Production', fmt(Math.round((SIM.goodsProd || 0) * 60)) + '/min', 'goods produced') + statCard('🛒', 'Consumption', fmt(Math.round((SIM.goodsUse || 0) * 60)) + '/min', 'goods used by the city',
+        null, (SIM.goodsUse || 0) > (SIM.goodsProd || 0) * 1.3 ? 'warn' : '');
+    h = tabsH + '<div class="mStatGrid">' + cards + '</div>' + graphBlockHtml() +
       '<div class="mActs"><button class="btn blue" data-mpg="taxes">🏛 Taxes & budget</button><button class="btn" data-mpg="companies">🏢 Companies & stocks</button><button class="btn" data-mpg="bank">🏦 Bank</button><button class="btn" data-mpg="trade">🚢 Trade</button></div>';
   }
   el.querySelector('.mPageTitle').innerHTML = title;
@@ -288,6 +375,7 @@ function renderMobilePage(first) {
   const cv = body.querySelector('#mGraph'); if (cv) drawGraph(cv);
 }
 function pageClick(e) {
+  const et = e.target.closest('[data-metab]'); if (et) { MPAGE.etab = et.dataset.metab; MPAGE.el.querySelector('.mPageBody').innerHTML = ''; renderMobilePage(true); sfx('click'); return; }
   const a = e.target.closest('[data-mpg]'), g = e.target.closest('[data-mgr]'), rg = e.target.closest('[data-mrange]');
   if (g) { MPAGE.graph = g.dataset.mgr; const cv = $('mGraph'); if (cv) { cv._g = null; } MPAGE.el.querySelector('.mPageBody').innerHTML = ''; renderMobilePage(true); sfx('click'); return; }
   if (rg) { MPAGE.range = +rg.dataset.mrange; const cv = $('mGraph'); if (cv) cv._g = null; MPAGE.el.querySelectorAll('[data-mrange]').forEach(function (b) { b.classList.toggle('on', b === rg); }); if (cv) drawGraph(cv); sfx('click'); return; }
@@ -295,7 +383,8 @@ function pageClick(e) {
   const k = a.dataset.mpg; sfx('click');
   const deskp = { stats: ['city', 'overview'], services: ['city', 'services'], housing: ['city', 'housing'], research: ['research'], companies: ['companies'], world: ['world'], taxes: ['city', 'economy'], bank: ['companies', 'bank'], trade: ['world', 'trade'] }[k];
   if (k === 'hall') { openCityHall(); return; }
-  if (k === 'quests') { closeMobilePage(); openQuestsPanel(); return; }
+  if (k === 'quests') { if (typeof openQuestPage === 'function') openQuestPage(); else { closeMobilePage(); openQuestsPanel(); } return; }
+  if (k === 'report') { closeMobilePage(); if (typeof openDailyReport === 'function') openDailyReport(); return; }
   if (deskp) { closeMobilePage(); openPanel(deskp[0], deskp[1]); }
 }
 
@@ -330,7 +419,7 @@ function drawGraph(cv) {
   c.textAlign = 'right'; c.fillText((i1 - i0) + ' samples' + (g.off ? ' · −' + g.off : ''), W - R, 12);
   if (g.tip >= i0 && g.tip < i1) {                                      // tooltip — always fully inside the canvas
     const tx = x(g.tip); c.strokeStyle = 'rgba(255,255,255,.5)'; c.beginPath(); c.moveTo(tx, T); c.lineTo(tx, H - B); c.stroke();
-    const lines = series.map(function (s) { return s.n + ': ' + (s.d[g.tip] !== undefined ? def[3](s.d[g.tip]) : '—'); });
+    const lines = series.map(function (s) { const v = s.d[g.tip], p = s.d[g.tip - 1]; return s.n + ': ' + (v !== undefined ? def[3](v) + (p ? ' (' + ((v - p) / Math.abs(p) * 100 >= 0 ? '+' : '') + ((v - p) / Math.abs(p) * 100).toFixed(1) + '%)' : '') : '—'); });
     c.font = 'bold 12px sans-serif'; const bw = Math.max.apply(null, lines.map(function (t) { return c.measureText(t).width; })) + 14, bh = lines.length * 16 + 8;
     const bx = clamp(tx + 10 + bw > W ? tx - 10 - bw : tx + 10, 2, W - bw - 2), by = clamp(T + 4, 2, H - bh - 2);
     c.fillStyle = 'rgba(12,14,34,.94)'; c.fillRect(bx, by, bw, bh); c.strokeStyle = 'rgba(140,150,255,.4)'; c.strokeRect(bx, by, bw, bh);
@@ -354,15 +443,17 @@ function bindGraph(cv) {
 }
 
 /* ===================================== CITY MAP (full screen) ===================================== */
-const MMAP = { open: false, el: null, layers: { roads: true, districts: true, buildings: true, transit: false, water: false, power: false }, base: null, ver: -1, raf: 0 };
+const MMAP = { open: false, el: null, layers: { roads: true, districts: true, buildings: true, transit: false, water: false, power: false }, heat: '', base: null, ver: -1, raf: 0 };
+const MMAP_HEATS = ['TRAFFIC', 'ELECTRICITY', 'WATER', 'POLLUTION', 'LAND VALUE', 'HAPPINESS', 'SAFETY', 'HEALTH', 'EDUCATION', 'WEALTH', 'DEMAND'];
 const MMAP_LAYERS = [['roads', '🛣️', 'Roads'], ['districts', '🏘️', 'Districts'], ['buildings', '🏢', 'Buildings'], ['transit', '🚇', 'Transit'], ['water', '💧', 'Water'], ['power', '⚡', 'Electricity']];
 function openCityMap(focus) {
   if (!MMAP.el) {
     const el = document.createElement('div'); el.id = 'mMap'; el.className = 'hidden';
-    el.innerHTML = '<div class="mMapHead"><b>🗺️ CITY MAP</b><div class="mChips" id="mMapLayers"></div><button class="mX big" id="mMapX" aria-label="Close map">✕</button></div><div class="mMapBody"><canvas id="mMapCv"></canvas><div class="mMapLegend small" id="mMapLegend"></div></div>';
+    el.innerHTML = '<div class="mMapHead"><b>🗺️ CITY MAP</b><div class="mChips" id="mMapLayers"></div><button class="mX big" id="mMapX" aria-label="Close map">✕</button></div><div class="mChips mMapHeats" id="mMapHeats"></div><div class="mMapBody"><canvas id="mMapCv"></canvas><div class="mMapLegend small" id="mMapLegend"></div></div>';
     document.body.appendChild(el); MMAP.el = el;
     el.querySelector('#mMapX').onclick = function () { closeCityMap(); sfx('click'); };
     el.querySelector('#mMapLayers').addEventListener('click', function (e) { const b = e.target.closest('[data-mml]'); if (!b) return; MMAP.layers[b.dataset.mml] = !MMAP.layers[b.dataset.mml]; renderMapLayers(); drawCityMap(); sfx('click'); });
+    el.querySelector('#mMapHeats').addEventListener('click', function (e) { const b = e.target.closest('[data-mmh]'); if (!b) return; MMAP.heat = MMAP.heat === b.dataset.mmh ? '' : b.dataset.mmh; renderMapLayers(); drawCityMap(); sfx('click'); });
     const cv = el.querySelector('#mMapCv'); let down = null;
     cv.addEventListener('pointerdown', function (e) { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
     cv.addEventListener('pointerup', function (e) {
@@ -374,7 +465,8 @@ function openCityMap(focus) {
     });
   }
   closeMobileOverlays(); closeMobilePage(); closeNotificationCenter();
-  if (focus === 'power') { MMAP.layers.power = true; MMAP.layers.water = false; } else if (focus === 'water') { MMAP.layers.water = true; MMAP.layers.power = false; } else if (focus === 'transit') MMAP.layers.transit = true;
+  if (focus && String(focus).indexOf('heat:') === 0) MMAP.heat = String(focus).slice(5);
+  else if (focus === 'power') { MMAP.layers.power = true; MMAP.layers.water = false; } else if (focus === 'water') { MMAP.layers.water = true; MMAP.layers.power = false; } else if (focus === 'transit') MMAP.layers.transit = true;
   MMAP.open = true; MMAP.ver = -1; MMAP.el.classList.remove('hidden'); document.body.classList.add('mMapOpen');
   renderMapLayers();
   requestAnimationFrame(drawCityMap);
@@ -382,7 +474,10 @@ function openCityMap(focus) {
   refreshMobileBar();
 }
 function closeCityMap() { if (!MMAP.open) return false; MMAP.open = false; clearInterval(MMAP.raf); MMAP.el.classList.add('hidden'); document.body.classList.remove('mMapOpen'); return true; }
-function renderMapLayers() { $('mMapLayers').innerHTML = MMAP_LAYERS.map(function (l) { return '<button class="mChip' + (MMAP.layers[l[0]] ? ' on' : '') + '" data-mml="' + l[0] + '"><span>' + l[1] + '</span>' + l[2] + '</button>'; }).join(''); }
+function renderMapLayers() {
+  $('mMapLayers').innerHTML = MMAP_LAYERS.map(function (l) { return '<button class="mChip' + (MMAP.layers[l[0]] ? ' on' : '') + '" data-mml="' + l[0] + '"><span>' + l[1] + '</span>' + l[2] + '</button>'; }).join('');
+  $('mMapHeats').innerHTML = '<span class="mHeatLbl">HEATMAP</span>' + MMAP_HEATS.map(function (id) { const H = heatDef(id); return H ? '<button class="mChip small' + (MMAP.heat === id ? ' on' : '') + '" data-mmh="' + id + '"><span>' + H.icon + '</span>' + esc(H.name) + '</button>' : ''; }).join('');
+}
 const CAT_COLORS = { Residential: '#80ed99', Commercial: '#4cc9f0', Industry: '#ef476f', Resources: '#b08968', Logistics: '#f8961e', Utilities: '#ffd166', Waste: '#8d99ae', Services: '#f15bb5', Transport: '#9b5de5', Leisure: '#52b788', Science: '#90e0ef', Landmarks: '#ffd60a' };
 function drawCityMap() {
   if (!MMAP.open || !STARTED) return;
@@ -421,10 +516,21 @@ function drawCityMap() {
     S.buildings.list.forEach(function (b) { if (BUILDINGS[b.type].cat !== 'Transport') return; const cc = buildingCenter(b); c.fillStyle = '#9b5de5'; c.beginPath(); c.arc(cc.x / TILE * k, cc.y / TILE * k, Math.max(2.5, k * 0.8), 0, 6.283); c.fill(); });
   }
   if (L.districts && typeof districtCenters === 'function' && MAP.dnames) { c.font = 'bold ' + Math.max(10, Math.round(k * 2.2)) + 'px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; districtCenters().forEach(function (d) { if (d.name.indexOf('Outskirts') >= 0) return; c.fillStyle = 'rgba(8,10,25,.6)'; const tw = c.measureText(d.name).width + 8; c.fillRect(d.x * k - tw / 2, d.y * k - 8, tw, 16); c.fillStyle = '#ffd166'; c.fillText(d.name, d.x * k, d.y * k); }); }
+  if (MMAP.heat && typeof computeHeat6 === 'function') {                            // heatmap overlay (same data as the in-game heatmaps)
+    const H = heatDef(MMAP.heat);
+    if (H) { if (HEAT6.mode !== MMAP.heat || FX.time - HEAT6.at > 1.5) computeHeat6(MMAP.heat); const g = HEAT6.grid; if (g) for (let i = 0; i < g.length; i++) { const v = g[i]; if (v <= 0.02 && H.ramp !== 'good') continue; c.fillStyle = rampColor(H.ramp, v, 0.6); c.fillRect((i % MAP.W) * k, Math.floor(i / MAP.W) * k, k + 0.5, k + 0.5); } }
+  }
+  S.buildings.list.forEach(function (b) {                                            // important buildings · emergencies
+    const d = BUILDINGS[b.type];
+    if (d.landmark || b.type === 'townhall') { c.strokeStyle = '#ffd60a'; c.lineWidth = 2; c.strokeRect(b.x * k, b.y * k, bdef(b).w * k, bdef(b).h * k); }
+    if (b.fire > 0) { const cc = buildingCenter(b); c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(cc.x / TILE * k, cc.y / TILE * k, Math.max(4, k * 1.2), 0, 6.283); c.fill(); }
+  });
+  AG.accidents.forEach(function (a) { c.fillStyle = '#ff4d6d'; c.beginPath(); c.arc(a.x / TILE * k, a.y / TILE * k, Math.max(3.5, k), 0, 6.283); c.fill(); });
   const tl = screenToWorld(0, 0), br = screenToWorld(CW, CH);                       // the camera view
   c.strokeStyle = '#fff'; c.lineWidth = 2; c.strokeRect(tl.x / TILE * k, tl.y / TILE * k, (br.x - tl.x) / TILE * k, (br.y - tl.y) / TILE * k);
   c.restore();
-  $('mMapLegend').innerHTML = 'Tap the map to move the camera there · ' + (L.power ? '⚡ <b style="color:#ffd166">■</b> plants · <b style="color:#ef476f">■</b> no power · ' + fmt(Math.round(SIM.powerUse || 0)) + '/' + fmt(Math.round(SIM.powerGen || 0)) + ' · ' : '') + (L.water ? '💧 <b style="color:#4cc9f0">■</b> water · ' + fmt(Math.round(SIM.waterUse || 0)) + '/' + fmt(Math.round(SIM.waterGen || 0)) + ' · ' : '') + (L.transit ? '🚇 ' + (S.p9 && S.p9.transit ? S.p9.transit.lines.length : 0) + ' lines · ' : '') + MAP.W + '×' + MAP.H;
+  const HH = MMAP.heat ? heatDef(MMAP.heat) : null;
+  $('mMapLegend').innerHTML = (HH ? '<b>' + HH.icon + ' ' + esc(HH.name) + '</b> ' + (MMAP.heat === 'TRAFFIC' ? ['Low', 'Medium', 'High', 'Critical'].map(function (t, j) { return '<i class="mLeg" style="background:' + rampColor(HH.ramp, j / 3, 0.95) + '"></i>' + t; }).join(' ') : '<i class="mLeg" style="background:' + rampColor(HH.ramp, 0, 0.95) + '"></i>' + esc(HH.low) + ' → <i class="mLeg" style="background:' + rampColor(HH.ramp, 1, 0.95) + '"></i>' + esc(HH.high)) + ' · ' : '') + 'Tap the map to move the camera there · 🔴 emergencies · ' + (L.power ? '⚡ <b style="color:#ffd166">■</b> plants · <b style="color:#ef476f">■</b> no power · ' + fmt(Math.round(SIM.powerUse || 0)) + '/' + fmt(Math.round(SIM.powerGen || 0)) + ' · ' : '') + (L.water ? '💧 <b style="color:#4cc9f0">■</b> water · ' + fmt(Math.round(SIM.waterUse || 0)) + '/' + fmt(Math.round(SIM.waterGen || 0)) + ' · ' : '') + (L.transit ? '🚇 ' + (S.p9 && S.p9.transit ? S.p9.transit.lines.length : 0) + ' lines · ' : '') + MAP.W + '×' + MAP.H;
 }
 
 /* ===================================== TOASTS & NOTIFICATION CENTER ===================================== */
@@ -557,71 +663,104 @@ function mobileAutosaveSoon(why) { if (!GSET.autosave || MOB.errorStorm) return;
 function mSetCard(icon, title, desc, ctl) { return '<div class="mSetCard"><div class="mscText"><b>' + icon + ' ' + title + '</b>' + (desc ? '<span>' + desc + '</span>' : '') + '</div><div class="mscCtl">' + ctl + '</div></div>'; }
 function mSeg(attr, key, vals, labels, cur) { return '<div class="mSeg">' + vals.map(function (v, i) { return '<button class="' + (String(cur) === String(v) ? 'on' : '') + '" ' + attr + '="' + key + '" data-v="' + v + '">' + (labels ? labels[i] : v) + '</button>'; }).join('') + '</div>'; }
 function mTog(attr, key, on, extra) { return '<button class="mTog' + (on ? ' on' : '') + '" ' + attr + '="' + key + '" data-v="' + (extra !== undefined ? extra : on ? '0' : '1') + '" aria-pressed="' + !!on + '"><i></i>' + (on ? 'ON' : 'OFF') + '</button>'; }
-const MSET_TABS = [['graphics', '🎨', 'Graphics'], ['controls', '🎮', 'Controls'], ['camera', '🎥', 'Camera'], ['audio', '🔊', 'Audio'], ['simulation', '🧠', 'Simulation'], ['accessibility', '♿', 'Accessibility'], ['system', '💾', 'System']];
+const MSET_TABS = [['graphics', '🎨', 'Graphics'], ['performance', '🚀', 'Performance'], ['camera', '🎥', 'Camera'], ['controls', '🎮', 'Controls'], ['audio', '🔊', 'Audio'], ['haptics', '📳', 'Haptics'],
+  ['uiscale', '🔍', 'UI Scale'], ['language', '🌐', 'Language'], ['accessibility', '♿', 'Accessibility'], ['save', '💾', 'Save'], ['notifications', '🔔', 'Notifications']];
+const MSET_ALIAS = { system: 'save', simulation: 'performance' };
+const POWER_MODES = { performance: { perfMode: 'MEDIUM', fpsTarget: '60', simQuality: 'MEDIUM' }, balanced: { perfMode: 'AUTO', fpsTarget: 'AUTO', simQuality: 'MEDIUM' }, quality: { perfMode: 'HIGH', fpsTarget: '60', simQuality: 'HIGH' }, battery: { perfMode: 'LOW', fpsTarget: '30', simQuality: 'LOW' } };
+function deviceCardHtml() {
+  const dv = Platform.device(), req = PLATFORM_ADAPTER.requirements || {}, ram = dv.ramMB || 0;
+  let gpu = '';
+  try { const gl = document.createElement('canvas').getContext('webgl'); const ext = gl && gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl ? 'WebGL' : 'Canvas 2D'; } catch (e) { gpu = 'Canvas 2D'; }
+  const rec = !ram || ram >= (req.recommendedRamMB || 4096) ? 'HIGH' : ram >= (req.ramMB || 2048) ? 'MEDIUM' : 'LOW';
+  return mSetCard('📱', 'Device', (dv.model ? esc(dv.model) + ' · ' : '') + (IS_ANDROID_APP ? 'Android ' + esc(ANDROID_INFO.release || '?') + ' (API ' + dv.sdk + ') · ' : '') + dv.cores + ' cores · ' + (ram ? Math.round(ram / 1024 * 10) / 10 + ' GB RAM' : 'RAM ?') + ' · ' + esc(String(gpu).slice(0, 40)) +
+    '<br>Recommended profile: <b>' + rec + '</b>' + (AUTOP.benchmark ? ' · benchmark ' + AUTOP.benchmark.score : '') + (req.android ? '<br>Minimum: Android ' + req.android + ', ' + Math.round(req.ramMB / 1024) + ' GB RAM, ' + req.storageMB + ' MB storage · recommended ' + Math.round(req.recommendedRamMB / 1024) + ' GB RAM · GPU ' + esc(req.gpu) : ''),
+    '<button class="btn small" data-mset="applyRec" data-v="' + rec + '">Use ' + rec + '</button>');
+}
 function mobileSettings(tab) {
-  if (tab) SET2.tab = tab;
-  if (!MSET_TABS.some(function (t) { return t[0] === SET2.tab; })) SET2.tab = 'graphics';
+  if (tab) SET2.tab = MSET_ALIAS[tab] || tab;
+  if (!MSET_TABS.some(function (t) { return t[0] === SET2.tab; })) SET2.tab = MSET_ALIAS[SET2.tab] || 'graphics';
   const se = S.settings, G = 'data-gs2', A = 'data-mset';
   const sTog = function (k) { return '<button class="mTog' + (se[k] ? ' on' : '') + '" data-act="toggle" data-k="' + k + '"><i></i>' + (se[k] ? 'ON' : 'OFF') + '</button>'; };
   const sSeg = function (k, vals, labels) { return '<div class="mSeg">' + vals.map(function (v, i) { return '<button class="' + (se[k] === v ? 'on' : '') + '" data-act="set" data-k="' + k + '" data-v="' + v + '">' + (labels ? labels[i] : v) + '</button>'; }).join('') + '</div>'; };
   const gsSeg = function (k, vals, labels) { return mSeg('data-gset', k, vals, labels, GSET[k]); };
   const gsTg = function (k) { return mTog('data-gset', k, !!GSET[k]); };
+  const aTog = function (k, def) { const on = GSET[k] === undefined ? def !== false : !!GSET[k]; return mTog(A, k, on); };
+  const vol = function (k, label) { const v = GSET[k] === undefined ? 100 : GSET[k]; return mSetCard('🎚️', label + ' (' + v + '%)', '', mSeg(A, k, [0, 25, 50, 75, 100], ['0', '25', '50', '75', '100'], v)); };
+  const slider = function (k, label, desc) { const lv = ['LOW', 'MEDIUM', 'HIGH'], ci = Math.max(0, lv.indexOf(GSET[k] || 'MEDIUM')); return mSetCard('🎚️', label, desc, '<div class="mSlider"><input type="range" min="0" max="2" step="1" value="' + ci + '" data-mrange="' + k + '" aria-label="' + label + '"><div class="mSliderLbl"><span>Low</span><span>Medium</span><span>High</span></div></div>'); };
+  const asIv = !GSET.autosave ? 'off' : String(GSET.autosaveInterval || 300);
   let h = '';
   switch (SET2.tab) {
     case 'graphics':
-      h = mSetCard('⚙️', 'Performance preset', 'Now ' + perfModeLabel() + (AUTOP.benchmark ? ' · benchmark ' + AUTOP.benchmark.score : '') + '. AUTO measures the device and lowers detail when it gets slow or hot.', mSeg(G, 'perfMode', ['AUTO', 'LOW', 'MEDIUM', 'HIGH', 'ULTRA'], null, GSET.perfMode)) +
-        mSetCard('🎞️', 'FPS target', 'AUTO: 60 FPS when the device can, 30 FPS on LOW, in low-memory mode or when hot.', mSeg(A, 'fpsTarget', ['AUTO', '30', '45', '60'], ['AUTO', '30', '45', '60'], GSET.fpsTarget || 'AUTO')) +
-        mSetCard('📟', 'Show FPS', 'Small FPS counter in the corner.', sTog('showFps')) +
-        mSetCard('🔋', 'Low-end device mode', 'Short render distance, no shadows, fewer citizens.', mTog(G, 'lowEnd', GSET.lowEnd)) +
+      h = mSetCard('🎨', 'Graphics', 'Now ' + perfModeLabel() + '. AUTO measures the device and lowers detail when it gets slow or hot.', mSeg(G, 'perfMode', ['LOW', 'MEDIUM', 'HIGH', 'ULTRA', 'AUTO'], null, GSET.perfMode)) +
         mSetCard('🌗', T('shadows'), '', gsTg('shadows')) + mSetCard('✨', T('particles'), '', gsSeg('particles', ['ON', 'REDUCED', 'OFF'])) +
-        mSetCard('🌳', 'Decorations', 'Procedural trees, lamps and details.', sTog('deco')) +
+        mSetCard('🌳', 'Decorations', 'Procedural trees, lamps and details.', sTog('deco')) + mSetCard('📟', 'Show FPS', 'Small FPS counter.', sTog('showFps')) +
         (IS_ANDROID ? mSetCard('🖼', 'Screen orientation', 'Landscape is recommended on phones.', mSeg(G, 'orientation', ['landscape', 'auto', 'portrait'], ['Landscape', 'Auto', 'Portrait'], GSET.orientation)) : '') +
         (BUILD.dev ? mSetCard('📐', 'SHOW UI BOUNDS', 'Development build only: X · Y · width · height of every UI element.', mTog(A, 'uiBounds', !!MOB.bounds)) : '');
       break;
+    case 'performance':
+      h = mSetCard('🔋', 'Power mode', 'Performance · Balanced · Quality · Battery Saver set graphics, FPS and simulation together.', mSeg(A, 'powerMode', ['performance', 'balanced', 'quality', 'battery'], ['Performance', 'Balanced', 'Quality', 'Battery Saver'], GSET.powerMode || 'balanced')) +
+        mSetCard('🎞️', 'FPS target', 'AUTO: 60 FPS on strong devices, 30 FPS on weak or hot ones, in menus and while idle.', mSeg(A, 'fpsTarget', ['AUTO', '30', '45', '60'], ['AUTO', '30', '45', '60'], GSET.fpsTarget || 'AUTO')) +
+        mSetCard('🧠', 'Simulation quality', 'Near citizens & vehicles: full AI · mid: reduced · far: statistical flow.', mSeg(G, 'simQuality', ['LOW', 'MEDIUM', 'HIGH'], null, GSET.simQuality)) +
+        mSetCard('📉', 'Low-end device mode', 'Short render distance, no shadows, fewer citizens.', mTog(G, 'lowEnd', GSET.lowEnd)) +
+        mSetCard('👥', T('npc'), '', gsSeg('npcDensity', [25, 50, 75, 100, 150, 200], ['25%', '50%', '75%', '100%', '150%', '200%'])) +
+        mSetCard('🚗', T('traffic2'), '', gsSeg('trafficDensity', [25, 50, 75, 100, 150, 200], ['25%', '50%', '75%', '100%', '150%', '200%'])) +
+        mSetCard('🛡️', 'Safe speed limit', 'Heavy speeds slow down on a struggling device (now ' + SAFE.cap + '×).', mTog(G, 'safeSpeed', GSET.safeSpeed)) + deviceCardHtml();
+      break;
+    case 'camera':
+      h = slider('camSens', 'Camera Sensitivity', 'How far the camera moves per finger movement.') + slider('zoomSpeed', 'Zoom Speed', 'Pinch zoom speed.') + slider('rotSpeed', 'Rotation Speed', 'Two-finger twist speed.') +
+        mSetCard('↕️', 'Invert Vertical', '', aTog('invertV', false)) + mSetCard('↔️', 'Invert Horizontal', '', aTog('invertH', false)) +
+        mSetCard('🤏', 'Gesture Camera', 'Pinch zoom and two-finger rotate. OFF shows + / − zoom buttons instead.', aTog('gestureCam', true)) +
+        mSetCard('🔄', 'Two-finger rotation', '', mTog(G, 'rotateCam', GSET.rotateCam)) +
+        (IS_DESKTOP ? mSetCard('🖱', 'Edge Pan', 'Move the camera at the screen edge (mouse).', mTog(G, 'edgePan', GSET.edgePan)) : mSetCard('🖱', 'Edge Pan', 'Mouse only — used on Windows.', '<span class="small">—</span>')) +
+        mSetCard('🧭', 'Minimap', '', sTog('minimap')) + mSetCard('🎯', 'RESET CAMERA', 'City centre, north up, default zoom.', '<button class="btn small" data-mset="resetCam" data-v="1">Reset</button>');
+      break;
     case 'controls':
-      h = mSetCard('👆', 'LARGE TOUCH BUTTONS', 'Bigger buttons, icons and spacing for small phones.', mTog(G, 'largeTouch', GSET.largeTouch)) +
+      h = mSetCard('👆', 'LARGE TOUCH MODE', 'Bigger buttons, text and touch areas.', mTog(G, 'largeTouch', GSET.largeTouch)) +
         mSetCard('🧾', 'Purchase confirmation', '', sSeg('confirm', ['always', 'expensive', 'never'], ['Always', 'Expensive', 'Never'])) +
-        mSetCard('🎮', 'Gamepad support', PAD.active ? 'Controller connected' : 'Bluetooth / USB controllers', sTog('gamepad')) +
-        mSetCard('📖', 'Touch controls', 'One finger: move · pinch: zoom · twist: rotate · tap: inspect · back: close / pause.', '<button class="btn small" data-mset="help" data-v="1">Show</button>') +
-        mSetCard('🎓', 'Tutorial', 'Camera, zoom, build, road, map, economy and save.', '<button class="btn small" data-gs2="replayTut" data-v="1">Replay</button>');
+        mSetCard('🎮', 'Controller', PAD.active ? 'Controller connected' : 'Bluetooth / USB controllers (touch keeps working without one)', sTog('gamepad')) +
+        mSetCard('✋', 'Touch controls', 'Swipe = move camera · pinch = zoom · two fingers = rotate · tap = select · drag = place.', '<button class="btn small" data-mset="training" data-v="1">Show</button>') +
+        mSetCard('🎓', 'Tutorial', 'Camera, road, homes, utilities, jobs, traffic, expansion.', '<button class="btn small" data-gs2="replayTut" data-v="1">Replay</button>') +
+        mSetCard('📖', 'Help', 'All touch controls.', '<button class="btn small" data-mset="help" data-v="1">Open</button>');
       break;
-    case 'camera': {
-      const lv = ['LOW', 'MEDIUM', 'HIGH'], ci = Math.max(0, lv.indexOf(GSET.camSens || 'MEDIUM'));
-      h = mSetCard('🎚️', 'Camera Sensitivity', 'How far the camera moves and zooms per finger movement.', '<div class="mSlider"><input type="range" min="0" max="2" step="1" value="' + ci + '" data-mrange="camSens" aria-label="Camera sensitivity"><div class="mSliderLbl"><span>Low</span><span>Medium</span><span>High</span></div></div>') +
-        mSetCard('🔄', 'Two-finger rotation', 'Twist two fingers to rotate the camera.', mTog(G, 'rotateCam', GSET.rotateCam)) +
-        mSetCard('↔️', 'Invert drag direction', '', mTog(G, 'invertPan', GSET.invertPan)) +
-        mSetCard('🧭', 'Minimap', 'Small map in the top-right corner.', sTog('minimap')) +
-        mSetCard('🎯', 'Reset camera', 'City centre, north up, default zoom.', '<button class="btn small" data-mset="resetCam" data-v="1">Reset</button>');
-      break;
-    }
     case 'audio':
       h = mSetCard('🔊', 'Sound effects', '', sTog('sound')) + mSetCard('🎵', 'Music', '', sTog('music')) +
-        mSetCard('🔈', T('volume') + ' (' + GSET.masterVolume + '%)', '', gsSeg('masterVolume', [0, 25, 50, 80, 100], ['0', '25', '50', '80', '100'])) + mSetCard('💬', 'Citizen speech bubbles', '', sTog('bubbles'));
+        mSetCard('🔈', 'Master (' + GSET.masterVolume + '%)', '', gsSeg('masterVolume', [0, 25, 50, 80, 100], ['0', '25', '50', '80', '100'])) +
+        vol('volMusic', 'Music') + vol('volSfx', 'SFX') + vol('volUi', 'UI') + vol('volEnv', 'Environment') + mSetCard('💬', 'Citizen speech bubbles', '', sTog('bubbles'));
       break;
-    case 'simulation': {
-      const pctv = [25, 50, 75, 100, 150, 200];
-      h = mSetCard('🧠', 'Simulation quality', 'How many citizens and vehicles are simulated individually.', mSeg(G, 'simQuality', ['LOW', 'MEDIUM', 'HIGH'], null, GSET.simQuality)) +
-        mSetCard('💾', 'Autosave', GSET.autosave ? 'Every ' + (autosaveInterval() >= 60 ? autosaveInterval() / 60 + ' min' : autosaveInterval() + ' s') + ' and after important events' : 'OFF', gsTg('autosave')) +
-        mSetCard('⏱️', T('interval'), '', gsSeg('autosaveInterval', [60, 120, 300, 600], ['1 min', '2 min', '5 min', '10 min'])) +
-        mSetCard('👥', T('npc'), '', gsSeg('npcDensity', pctv, pctv.map(function (x) { return x + '%'; }))) +
-        mSetCard('🚗', T('traffic2'), '', gsSeg('trafficDensity', pctv, pctv.map(function (x) { return x + '%'; }))) +
-        mSetCard('🛡️', 'Safe speed limit', 'Heavy speeds slow down on a struggling device (now ' + SAFE.cap + '×).', mTog(G, 'safeSpeed', GSET.safeSpeed)) +
-        mSetCard('🎚️', 'Dynamic difficulty', '', sTog('dynDiff')) + mSetCard('📰', 'Daily city report', '', sTog('dailyReport')) +
-        NOTIFY_CATS.map(function (c) { const on = GSET.notify[c[0]] !== false; return mSetCard(c[1], c[2], 'Notification', '<button class="mTog' + (on ? ' on' : '') + '" data-gs2="notify" data-v="' + c[0] + '"><i></i>' + (on ? 'ON' : 'OFF') + '</button>'); }).join('');
+    case 'haptics':
+      h = mSetCard('📳', 'Haptic Feedback', 'Light vibration for buttons, build success, invalid placement, notifications and major alerts.', aTog('haptics', true)) +
+        mSetCard('🧪', 'Test', '', '<div class="mBtns"><button class="btn small" data-mset="hapticTest" data-v="tap">Tap</button><button class="btn small" data-mset="hapticTest" data-v="success">Build</button><button class="btn small" data-mset="hapticTest" data-v="error">Invalid</button><button class="btn small" data-mset="hapticTest" data-v="alert">Alert</button></div>');
       break;
-    }
-    case 'accessibility':
-      h = mSetCard('🔍', 'UI SCALE (' + GSET.uiScale + '%)', 'Resize the whole interface for your phone or tablet.', mSeg(G, 'uiScale', [80, 90, 100, 110, 120, 140], ['80%', '90%', '100%', '110%', '120%', '140%'], GSET.uiScale)) +
+    case 'uiscale':
+      h = mSetCard('🔍', 'UI SCALE (' + GSET.uiScale + '%)', 'Resize the whole interface for your phone or tablet.', mSeg(G, 'uiScale', [80, 90, 100, 110, 120, 130], ['80%', '90%', '100%', '110%', '120%', '130%'], GSET.uiScale)) +
         mSetCard('🔠', 'Text size', '', mSeg(G, 'textSize', ['S', 'M', 'L', 'XL'], ['S', 'M', 'L', 'XL'], GSET.textSize)) +
-        mSetCard('👆', 'LARGE TOUCH BUTTONS', '', mTog(G, 'largeTouch', GSET.largeTouch)) +
-        mSetCard('◐', 'High contrast', '', sTog('highContrast')) + mSetCard('🧘', 'Reduced motion', '', sTog('reducedMotion')) +
-        mSetCard('🎨', 'Colour-blind heatmaps', '', mTog(G, 'cbHeat', GSET.cbHeat)) + mSetCard('💡', 'Tutorial hints', '', mTog(G, 'tutorialHints', GSET.tutorialHints));
+        mSetCard('👆', 'LARGE TOUCH MODE', 'Buttons, text and touch hitboxes grow.', mTog(G, 'largeTouch', GSET.largeTouch)) +
+        mSetCard('≡', 'HUD', 'FULL · COMPACT · MINIMAL (≡ in the top right).', mSeg(A, 'hudMode', ['full', 'compact', 'minimal'], ['Full', 'Compact', 'Minimal'], GSET.hudMode || 'full'));
       break;
-    case 'system':
-      h = mSetCard('💾', 'Save data', (GSET.autosave ? 'Autosave every ' + Math.round(autosaveInterval() / 60 * 10) / 10 + ' min' : 'Autosave OFF') + ' · CITY_SAVE_V4 (v' + SAVE_VERSION + ')', '<div class="mBtns"><button class="btn small green" data-mset="save" data-v="1">💾 Save</button><button class="btn small" data-act="downloadSave">📤 Export</button><button class="btn small" data-act="importSave">📥 Import</button></div>') +
-        mSetCard('🌐', T('language'), '', gsSeg('language', ['en', 'tr'], ['English', 'Türkçe'])) +
+    case 'language':
+      h = mSetCard('🌐', T('language'), 'The whole game, also the mobile UI.', gsSeg('language', ['en', 'tr'], ['English', 'Türkçe']));
+      break;
+    case 'accessibility':
+      h = mSetCard('◐', 'High contrast', '', sTog('highContrast')) + mSetCard('🧘', 'Reduced motion', '', sTog('reducedMotion')) + mSetCard('✨', 'Reduced effects', 'Fewer particles.', sTog('particleReduce')) +
+        '<div class="mSetCard"><div class="mscText"><b>📳 Screen shake off</b></div><div class="mscCtl"><button class="mTog' + (se.screenShake === false ? ' on' : '') + '" data-act="toggle" data-k="screenShake"><i></i>' + (se.screenShake === false ? 'ON' : 'OFF') + '</button></div></div>' +
+        mSetCard('📴', 'Vibration', 'Haptic feedback.', aTog('haptics', true)) + mSetCard('🎨', 'Colour-blind heatmaps', 'Information is also shown with icons and text, never colour only.', mTog(G, 'cbHeat', GSET.cbHeat)) +
+        mSetCard('🔠', 'Large text', '', mSeg(G, 'textSize', ['M', 'L', 'XL'], ['Normal', 'Large', 'Extra large'], GSET.textSize)) + mSetCard('👆', 'Large touch controls', '', mTog(G, 'largeTouch', GSET.largeTouch)) +
+        mSetCard('💡', 'Tutorial hints', '', mTog(G, 'tutorialHints', GSET.tutorialHints));
+      break;
+    case 'save':
+      h = mSetCard('💾', 'Save now', 'CITY_SAVE_V4 (save v' + SAVE_VERSION + ') · atomic writes with validation and a backup copy.', '<div class="mBtns"><button class="btn small green" data-mset="save" data-v="1">💾 Save</button><button class="btn small" data-act="downloadSave">📤 Export</button><button class="btn small" data-act="importSave">📥 Import</button></div>') +
+        mSetCard('⏱️', 'Autosave', 'Plus a save after important events.', mSeg(A, 'autosave', ['off', '300', '600', '900', '1800'], ['OFF', '5 min', '10 min', '15 min', '30 min'], asIv)) +
+        mSetCard('📸', 'Event snapshots', 'Before disasters and economic crises, after big construction and city expansion (last 3 kept).', aTog('autoSnap', true)) +
+        mSetCard('📁', 'Storage', esc(SaveProviders.active.name) + ' · Cloud save: not enabled (offline-first)', '<span class="small">' + (IS_ANDROID_APP ? 'Uninstalling deletes the saves — EXPORT first.' : '') + '</span>') +
         (AdminAuth.active() ? mSetCard('🛡️', 'Admin session', 'Auto-lock ' + GSET.adminLockMin + ' min', '<button class="btn small red" data-gs2="adminLogout" data-v="1">⏏ LOG OUT</button>') : '') +
+        (typeof stressAllowed === 'function' && stressAllowed() ? mSetCard('🧪', 'MOBILE STRESS TEST', 'Developer / test builds and authorized developers only: FPS, frame time, memory, citizens, vehicles, buildings at 10×.', '<button class="btn small" data-mset="stress" data-v="1">Open</button>') : '') +
         '<div class="mSetCard"><div class="mscText"><b>ℹ️ About</b><span class="verTap" id="setVersion">' + T('version') + ' ' + GAME_VERSION + ' · ' + PLATFORM_NAME + ' · save v' + SAVE_VERSION + ' · build ' + BUILD.profile.toUpperCase() + '</span><span>Offline-first: the whole city simulation works without internet.</span></div></div>';
+      break;
+    case 'notifications':
+      h = mSetCard('🚨', 'Critical alerts', 'Major fire, power failure, water shortage, bank crisis, earthquake, flood, collapse.', aTog('critAlerts', true)) +
+        mSetCard('💬', 'Citizen comments', 'Occasional comments from citizens (with a cooldown).', aTog('comments', true)) +
+        NOTIFY_CATS.map(function (c) { const on = GSET.notify[c[0]] !== false; return mSetCard(c[1], c[2], '', '<button class="mTog' + (on ? ' on' : '') + '" data-gs2="notify" data-v="' + c[0] + '"><i></i>' + (on ? 'ON' : 'OFF') + '</button>'); }).join('') +
+        mSetCard('🎚️', 'Dynamic difficulty', '', sTog('dynDiff')) + mSetCard('📰', 'Daily city report', '', sTog('dailyReport'));
       break;
   }
   const tabs = '<div class="mChips mSetTabs">' + MSET_TABS.map(function (t) { return '<button class="mChip' + (SET2.tab === t[0] ? ' on' : '') + '" data-s2tab="' + t[0] + '"><span>' + t[1] + '</span>' + t[2] + '</button>'; }).join('') + '</div>';
@@ -631,18 +770,27 @@ function mobileSettings(tab) {
   $('modalBody').scrollTop = keep;
   const on = $('modalBody').querySelector('.mSetTabs .on'); if (on && on.scrollIntoView) on.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
+const MSET_BOOL = ['invertV', 'invertH', 'gestureCam', 'haptics', 'autoSnap', 'critAlerts', 'comments'];
 function msetApply(k, v) {
-  if (k === 'fpsTarget') GSET.fpsTarget = v;
-  else if (k === 'camSens') GSET.camSens = v;
+  if (MSET_BOOL.indexOf(k) >= 0) { GSET[k] = v === '1'; if (k === 'invertV' || k === 'invertH') GSET.invertPan = false; if (k === 'haptics' && GSET.haptics) haptic('tap'); }
+  else if (k === 'fpsTarget' || k === 'camSens' || k === 'zoomSpeed' || k === 'rotSpeed') GSET[k] = v;
+  else if (k === 'volMusic' || k === 'volSfx' || k === 'volUi' || k === 'volEnv') { GSET[k] = clamp(+v || 0, 0, 100); if (SND.applyVolumes) SND.applyVolumes(); }
+  else if (k === 'hudMode') { GSET.hudMode = v; if (typeof applyHudMode === 'function') applyHudMode(); }
+  else if (k === 'powerMode') { GSET.powerMode = v; Object.assign(GSET, POWER_MODES[v] || {}); if (v === 'battery') GSET.particles = 'REDUCED'; if (GSET.perfMode === 'AUTO') GSET.autoPerfLevel = ''; GSET._rev++; toast('🔋 ' + ({ performance: 'Performance', balanced: 'Balanced', quality: 'Quality', battery: 'Battery Saver' })[v] + ' mode', 'good'); }
+  else if (k === 'autosave') { if (v === 'off') GSET.autosave = false; else { GSET.autosave = true; GSET.autosaveInterval = +v; } }
+  else if (k === 'applyRec') { GSET.perfMode = v; GSET._rev++; }
+  else if (k === 'hapticTest') { haptic(v); return; }
   else if (k === 'uiBounds') { setUiBounds(v === '1'); return; }
   else if (k === 'resetCam') { closeModal(); resetCamera(); return; }
   else if (k === 'help') { openControlsHelp(); return; }
+  else if (k === 'training') { closeModal(); if (typeof showTouchTraining === 'function') showTouchTraining(true); return; }
+  else if (k === 'stress') { closeModal(); if (typeof openStressTest === 'function') openStressTest(); return; }
   else if (k === 'save') { mobileSave(); return; }
   saveGSET(); applySettings2(); updateFpsCap();
   if ($('modalWrap').classList.contains('show')) openSettings();
 }
 document.addEventListener('click', function (e) { const el = e.target.closest && e.target.closest('[data-mset]'); if (!el) return; e.preventDefault(); sfx('click'); msetApply(el.dataset.mset, el.dataset.v); });
-document.addEventListener('change', function (e) { const el = e.target; if (el && el.dataset && el.dataset.mrange === 'camSens') { msetApply('camSens', ['LOW', 'MEDIUM', 'HIGH'][clamp(+el.value | 0, 0, 2)]); } });
+document.addEventListener('change', function (e) { const el = e.target; if (el && el.dataset && /^(camSens|zoomSpeed|rotSpeed)$/.test(el.dataset.mrange || '')) msetApply(el.dataset.mrange, ['LOW', 'MEDIUM', 'HIGH'][clamp(+el.value | 0, 0, 2)]); });
 
 /* ===================================== MOBILE TUTORIAL (touch) ===================================== */
 const MOBILE_TUTORIAL = [
@@ -652,7 +800,7 @@ const MOBILE_TUTORIAL = [
   ['🛣️', 'Road', 'ROAD → pick Small, Medium, Large, Highway, Bridge or Tunnel → touch START, DRAG your finger, lift to END, then CONFIRM.', '[data-mbar="road"]'],
   ['🗺️', 'Map', 'MAP opens the full city map with roads, districts, buildings, transit, water and electricity. Tap it to jump there.', '[data-mbar="map"]'],
   ['💰', 'Economy', 'ECONOMY shows money, income, expenses, GDP, inflation, interest and companies with touch graphs.', '[data-mbar="economy"]'],
-  ['💾', 'Save', 'The game autosaves. ☰ (top right) or the back button opens the pause menu — SAVE saves with one tap.', '#mMenu']
+  ['💾', 'Save', 'The game autosaves. ⏸ (left) or the back button opens the pause menu — SAVE saves with one tap.', '#mPause']
 ];
 function startMobileTutorial(force) {
   if (!IS_MOBILE || (!force && (GSET.mobileTutDone || GSET.tutorialHints === false)) || MOB.tut) return;
@@ -724,14 +872,14 @@ function noteError() {
     MERR.shown = true; MOB.errorStorm = true;
     Log.error('ERROR RECOVERY: ' + MERR.t.length + ' errors in 20 s — autosave paused, recovery offered');
     try { setSpeed(0); } catch (e) { /* ignore */ }
-    sysDialog('⚠️ ERROR RECOVERY', '<p>Something went wrong in the simulation. Your last autosave is protected.</p>', [['CONTINUE', 'gold', function () { MERR.shown = false; MERR.t = []; MOB.errorStorm = false; setSpeed(1); }], ['RELOAD LAST SAVE', 'blue', function () { MERR.shown = false; MERR.t = []; MOB.errorStorm = false; loadSlot(S.slot || 1); }]], 0);
+    sysDialog('⚠️ ERROR RECOVERY', '<p>Something went wrong. Your recovery save is safe.</p>', [['RETURN', 'gold', function () { MERR.shown = false; MERR.t = []; MOB.errorStorm = false; setSpeed(1); }], ['RECOVER SAVE', 'blue', function () { MERR.shown = false; MERR.t = []; MOB.errorStorm = false; loadSlot(S.slot || 1); }]], 0);
   }
 }
 
 /* ===================================== UI BOUNDS AUDIT (automatic) & SHOW UI BOUNDS (development builds) ===================================== */
 /* Full-screen layers (#mPage, #mMap, #adminCenter) paint their background edge to edge on purpose (under the notch);
    their header and content are what has to stay inside the safe area, so those are audited */
-const AUDIT_SEL = ['#mHud', '#mSide', '#mBar', '#mBuildBar', '#mRoad', '#mSheet', '#mInspect', '#mNotes', '#mPage .mPageHead', '#mPage .mPageBody', '#mMap .mMapHead', '#mMap .mMapBody', '#modal', '#sysBox', '#minimap', '#leftPanel.open', '#rightPanel', '#mTut .mtCard', '#dialogBox', '#admPill', '#mToolHint', '#mSaveChip', '#mHeld', '#issuesBar', '#wgBox', '#admLoginBox', '#admTop', '#admMain', '#dailyCard', '#fpsBox'];
+const AUDIT_SEL = ['#mChooser', '#mCrit', '#mAch', '#mAdv', '#mComment', '#mTrack', '#mMiniCtl', '#undoBar', '#mHud', '#mSide', '#mBar', '#mBuildBar', '#mRoad', '#mSheet', '#mInspect', '#mNotes', '#mPage .mPageHead', '#mPage .mPageBody', '#mMap .mMapHead', '#mMap .mMapBody', '#modal', '#sysBox', '#minimap', '#leftPanel.open', '#rightPanel', '#mTut .mtCard', '#dialogBox', '#admPill', '#mToolHint', '#mSaveChip', '#mHeld', '#issuesBar', '#wgBox', '#admLoginBox', '#admTop', '#admMain', '#dailyCard', '#fpsBox'];
 function safeRect() { return { l: RESP.sa.l, t: RESP.sa.t, r: window.innerWidth - RESP.sa.r, b: window.innerHeight - RESP.sa.b }; }
 function visibleEl(el) { if (!el || el.classList.contains('hidden')) return false; const cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0; }
 /* finite entrance animations (slide / pop) jump to their end before measuring; endless effects (pulse) are left alone */
@@ -769,7 +917,7 @@ function mobileUiAudit(fix) {
 /* Touch target check: every visible button of the mobile UI is at least 40 CSS px and not covered by another element */
 function mobileTouchAudit() {
   const out = [];
-  document.querySelectorAll('#mHud button,#mSide button,#mBar button,#mBuildBar button,#mRoad button,#mSheet button,#mInspect button,#mPage button,#mMap button,#mNotes button,#modal button').forEach(function (b) {
+  document.querySelectorAll('#mChooser button,#mCrit button,#mAdv button,#undoBar button,#mHud button,#mSide button,#mBar button,#mBuildBar button,#mRoad button,#mSheet button,#mInspect button,#mPage button,#mMap button,#mNotes button,#modal button').forEach(function (b) {
     if (!visibleEl(b) || b.closest('.hidden')) return;
     const r = b.getBoundingClientRect(); if (!r.width) return;
     const cx = clamp(r.left + r.width / 2, 0, window.innerWidth - 1), cy = clamp(r.top + r.height / 2, 0, window.innerHeight - 1);

@@ -74,14 +74,17 @@ function showRecoveryDialog(rec) {
 function lastSnapshot() { try { const idx = snapshotIndex(); return idx.length ? idx[idx.length - 1] : null; } catch (e) { return null; } }
 function androidLifecycle() {
   /* MainActivity.onPause / onResume call these directly (the WebView does not always fire visibilitychange) */
-  window.bctOnPause = function () { try { if (STARTED) { saveGame(true); writeRecovery(); } Store.setItem(SESSION_KEY, 'paused'); Log.info('App paused (autosaved)'); } catch (e) { /* storage */ } return 'ok'; };
-  window.bctOnResume = function () { try { Store.setItem(SESSION_KEY, 'open'); } catch (e) { /* storage */ } return 'ok'; };
+  /* Part 14: background → quick snapshot (recovery) + atomic save, then the lifecycle bus (audio, FPS, sim) */
+  window.bctOnPause = function () { const t = performance.now(); try { if (STARTED) { saveGame(true); writeRecovery(); } Store.setItem(SESSION_KEY, 'paused'); Log.info('App paused (autosaved in ' + Math.round(performance.now() - t) + ' ms)'); } catch (e) { /* storage */ } Lifecycle.emit('pause'); return 'ok'; };
+  window.bctOnResume = function () { try { Store.setItem(SESSION_KEY, 'open'); } catch (e) { /* storage */ } Lifecycle.emit('resume'); return 'ok'; };
+  window.bctOnStop = function () { Lifecycle.emit('stop'); return 'ok'; };
+  window.bctOnRestart = function () { Lifecycle.emit('restart'); return 'ok'; };
   /* Android: the OS may stop a backgrounded app at any time — autosave + recovery snapshot on pause, "open" again on resume */
   document.addEventListener('visibilitychange', function () {
     if (DESKTOP) return;
     try {
-      if (document.hidden) { if (STARTED) { saveGame(true); writeRecovery(); } Store.setItem(SESSION_KEY, 'paused'); Log.info('App paused (autosaved)'); }
-      else { Store.setItem(SESSION_KEY, 'open'); Log.info('App resumed'); }
+      if (document.hidden) { if (STARTED && Lifecycle.state.now !== 'background') { saveGame(true); writeRecovery(); } Store.setItem(SESSION_KEY, 'paused'); Log.info('App paused (autosaved)'); Lifecycle.emit('background'); }
+      else { Store.setItem(SESSION_KEY, 'open'); Log.info('App resumed'); Lifecycle.emit('foreground'); }
     } catch (e) { /* storage blocked */ }
   });
 }

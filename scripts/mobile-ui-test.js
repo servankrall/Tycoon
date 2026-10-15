@@ -1,11 +1,13 @@
 'use strict';
-/* BLOCK CITY TYCOON — MOBILE UI TEST (Part 13)
+/* BLOCK CITY TYCOON — MOBILE UI TEST (Part 13 · Part 14: Mobile 2.0)
    Runs the Android UI (browser preview, ?platform=android) in Chromium with touch emulation on real phone / tablet
    screen sizes and checks every main screen: Main Menu, New City, Continue, World Generator, Gameplay, Build, Roads,
    Transport, Economy, City Panel, Map, Settings, Save, Load, Pause and the Back Button. On every screen the in-game UI
    bounds audit (mobileUiAudit: x ≥ left, x + width ≤ right, y ≥ top, y + height ≤ bottom of the safe area) and the touch
    audit (buttons ≥ 36 px, not covered by another element) must pass. Touch input is real: one-finger drag, pinch,
    twist, tap-to-place, START → DRAG → END → CONFIRM road drawing — all through CDP touch events.
+   Part 14 adds: HUD modes, speed sheet, search, long press + smart selection, double tap, UNDO, critical alerts, quests,
+   daily report, minimap 2.0, readable text (no tiny fonts), HUD overlap and a memory-leak loop over the panels.
    Usage:  node scripts/mobile-ui-test.js [--out=dist/mobile-ui] [--only=small-phone,tablet] [--shots]
    Needs Playwright (npm i --no-save playwright && npx playwright install chromium) or PLAYWRIGHT_PATH. */
 const fs = require('fs');
@@ -25,6 +27,7 @@ if (!pw) { console.error('Playwright not found — npm i --no-save playwright &&
 /* CSS viewport = physical pixels / device pixel ratio (landscape) */
 const DEVICES = [
   { id: 'small-phone', name: 'SMALL PHONE 720×1280 (dpr 2)', w: 640, h: 360, dpr: 2 },
+  { id: 'hd-phone', name: 'HD PHONE 1920×1080 (dpr 1.5)', w: 1280, h: 720, dpr: 1.5 },
   { id: 'medium-phone', name: 'MEDIUM PHONE 1080×1920 (dpr 2.625)', w: 731, h: 411, dpr: 2.625 },
   { id: 'large-phone', name: 'LARGE PHONE 1080×2400 (dpr 2.75), notch + nav bar', w: 873, h: 393, dpr: 2.75, insets: [0, 34, 0, 24] },
   { id: 'qhd-phone', name: 'QHD PHONE 1440×2560 (dpr 3.5)', w: 731, h: 411, dpr: 3.5, insets: [0, 0, 0, 28] },
@@ -150,6 +153,7 @@ async function runDevice(browser, base, dev) {
   await check('Inspector', async function () {
     const p = await ev(function () { const b = S.buildings.list.find(function (x) { return x.built && BUILDINGS[x.type].workers && BUILDINGS[x.type].w <= 2; }); CAM.rot = 0; CAM.zoom = 1.2; CAM.x = (b.x + 0.5) * TILE; CAM.y = (b.y + 0.5) * TILE; clampCamera(); const s = worldToScreen((b.x + 0.5) * TILE, (b.y + 0.7) * TILE); return [s.x, s.y]; });
     await tap(p[0], p[1]); await sleep(250);
+    await ev(function () { if (MOBX.chooser) { const b = Array.from(MOBX.chooser.el.querySelectorAll('[data-mch]')).find(function (x) { return MOBX.chooser.c[+x.dataset.mch] && MOBX.chooser.c[+x.dataset.mch].kind === 'building'; }); if (b) b.click(); } }); await sleep(200);   // SMART SELECTION: pick the building
     const r = await ev(function () { return { kind: MINS.kind, rows: document.querySelectorAll('#mInspect .miRow').length }; });
     await tapSel('#mInspect [data-mi="close"]'); await sleep(100);
     return { ok: r.kind === 'building' && r.rows >= 5, detail: 'tap → BUILDING INFO (' + r.rows + ' rows: level, condition, workers, income, power, water)' };
@@ -157,11 +161,111 @@ async function runDevice(browser, base, dev) {
   await check('City Panel', async function () { await tapSel('[data-mbar="city"]'); await sleep(250); const n = await ev(function () { return document.querySelectorAll('#mPage .mStatCard').length; }); return { ok: n >= 7, detail: n + ' cards' }; });
   await check('Economy', async function () {
     await ev(function () { closeMobilePage(); }); await tapSel('[data-mbar="economy"]'); await sleep(300);
-    const r = await ev(function () { const cv = $('mGraph'); const w = cv.parentNode.getBoundingClientRect(), c = cv.getBoundingClientRect(); return { n: document.querySelectorAll('#mPage .mStatCard').length, fit: c.width <= w.width + 1 && c.right <= window.innerWidth }; });
+    const r = await ev(function () { const cv = $('mGraph'); const w = cv.parentNode.getBoundingClientRect(), c = cv.getBoundingClientRect(); return { n: document.querySelectorAll('#mPage .mStatCard').length, tabs: document.querySelectorAll('#mPage [data-metab]').length, fit: c.width <= w.width + 1 && c.right <= window.innerWidth }; });
     await tapSel('#mPage [data-mpx]'); await sleep(100);
-    return { ok: r.n >= 8 && r.fit, detail: r.n + ' cards · graph fits the screen ' + r.fit };
+    return { ok: r.n >= 6 && r.tabs >= 3 && r.fit, detail: r.n + ' cards · ' + r.tabs + ' economy tabs · graph fits the screen ' + r.fit };
   });
   await check('Map', async function () { await tapSel('[data-mbar="map"]'); await sleep(300); const r = await ev(function () { return MMAP.open && document.querySelectorAll('#mMapLayers [data-mml]').length; }); const back = await ev(function () { return window.bctOnBack(); }); await sleep(100); const closed = await ev(function () { return !MMAP.open; }); return { ok: r === 6 && back === 'handled' && closed, detail: r + ' layers · back closes the map ' + closed }; });
+  await check('HUD modes', async function () {
+    const r = [];
+    for (let i = 0; i < 3; i++) { await tapSel('#mHudMode'); await sleep(250); r.push(await ev(function () { return { m: GSET.hudMode, bar: shown($('mBar')), handle: shown($('mBarHandle')), pause: shown($('mPause')) }; })); }
+    const min = r.find(function (x) { return x.m === 'minimal'; }) || {};
+    let peek = false;
+    if (min.handle) { await ev(function () { GSET.hudMode = 'minimal'; applyHudMode(); }); await tapSel('#mBarHandle'); await sleep(200); peek = await ev(function () { return shown($('mBar')); }); }
+    await ev(function () { GSET.hudMode = 'full'; saveGSET(); applyHudMode(); }); await sleep(250);
+    return { ok: r.length === 3 && min.m === 'minimal' && !min.bar && min.handle && min.pause && peek, detail: r.map(function (x) { return x.m.toUpperCase(); }).join(' → ') + ' · MINIMAL: toolbar folded into TOOLS ' + min.handle + ', pause kept ' + min.pause + ' · TOOLS ▲ shows it ' + peek };
+  });
+  await check('Speed sheet', async function () {
+    await tapSel('#mSpeed'); await sleep(250);
+    const n = await ev(function () { return MSHEET.kind === 'speed' ? document.querySelectorAll('#mSheet [data-mspd]').length : 0; });
+    await tapSel('#mSheet [data-mspd="5"]'); await sleep(150);
+    const sp = await ev(function () { const v = S.settings.speed; setSpeed(0); return { v: v, closed: !MSHEET.open }; });
+    return { ok: n === 9 && sp.v === 5 && sp.closed, detail: n + ' speeds (⏸ 0.5× … 100×) · tap 5× → ' + sp.v + '× · sheet closed ' + sp.closed };
+  });
+  await check('Search', async function () {
+    await tapSel('#mSearchBtn'); await sleep(250);
+    await ev(function () { const i = $('mSearchQ'); i.value = 'house'; i.dispatchEvent(new Event('input')); }); await sleep(120);
+    const n = await ev(function () { return document.querySelectorAll('#mSearchRes [data-msr]').length; });
+    await ev(function () { document.querySelector('[data-msc="district"]').click(); const i = $('mSearchQ'); i.value = ''; i.dispatchEvent(new Event('input')); }); await sleep(100);
+    const d = await ev(function () { return document.querySelectorAll('#mSearchRes [data-msr]').length; });
+    const cam0 = await ev(function () { return CAM.x + ',' + CAM.y; });
+    await tapSel('#mSearchRes [data-msr="0"]'); await sleep(900);
+    const r = await ev(function () { const c = CAM.x + ',' + CAM.y; MSEARCH.cat = 'all'; MSEARCH.q = ''; return { c: c, closed: !$('modalWrap').classList.contains('show') }; });
+    return { ok: n > 0 && d > 0 && r.closed && r.c !== cam0, detail: '"house" → ' + n + ' results · districts ' + d + ' · GO → camera moved ' + (r.c !== cam0) };
+  });
+  await check('Long press & smart selection', async function () {
+    const p = await ev(function () { const b = S.buildings.list.find(function (x) { return x.built && BUILDINGS[x.type].w <= 2; }); CAM.rot = 0; CAM.zoom = 1.2; CAM.x = (b.x + 0.5) * TILE; CAM.y = (b.y + 0.5) * TILE; clampCamera(); const s = worldToScreen((b.x + 0.5) * TILE, (b.y + 0.7) * TILE); return [s.x, s.y]; });
+    await touch('touchStart', [[p[0], p[1]]]); await sleep(750); await touch('touchEnd', []); await sleep(200);
+    const r = await ev(function () { return MOBX.chooser ? { n: MOBX.chooser.c.length, kinds: MOBX.chooser.c.map(function (c) { return c.kind; }).join('/') } : null; });
+    if (r) await tapSel('#mChooser [data-mch="' + (r.n - 1) + '"]'); await sleep(200);
+    const tile = await ev(function () { const ok = $('modalWrap').classList.contains('show') && /LOCATION/.test($('modalTitle') ? $('modalTitle').textContent : document.querySelector('#modal').textContent); closeModal(); return ok; });
+    const z0 = await ev(function () { return CAM.zoom; });
+    const q = await ev(function () { for (let k = 0; k < 40; k++) { const x = innerWidth * (0.35 + (k % 5) * 0.08), y = innerHeight * (0.45 + Math.floor(k / 5) * 0.03); if (document.elementFromPoint(x, y) === canvas) return [x, y]; } return [innerWidth / 2, innerHeight / 2]; });
+    await touch('touchStart', [[q[0], q[1]]]); await sleep(30); await touch('touchEnd', []); await sleep(50); await touch('touchStart', [[q[0], q[1]]]); await sleep(30); await touch('touchEnd', []); await sleep(1300);
+    const z1 = await ev(function () { closeInspector(); closeSelectChooser(); return CAM.zoom; });
+    return { ok: !!r && r.n >= 2 && /tile/.test(r.kinds) && tile && z1 > z0 * 1.2, detail: 'long press → chooser ' + (r ? r.kinds : 'none') + ' · tile info ' + tile + ' · double tap zoom ' + z0.toFixed(2) + '→' + z1.toFixed(2) };
+  });
+  await check('Undo', async function () {
+    const r = await ev(function () {
+      UNDO.lastInput = performance.now();
+      let spot = null; for (let y = 3; y < MAP.H - 3 && !spot; y++) for (let x = 3; x < MAP.W - 3 && !spot; x++) if (canPlace(BUILDINGS.house, x, y).ok) spot = [x, y];
+      if (!spot) return null;
+      const m0 = S.money, n0 = S.buildings.list.length; const b = placeBuilding(BUILDINGS.house, spot[0], spot[1], 0);
+      const bar = shown($('undoBar')), n1 = S.buildings.list.length;
+      return { bar: bar, n0: n0, n1: n1, m0: m0, ok: !!b };
+    });
+    if (!r) return { ok: false, detail: 'no free spot' };
+    if (r.bar) await tapSel('#undoBar [data-undo]'); await sleep(150);
+    const a = await ev(function () { return { n: S.buildings.list.length, m: S.money }; });
+    return { ok: r.ok && r.bar && r.n1 === r.n0 + 1 && a.n === r.n0 && Math.abs(a.m - r.m0) < 1, detail: 'build → toast with ↶ UNDO ' + r.bar + ' · UNDO → ' + a.n + '/' + r.n0 + ' buildings, money restored ' + (Math.abs(a.m - r.m0) < 1) };
+  });
+  await check('Critical alert', async function () {
+    const r = await ev(function () { const d = (typeof DISASTERS !== 'undefined' ? DISASTERS : []).find(function (x) { return x.id === 'storm'; }) || { id: 'storm', icon: '⛈️', name: 'Storm', desc: 'test', dur: 30 }; GSET.critAlerts = true; const sp = S.settings.speed; showCriticalAlert('disaster', d); return { shown: shown($('mCrit')), btns: document.querySelectorAll('#mCrit [data-mcr]').length, paused: S.settings.speed !== sp }; });
+    if (r.shown) await tapSel('#mCrit [data-mcr="ignore"]'); await sleep(150);
+    const hid = await ev(function () { return !shown($('mCrit')); });
+    return { ok: r.shown && r.btns >= 2 && !r.paused && hid, detail: 'CRITICAL ALERT with VIEW / DISPATCH / IGNORE (' + r.btns + ') · game not paused ' + !r.paused + ' · IGNORE closes ' + hid };
+  });
+  await check('Quests & daily report', async function () {
+    await ev(function () { openQuestPage(); }); await sleep(200);
+    const q = await ev(function () { return document.querySelectorAll('#modalBody [data-mq="go"]').length; });
+    if (q) await tapSel('#modalBody [data-mq="go"]'); await sleep(500);
+    const went = await ev(function () { return !$('modalWrap').classList.contains('show'); });
+    await ev(function () { openDailyReport(); }); await sleep(200);
+    const rep = await ev(function () { const n = document.querySelectorAll('#modalBody .mRep').length; return n; });
+    const a = await audit(); await ev(function () { closeModal(); });
+    return { ok: (q >= 1 ? went : true) && rep >= 8 && !a.ui.length, detail: q + ' quests with GO TO LOCATION · GO closes and moves ' + went + ' · daily report ' + rep + ' cards' };
+  });
+  await check('Minimap 2.0', async function () {
+    await ev(function () { S.settings.minimap = true; $('minimap').classList.remove('hidden'); syncMiniCtl(); }); await sleep(600);
+    const r = await ev(function () { return { ctl: shown($('mMiniCtl')), n: document.querySelectorAll('#mMiniCtl [data-mmc]').length, w0: $('minimap').getBoundingClientRect().width }; });
+    if (r.ctl) { await tapSel('#mMiniCtl [data-mmc="size"]'); await sleep(250); }
+    const w1 = await ev(function () { return $('minimap').getBoundingClientRect().width; });
+    if (r.ctl) { await tapSel('#mMiniCtl [data-mmc="map"]'); await sleep(300); }
+    const map = await ev(function () { const o = MMAP.open; closeCityMap(); GSET.miniSize = 'm'; applyMiniSize(); return o; }); await sleep(200);
+    return { ok: (r.ctl && r.n === 3 && w1 !== r.w0 && map) || (!r.ctl && RESP.portrait), detail: 'controls ' + r.n + ' · resize ' + Math.round(r.w0) + '→' + Math.round(w1) + ' px · 🗺 opens the full map ' + map };
+  });
+  await check('Readable text & no overlap', async function () {
+    const r = await ev(function () {
+      const tiny = [], sel = '#mHud *,#mSide *,#mBar *,#mSheet *,#mInspect *,#mMiniCtl *,#undoBar *';
+      document.querySelectorAll(sel).forEach(function (e) { if (!e.childNodes.length || !Array.from(e.childNodes).some(function (n) { return n.nodeType === 3 && n.textContent.trim(); })) return; if (!visibleEl(e) || e.closest('.hidden')) return; const fs = parseFloat(getComputedStyle(e).fontSize); if (fs < 10) tiny.push((e.id || e.className || e.tagName) + ' ' + fs + 'px'); });
+      const R = function (id) { const e = $(id); return e && shown(e) ? e.getBoundingClientRect() : null; }, hit = function (a, b) { return a && b && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1; };
+      const hud = R('mHud'), side = R('mSide'), mini = R('minimap'), bar = R('mBar'), over = [];
+      if (hit(hud, side)) over.push('HUD/side'); if (hit(side, mini)) over.push('side/minimap'); if (hit(mini, bar)) over.push('minimap/toolbar'); if (hit(side, bar)) over.push('side/toolbar');
+      return { tiny: tiny.slice(0, 5), over: over };
+    });
+    return { ok: !r.tiny.length && !r.over.length, detail: 'text ≥ 10 px ' + (r.tiny.length ? r.tiny.join(', ') : 'ok') + ' · HUD / side buttons / minimap / toolbar overlap ' + (r.over.length ? r.over.join(', ') : 'none') };
+  });
+  await check('Memory (panel loop)', async function () {
+    const r = await ev(async function () {
+      const w = function (ms) { return new Promise(function (res) { setTimeout(res, ms); }); };
+      const heap = function () { return performance.memory ? performance.memory.usedJSHeapSize : 0; };
+      if (window.gc) window.gc(); const h0 = heap(), d0 = document.getElementsByTagName('*').length;
+      for (let i = 0; i < 12; i++) { openBuildSheet(); await w(20); closeSheet(); openMobilePage('city'); await w(20); closeMobilePage(); openCityMap(); await w(20); closeCityMap(); openNotificationCenter(); await w(10); closeNotificationCenter(); openSpeedSheet(); closeSheet(); openSearch(); closeModal(); }
+      await w(300); if (window.gc) window.gc();
+      return { dMB: Math.round((heap() - h0) / 1048576), dDom: document.getElementsByTagName('*').length - d0 };
+    });
+    return { ok: r.dMB < 40 && r.dDom < 400, detail: '12× open/close of every panel → heap ' + (r.dMB >= 0 ? '+' : '') + r.dMB + ' MB · DOM ' + (r.dDom >= 0 ? '+' : '') + r.dDom + ' nodes' };
+  });
   await check('Settings', async function () {
     await ev(function () { openSettings('graphics'); }); await sleep(200);
     const tabs = await ev(function () { return Array.from(document.querySelectorAll('[data-s2tab]')).map(function (b) { return b.dataset.s2tab; }); });
@@ -169,14 +273,14 @@ async function runDevice(browser, base, dev) {
     for (const t of tabs) { await ev(function (x) { openSettings(x); }, t); await sleep(80); const a = await audit(); if (a.ui.length || a.touch.length) bad.push(t + '[' + a.ui.map(function (x) { return x.id; }).concat(a.touch.map(function (x) { return x.text + (x.covered ? ' covered' : ' small'); })).slice(0, 3).join(';') + ']'); }
     await ev(function () { openSettings('camera'); }); await sleep(100);
     const sens = await ev(function () { const r = document.querySelector('[data-mrange="camSens"]'); r.value = 2; r.dispatchEvent(new Event('change', { bubbles: true })); return GSET.camSens; });
-    await ev(function () { openSettings('accessibility'); }); await sleep(80);
+    await ev(function () { openSettings('uiscale'); }); await sleep(80);
     await ev(function () { document.querySelector('[data-gs2="uiScale"][data-v="120"]').click(); }); await sleep(250);
     const sc = await ev(function () { return RESP.scale; });
     const a120 = await audit();
     await ev(function () { document.querySelector('[data-gs2="uiScale"][data-v="100"]').click(); GSET.camSens = 'MEDIUM'; saveGSET(); }); await sleep(150);
     const back = await ev(function () { return window.bctOnBack(); }); await sleep(100);
     const closed = await ev(function () { return !$('modalWrap').classList.contains('show'); });
-    return { ok: tabs.length >= 6 && !bad.length && sens === 'HIGH' && !a120.ui.length && closed, detail: tabs.join('/') + (bad.length ? ' · layout problems in ' + bad.join(',') : '') + ' · Camera Sensitivity slider → ' + sens + ' · UI SCALE 120% → scale ' + sc + ' ok ' + !a120.ui.length + ' · back closes ' + closed };
+    return { ok: tabs.length >= 11 && !bad.length && sens === 'HIGH' && !a120.ui.length && closed, detail: tabs.join('/') + (bad.length ? ' · layout problems in ' + bad.join(',') : '') + ' · Camera Sensitivity slider → ' + sens + ' · UI SCALE 120% → scale ' + sc + ' ok ' + !a120.ui.length + ' · back closes ' + closed };
   });
   await check('Pause & Save', async function () {
     const p = await ev(function () { return window.bctOnBack(); }); await sleep(150);
