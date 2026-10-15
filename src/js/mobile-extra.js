@@ -330,6 +330,8 @@ function openAdvisorCard() {
   auditSoon();
 }
 document.addEventListener('pointerdown', function (e) { const el = document.getElementById('mAdv'); if (el && !el.classList.contains('hidden') && !el.contains(e.target) && !(e.target.closest && e.target.closest('#mAdvBtn'))) el.classList.add('hidden'); }, true);
+function placeComment(el) { el = el || document.getElementById('mComment'); if (!el) return; const sr = MOB.side && shown(MOB.side) ? MOB.side.getBoundingClientRect() : null; el.style.left = sr ? Math.round(sr.right + 8) + 'px' : ''; }
+window.addEventListener('resize', function () { setTimeout(placeComment, 60); });
 const COMMENT_COOLDOWN_MS = 75000;
 function commentTick() {
   if (!STARTED || !mobOn() || GSET.comments === false || S.settings.speed === 0 || MSHEET.open || MINS.kind || MMAP.open || MPAGE.kind || $('modalWrap').classList.contains('show')) return;
@@ -339,7 +341,7 @@ function commentTick() {
   let el = document.getElementById('mComment');
   if (!el) { el = document.createElement('button'); el.id = 'mComment'; document.body.appendChild(el); el.onclick = function () { el.classList.add('hidden'); if (el._c && AG.citizens.indexOf(el._c) >= 0) { camFlyTo(el._c.x, el._c.y, Math.max(CAM.zoom, 1.3)); openInspector('citizen', el._c); } }; }
   el._c = c; el.className = c.bubble.bad ? 'bad' : '';
-  const sr = MOB.side && shown(MOB.side) ? MOB.side.getBoundingClientRect() : null; el.style.left = sr ? Math.round(sr.right + 8) + 'px' : '';
+  placeComment(el);
   el.innerHTML = '<span>💬</span><b>Citizen #' + c.id + '</b> “' + esc(c.bubble.text) + '”';
   clearTimeout(el._t); el._t = setTimeout(function () { el.classList.add('hidden'); }, 5500);
 }
