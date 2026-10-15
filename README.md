@@ -1,6 +1,6 @@
 # 🏙️ BLOCK CITY TYCOON — Windows EXE + Android APK
 
-**Build. Manage. Expand.** · Sürüm **2.2.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
+**Build. Manage. Expand.** · Sürüm **2.3.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
 `BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE — ve 2.0.0 ile bir **Android uygulaması** (APK). Windows ve Android **aynı oyun motorunu** kullanır; yalnızca girdi, arayüz, dosya sistemi ve performans katmanı platforma özeldir. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
@@ -39,8 +39,8 @@ Build sonrası:
 ```text
 dist/
 ├── windows/
-│   ├── BLOCK-CITY-TYCOON-Setup-2.2.0.exe       ← kurulum sihirbazı
-│   ├── BLOCK-CITY-TYCOON-Portable-2.2.0.exe    ← kurulumsuz, çift tıkla çalışır
+│   ├── BLOCK-CITY-TYCOON-Setup-2.3.0.exe       ← kurulum sihirbazı
+│   ├── BLOCK-CITY-TYCOON-Portable-2.3.0.exe    ← kurulumsuz, çift tıkla çalışır
 │   └── win-unpacked/BLOCK CITY TYCOON.exe      ← paketlenmiş uygulamanın kendisi
 └── android/
     ├── BLOCK-CITY-TYCOON-Android.apk           ← debug APK (geliştirme)
@@ -464,6 +464,41 @@ Tarayıcıda önizleme: `src/index.html?platform=android` (telefon boyutlu pence
 Otomatik test: `npm run test:mobile-ui` (Playwright gerekir: `npm i --no-save playwright && npx playwright install chromium`) →
 `dist/mobile-ui/mobile-ui-report.json`; hatalı ekranların görüntüleri aynı klasöre yazılır.
 
+## 6i. Mobile 2.0 — dokunmatik UX, performans ve sürüm kalitesi (2.3.0)
+Tek ortak simülasyon motoru (ekonomi, vatandaşlar, trafik, binalar, yollar, kayıt, olaylar, görevler) Windows EXE ve Android APK'da
+aynıdır; platforma özgü her şey **`src/js/platform-adapter.js`** üzerinden geçer: `AndroidPlatformAdapter` (touch, mobil UI, safe area,
+lifecycle, dosya sistemi, mobil performans, titreşim), `WindowsPlatformAdapter` (fare / klavye / kontrolcü, masaüstü UI) ve
+`BrowserPlatformAdapter`. Aynı dosyada `MOBILE_MODE`, safe area API'si (`safeLeft / safeRight / safeTop / safeBottom`), lifecycle olay
+yolu (foreground / background / pause / resume / stop / restart), `haptic()`, **SaveProvider** katmanı (`LocalSaveProvider`, ileride
+bulut için hazır `CloudSaveProvider`) ve **Action** sistemi (`Action.Build`, `Action.Cancel`, `Action.Pause`, `Action.Undo` …) bulunur.
+Yeni dosyalar: `src/js/mobile-extra.js` (dokunmatik özellikler) ve `src/js/undo.js` (tüm platformlarda UNDO).
+
+| Özellik | Nasıl |
+|---|---|
+| HUD 2.0 | sol: seviye · şehir · tarih — orta: nüfus · mutluluk — sağ: para · elektrik · su · 🔔 · **≡** (FULL → COMPACT → MINIMAL; minimalde araç çubuğu **TOOLS ▲** tutamacına katlanır) |
+| Akıllı seçim | parmağın altında birden çok nesne varsa **SELECT OBJECT** (Building / Road / Citizen / Vehicle); büyük dokunma alanları; **uzun bas** = her şey + kare bilgisi; **çift dokun** = yakınlaştır |
+| Inspector | sekmeler (Overview · Statistics · Economy · Connections), bina: UPGRADE · INFO · DEMOLISH; yol: Traffic %, araç/saat, ortalama hız, UPGRADE · EDIT (tür değiştir, uzat, böl, trafik ışığı, göbek, sil); vatandaş: TRACK · PROFILE · WORK · HOME; araç: TRACK · ROUTE · STATUS (hedef, ETA) |
+| Güvenli yıkım + UNDO | KEEP / DEMOLISH onayı; yol, bina, bölge ve yıkım **↶ UNDO** ile geri alınır (Windows: Ctrl+Z), para ve bütçe birebir geri gelir |
+| Hız | ⏸ / hız düğmesi → alt sayfa: ⏸ 0.5× 1× 2× 5× 10× 25× 50× 100× (sabit zaman adımı korunur) |
+| Arama | 🔍 bina, vatandaş #, yol, ilçe, şirket, araç, `x,y` konumu → kamera oraya gider |
+| Uyarılar | büyük olaylarda **CRITICAL ALERT** (VIEW · DISPATCH · IGNORE) — oyun durmaz; bildirimler konumunu bilir (📍 dokun → kamera gider); başarım açılır kutusu; 💡 akıllı danışman (SHOW LOCATION / DO IT); vatandaş yorumları (bekleme süresiyle) |
+| Harita | minimap 2.0: ⤢ boyut (S/M/L), 🗺️ tam harita, ✕ kapat, dokun → tam harita, yangın / hasar işaretleri; tam haritada 11 ısı haritası (TRAFFIC … DEMAND) |
+| Görevler / rapor | ⏸ → 🎯 Quests (**GO TO LOCATION**), 📰 Report (günlük kartlar), ❓ HELP (eğitim, dokunmatik eğitim kartı, kontroller) |
+| Ayarlar | 11 kategori: Graphics, Performance (Performance / Balanced / Quality / Battery Saver, FPS AUTO/30/45/60, cihaz kartı), Camera (hassasiyet, zoom ve dönüş hızı, ters dikey / yatay, Gesture Camera — kapalıyken ＋/－ düğmeleri, RESET CAMERA), Controls, Audio (Master + Music / SFX / UI / Environment), Haptics, UI Scale (80–130 %, LARGE TOUCH, HUD modu), Language, Accessibility, Save (otomatik kayıt OFF / 5 / 10 / 15 / 30 dk, olay anlık görüntüleri), Notifications |
+| Kayıt güvenliği | Android: `tmp → doğrula → yeniden adlandır` + `.bak` yedeği (bozuk dosyada yedekten okunur); arka plana geçişte kayıt + kurtarma; olay anlık görüntüleri (Before Disaster, After Major Construction, Before Economy Crisis, After City Expansion — son 3 tutulur); hata fırtınasında *"Something went wrong. Your recovery save is safe. [RETURN] [RECOVER SAVE]"* |
+| Pil | menüde ve duraklatılmış / dokunulmayan oyunda 30 FPS, arka planda 15 FPS ve ses durur; Battery Saver 30 FPS |
+| Fotoğraf modu | dokunmatik **🙈 HIDE UI** (herhangi bir yere dokun → geri gelir), 📸 HUD'suz PNG |
+| Geliştirici | **MOBILE STRESS TEST** (FPS, %1 low, kare süresi, bellek, ajan sayıları) yalnızca DEVELOPMENT / TEST build'lerinde veya yetkili OWNER / DEVELOPER / DEBUG oturumunda görünür; normal oyuncu görmez, her çalıştırma admin loguna yazılır |
+
+Build profilleri: `development` · `staging` (release oyunu, STAGING etiketiyle test için) · `test` · `release` (varsayılan) —
+`node scripts/build.js profile staging`. Sürüm numarası: `package.json` → Android `versionCode` otomatik artar (2.3.0 → 20300);
+kayıt formatı sürümü (save v12) bundan bağımsızdır.
+
+Testler: `npm run test:mobile-ui` artık 9 ekranda (1280×720, 1920×1080, 2400×1080, 2560×1440, 21:9, 2560×1600 ve 1280×800 tablet,
+portre) HUD modlarını, hız sayfasını, aramayı, uzun bas + akıllı seçimi, çift dokunmayı, UNDO'yu, kritik uyarıyı, görevleri, günlük
+raporu, minimap 2.0'ı, 10 px altı yazıyı, HUD / yan düğme / minimap / araç çubuğu çakışmasını ve panel aç-kapa bellek sızıntısını da
+denetler. Android self-test 28 adım (yeni: platform adapter + lifecycle, UNDO, hız / arama / HUD / kritik uyarı, atomik kayıt).
+
 ## 7. Pencere ve ayarlar
 
 - Başlangıç 1280×720, en küçük 1024×600; yeniden boyutlandırma, büyütme, küçültme, tam ekran.
@@ -480,7 +515,7 @@ Otomatik test: `npm run test:mobile-ui` (Playwright gerekir: `npm i --no-save pl
 `electron/updater.js` dört adımı içerir: **Update Checker → Version Check → Download Update → Install Update**. Açmak için `package.json` içindeki `bctUpdate.manifestUrl` alanına https ile yayınlanan bir JSON adresi yazın:
 
 ```json
-{ "version": "2.0.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-2.2.0.exe", "sha256": "…", "notes": "Yeni binalar" }
+{ "version": "2.0.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-2.3.0.exe", "sha256": "…", "notes": "Yeni binalar" }
 ```
 
 Adres boşsa güncelleme kapalıdır. İnternet yoksa oyun sessizce devam eder. İndirilen installer'ın SHA-256 değeri doğrulanır. Kayıtlar kullanıcı klasöründe durduğu için güncellemeden etkilenmez.
@@ -524,5 +559,5 @@ Windows'ta son kontrol:
 
 ```text
 npm install → npm run dev → NEW CITY → şehir oluşur → Ctrl+S → pencereyi kapat (EXIT)
-→ npm run build:windows → dist\windows\BLOCK-CITY-TYCOON-Setup-2.2.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
+→ npm run build:windows → dist\windows\BLOCK-CITY-TYCOON-Setup-2.3.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
 ```

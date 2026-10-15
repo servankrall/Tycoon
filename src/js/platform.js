@@ -12,12 +12,13 @@ const BCTA = (typeof window !== 'undefined' && window.BCTAndroid) ? window.BCTAn
 const ANDROID_INFO = (function () { if (!BCTA) return null; try { return JSON.parse(BCTA.info()) || {}; } catch (e) { return {}; } })();
 const BUILD = (function () {                      // build profile (scripts/build.js writes js/build-profile.js; missing file = RELEASE)
   const b = (typeof window !== 'undefined' && window.BCT_BUILD) || {};
-  const prof = ['development', 'test', 'release'].indexOf(b.profile) >= 0 ? b.profile : 'release';
-  return Object.freeze({ profile: prof, dev: prof === 'development', test: prof === 'test', release: prof === 'release', builtAt: String(b.builtAt || ''), target: String(b.target || '') });
+  const prof = ['development', 'staging', 'test', 'release'].indexOf(b.profile) >= 0 ? b.profile : 'release';
+  /* STAGING = the release game (admin hidden, no debug, production UI), labelled STAGING in Settings → About and the logs, for testers before a release */
+  return Object.freeze({ profile: prof, dev: prof === 'development', staging: prof === 'staging', test: prof === 'test', release: prof === 'release' || prof === 'staging', builtAt: String(b.builtAt || ''), target: String(b.target || '') });
 })();
 const DESKTOP = !!(BCT && BCT.isDesktop);
 const DEV_MODE = !!(BCT && BCT.dev) && BUILD.dev;
-const GAME_VERSION = (BCT && BCT.version) || (ANDROID_INFO && ANDROID_INFO.version) || '2.2.0';
+const GAME_VERSION = (BCT && BCT.version) || (ANDROID_INFO && ANDROID_INFO.version) || '2.3.0';
 /* --- Platform detection: IS_ANDROID · IS_WINDOWS · IS_DESKTOP (automatic; ?platform=android previews the mobile UI in a browser) --- */
 const PLATFORM_OVERRIDE = (function () { try { const m = /[?&]platform=(android|windows|desktop)\b/.exec(location.search); return m ? m[1] : ''; } catch (e) { return ''; } })();
 const IS_ANDROID = !!BCTA || PLATFORM_OVERRIDE === 'android';
@@ -167,7 +168,7 @@ function sanitizeGSET(src) {
   o.particles = pickIn(src.particles, ['ON', 'REDUCED', 'OFF'], d.particles);
   o.npcDensity = pickIn(Number(src.npcDensity), [25, 50, 75, 100, 150, 200], d.npcDensity);
   o.trafficDensity = pickIn(Number(src.trafficDensity), [25, 50, 75, 100, 150, 200], d.trafficDensity);
-  o.autosaveInterval = pickIn(Number(src.autosaveInterval), [15, 30, 60, 120, 300, 600], d.autosaveInterval);
+  o.autosaveInterval = pickIn(Number(src.autosaveInterval), [15, 30, 60, 120, 300, 600, 900, 1800], d.autosaveInterval);
   o.language = pickIn(src.language, Object.keys(SHELL_TEXT), d.language);
   return o;
 }
