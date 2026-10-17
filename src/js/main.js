@@ -455,9 +455,10 @@ function loop(ts) {
   const dt = Math.min(0.1, lastTs ? (ts - lastTs) / 1000 : 0.016);
   lastTs = ts;
   FX.time += dt;
-  let alpha = 1;
+  let alpha = 1, tIn = tWork, tSim = tWork, tUi = tWork;
   try {
     pollGamepad(dt);
+    tIn = performance.now();                                    // Part 16 frame budget: input · simulation · UI · render · visual engine · audio
     if (STARTED) {
       const simDt = dt * (typeof safeSpeed === 'function' ? safeSpeed(S.settings.speed) : S.settings.speed);      // Part 12: safe speed limit on slow devices
       if (simDt > 0) {
@@ -467,9 +468,10 @@ function loop(ts) {
       }
       alpha = Game.advance(simDt);  // fixed 20 TPS: construction, citizens, traffic, ships, incidents
       Game.measure(dt);
+      tSim = performance.now();
       S.statistics.totals.playSec += dt;
       cosmeticEffects(dt);
-      sirenAudioTick(dt);
+      const tAu = performance.now(); sirenAudioTick(dt); if (typeof VE !== 'undefined') VE.prof.audioAcc = (VE.prof.audioAcc || 0) + performance.now() - tAu;
       UI.idleTimer += dt;
       uiAcc += dt; panelAcc += dt; saveAcc += dt; advAcc += dt; dashAcc += dt; issueAcc += dt;
       if (uiAcc >= 0.25) { uiAcc = 0; refreshTopbar(); }
@@ -486,6 +488,7 @@ function loop(ts) {
       if (saveAcc >= autosaveInterval()) { saveAcc = 0; if (GSET.autosave) { saveGame(true); if (typeof Log !== 'undefined') Log.debug('Autosave'); } }
       recoveryTick(dt);
     }
+    tUi = performance.now();
     updateWeather(dt);
     if (typeof veFrame === 'function') veFrame(dt);          // Part 15: Visual Engine 2.0 (sun, weather blend, outages, ambience)
     updateFX(dt);
@@ -499,6 +502,7 @@ function loop(ts) {
   }
   if (!document.hidden) { const tr = performance.now(); try { withInterpolation(alpha, render); } catch (err) { logError('Render', err); } PERF.renderMs = (PERF.renderMs || 0) * 0.9 + (performance.now() - tr) * 0.1; }   // minimized: simulate, don't draw
   PERF.frameMs = (PERF.frameMs || 0) * 0.9 + (performance.now() - tWork) * 0.1;   // CPU time per frame (F3)
+  if (typeof veProfileFrame === 'function') veProfileFrame(tIn - tWork, STARTED ? tSim - tIn : 0, STARTED ? tUi - tSim : 0);
   PERF.frames++; PERF.acc += dt;
   if (PERF.acc >= 1) { PERF.fps = PERF.frames / PERF.acc; PERF.frames = 0; PERF.acc = 0; adaptivePerformance(); updateHud(); }
   requestAnimationFrame(loop);

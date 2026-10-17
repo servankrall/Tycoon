@@ -16,7 +16,7 @@ const VEHICLE_SPECS = {
   tanker: { len: 18, wid: 8, speed: 33, colors: ['#e9c46a'] },
   race: { len: 13, wid: 6, speed: 95, colors: ['#ff006e', '#8338ec', '#3a86ff', '#fb5607', '#06d6a0'] }
 };
-function resetAgents() { AG.citizens = []; AG.vehicles = []; AG.planes = []; AG.ships = []; AG.accidents = []; if (MAP.blocked) MAP.blocked.fill(0); }
+function resetAgents() { AG.citizens = []; AG.vehicles = []; AG.planes = []; AG.ships = []; AG.accidents = []; AG.nextId = 1; AG.spawned = 0; if (MAP.blocked) MAP.blocked.fill(0); }
 function perf() { return perfPreset(QUALITY_PRESETS[S.settings.quality] || QUALITY_PRESETS.MEDIUM); }   // quality preset × NPC / traffic density, shadows & particles settings
 
 /* --- Citizens: utility-AI state machine ----------------------------------- */
@@ -27,7 +27,14 @@ function weightedPick(arr, wfn) {
   for (let i = 0; i < arr.length; i++) { r -= wfn(arr[i]); if (r <= 0) return arr[i]; }
   return arr[arr.length - 1];
 }
+/* Part 16: DETERMINISTIC CITIZENS — the n-th citizen of a city always gets the same home pick, job pick, age, money and
+   personality: its attributes come from a stream seeded by the city seed and its spawn number, not from Math.random */
 function spawnCitizen(tourist) {
+  const n = AG.spawned = (AG.spawned | 0) + 1, rnd = Math.random;
+  Math.random = mulberry32(((S.city.seed >>> 0) * 2654435761 + n * 40503) >>> 0);
+  try { return spawnCitizen0(tourist); } finally { Math.random = rnd; }
+}
+function spawnCitizen0(tourist) {
   let home = null, p;
   if (tourist) {
     const hubs = MAP.lists.tourism.filter(function (b) { return b._op; });
@@ -52,7 +59,7 @@ function spawnCitizen(tourist) {
   AG.citizens.push(c);
 }
 function syncCitizens() {
-  if (S._rawCitizens) { const n = restoreCitizens(S._rawCitizens); delete S._rawCitizens; if (n) AG.citizens.forEach(citizenProfile); }
+  if (S._rawCitizens) { const n = restoreCitizens(S._rawCitizens); delete S._rawCitizens; if (n) AG.citizens.forEach(citizenProfile); AG.spawned = Math.max(AG.spawned | 0, n | 0); }   // new citizens continue the numbering
   const q = perf();
   const maxN = Math.floor(q.npc * PERF.scale);
   const touristTarget = S.city.tourismUnlocked ? Math.min(Math.floor(maxN * 0.25), Math.floor(S.city.tourists * 0.2)) : 0;

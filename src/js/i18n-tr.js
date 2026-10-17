@@ -3933,6 +3933,8 @@ const I18N_TR = {
   "Collecting data — one point per game month": "Veri toplanıyor — her oyun ayı bir nokta",
   "Tap anywhere (or press Esc) to show the photo controls again": "Fotoğraf kontrollerini yeniden göstermek için herhangi bir yere dokunun (veya Esc'ye basın)",
   "POWER OUTAGE": "ELEKTRİK KESİNTİSİ",
+  "Performance reduced to keep the game stable.": "Oyunu kararlı tutmak için performans düşürüldü.",
+  "Power restored": "Elektrik geri geldi",
   "Street lights": "Sokak lambaları",
   "Traffic lights": "Trafik ışıkları",
   "Buildings: emergency power": "Binalar: acil durum gücü",

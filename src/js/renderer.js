@@ -333,18 +333,21 @@ function updateWeather(dt) {
     }
     FX.natStorm = w === 'storm';
   }
-  if (w !== FX.weather) { FX.weather = w; FX.drops = []; if (w !== 'clear') sfx('weather'); }
+  if (w !== FX.weather) { FX.weather = w; FX.dropN = 0; if (w !== 'clear') sfx('weather'); }     // Part 16: drops are pooled, never thrown away
   const precip = FX.weather === 'rain' || FX.weather === 'storm' || FX.weather === 'snow' || FX.weather === 'heavyrain' || FX.weather === 'coldwave';
   const want = !precip ? 0 : Math.floor((typeof VE !== 'undefined' ? 0.25 + 0.75 * VE.wx.k : 1) * (FX.weather === 'snow' ? 140 : FX.weather === 'coldwave' ? 70 : FX.weather === 'storm' || FX.weather === 'heavyrain' ? 330 : 200) * perf().weather * PERF.scale);
+  /* PARTICLE POOL (rain · heavy rain · storm · snow): the drop objects are allocated once (up to the largest count ever
+     needed) and re-used; only the active count FX.dropN changes */
   while (FX.drops.length < want) FX.drops.push({ x: Math.random() * CW, y: Math.random() * CH, s: rand(0.6, 1.2), o: Math.random() * 6 });
-  if (FX.drops.length > want) FX.drops.length = want;
+  if ((FX.dropN || 0) < want) for (let i = FX.dropN || 0; i < want; i++) { const d = FX.drops[i]; d.x = Math.random() * CW; d.y = Math.random() * CH; }
+  FX.dropN = want;
   const snow = FX.weather === 'snow' || FX.weather === 'coldwave';
   const vy = snow ? 40 : (FX.weather === 'storm' ? 700 : FX.weather === 'heavyrain' ? 640 : 500), vx = snow ? 0 : (FX.weather === 'storm' ? -220 : FX.weather === 'heavyrain' ? -120 : -80);
-  FX.drops.forEach(function (d) {
+  for (let i = 0; i < FX.dropN; i++) { const d = FX.drops[i];
     d.y += vy * d.s * dt; d.x += (vx + (snow ? Math.sin(FX.time + d.o) * 20 : 0)) * d.s * dt;
     if (d.y > CH) { d.y = -10; d.x = Math.random() * (CW + 200); }
     if (d.x < -20) d.x = CW + 10;
-  });
+  }
   if (FX.weather === 'storm' && Math.random() < dt * 0.25) { FX.flash = 1; shake(3); sfx('thunder'); }
   SND.setRain(FX.weather === 'rain' || FX.weather === 'storm' || FX.weather === 'heavyrain');
 }
@@ -463,11 +466,28 @@ function drawVehicle(v) {
   if (v.type === 'race') { ctx.fillStyle = '#fff'; ctx.fillRect(-L / 2, -1, L, 2); }
   if (v.type === 'police') { ctx.fillStyle = '#fff'; ctx.fillRect(-2, -W / 2, 4, W); }
   if (v.siren) { const on = Math.floor(FX.time * 8) % 2; ctx.fillStyle = on ? '#ff1744' : '#2979ff'; ctx.fillRect(-2, -W / 2 - 1, 4, 2); }
-  const braking = (v.speed === 0 && v.stopped > 0.2) || (v._ps !== undefined && v.speed < v._ps - 0.5); v._ps = v.speed;
-  if (braking) { ctx.fillStyle = '#ff4d4d'; ctx.fillRect(-L / 2 - 1, -W / 2 + 1, 1.5, 2); ctx.fillRect(-L / 2 - 1, W / 2 - 3, 1.5, 2); }
-  const turn = vehicleTurnSide(v);
-  if (turn && Math.floor(FX.time * 3) % 2) { ctx.fillStyle = '#ffb703'; const sy = turn > 0 ? W / 2 - 1.5 : -W / 2; ctx.fillRect(L / 2 - 2, sy, 2, 1.5); ctx.fillRect(-L / 2, sy, 2, 1.5); }
+  const ls = vehicleLightState(v);
+  if (ls.brake) { ctx.fillStyle = '#ff4d4d'; ctx.fillRect(-L / 2 - 1, -W / 2 + 1, 1.5, 2); ctx.fillRect(-L / 2 - 1, W / 2 - 3, 1.5, 2); }
+  if (ls.turn && Math.floor(FX.time * 3) % 2) { ctx.fillStyle = '#ffb703'; const sy = ls.turn > 0 ? W / 2 - 1.5 : -W / 2; ctx.fillRect(L / 2 - 2, sy, 2, 1.5); ctx.fillRect(-L / 2, sy, 2, 1.5); }
   ctx.restore();
+}
+/* Part 16 — VEHICLE LIGHT STATE MACHINE: one place decides every light, once per vehicle per frame.
+   Base mode DAY · NIGHT · RAIN · FOG (headlights on in all but DAY); overlays EMERGENCY (siren lights), BRAKING
+   (stopped or slowing down), TURNING (−1 left / +1 right, blinking). Overlays never switch the base mode off. */
+const VL_MODES = ['DAY', 'NIGHT', 'RAIN', 'FOG'];
+let VL_FRAME = 0;
+function vehicleLightState(v) {
+  const L = v._ls || (v._ls = { f: -1, mode: 'DAY', head: false, brake: false, turn: 0, emergency: false, ps: v.speed });
+  if (L.f === VL_FRAME) return L;
+  const nf = nightFactor(), fog = typeof VE !== 'undefined' ? VE.wx.fog : 0, wet = FX.weather === 'rain' || FX.weather === 'heavyrain' || FX.weather === 'storm' || FX.weather === 'snow';
+  L.mode = nf > 0.35 ? 'NIGHT' : fog > 0.3 ? 'FOG' : wet ? 'RAIN' : 'DAY';
+  L.head = L.mode !== 'DAY';
+  L.brake = (v.speed === 0 && v.stopped > 0.2) || (L.ps !== undefined && v.speed < L.ps - 0.5);
+  L.ps = v.speed;
+  L.turn = vehicleTurnSide(v);
+  L.emergency = !!v.siren;
+  L.f = VL_FRAME;
+  return L;
 }
 /* turn signal: which way the vehicle turns at the next node of its path (−1 left, +1 right, 0 straight) */
 function vehicleTurnSide(v) {
@@ -478,11 +498,22 @@ function vehicleTurnSide(v) {
   const cr = v.hx * dy - v.hy * dx;
   return Math.abs(cr) < 0.3 ? 0 : cr > 0 ? 1 : -1;
 }
+/* Part 16: EMOJI SPRITES — text rendering is one of the slowest canvas calls, so each icon is drawn once per on-screen
+   pixel size (4 px buckets, sharp at the current zoom × DPR) into a small canvas and then stamped with drawImage */
+const EMOJI_FONT = 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif', EMOJI_CACHE = new Map();
+function emojiSprite(icon, px) {
+  const key = icon + '|' + px; let c = EMOJI_CACHE.get(key);
+  if (c) return c;
+  if (EMOJI_CACHE.size > 400) EMOJI_CACHE.clear();                  // bounded: zooming through every size never grows memory
+  c = document.createElement('canvas'); c.width = c.height = Math.ceil(px * 1.4);
+  const g = c.getContext('2d'); g.font = px + EMOJI_FONT; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#1b1b2f';
+  g.fillText(icon, c.width / 2, c.height / 2);
+  EMOJI_CACHE.set(key, c); return c;
+}
 function drawEmoji(icon, x, y, size) {
   if (size * CAM.zoom < 7) return;
-  ctx.font = Math.round(size) + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(icon, x, y);
+  const px = Math.min(256, Math.max(8, Math.ceil(size * CAM.zoom * DPR / 4) * 4)), s = size * 1.4;
+  ctx.drawImage(emojiSprite(icon, px), x - s / 2, y - s / 2, s, s);
 }
 function buildingHeight(b) { const d = bdef(b); return d.height * (1 + 0.15 * (b.level - 1)) * (PHOTO.on ? PHOTO.fov : 1) * (b._rise !== undefined ? 0.12 + 0.88 * b._rise : 1); }
 
@@ -521,7 +552,7 @@ function drawBuilding(b) {
   if (d.id === 'farm') {
     ctx.fillStyle = season.id === 'winter' ? '#e8eef2' : '#bc8a5f'; ctx.fillRect(x0, y0, w, h);
     ctx.fillStyle = season.id === 'winter' ? '#cfd8dc' : (season.id === 'autumn' ? '#e9c46a' : '#6a994e');
-    for (let yy = y0 + 3; yy < y0 + h - 2; yy += 6) ctx.fillRect(x0 + 3, yy, w - 6, 3);
+    ctx.beginPath(); for (let yy = y0 + 3; yy < y0 + h - 2; yy += 6) ctx.rect(x0 + 3, yy, w - 6, 3); ctx.fill();
     ctx.fillStyle = '#9d0208'; ctx.fillRect(x0 + w - 16, y0 + 4, 12, 10); ctx.fillStyle = '#6a040f'; ctx.fillRect(x0 + w - 17, y0 + 2, 14, 3);
     statusIcons(b, x0, y0, w, h, 8); return;
   }
@@ -549,6 +580,7 @@ function drawBuilding(b) {
   const shMode = typeof VE !== 'undefined' ? VE.b.shadow : 'dynamic';
   if (q.shadow && PERF.scale >= 0.6 && SUN.on !== false && !(IS_MOBILE && CAM.zoom < 0.45)) {
     const k = SUN.k === undefined ? 1 : 0.35 + 0.65 * SUN.k;
+    if (typeof VE !== 'undefined') VE.stats.shadows++;
     if (shMode === 'simple') { ctx.fillStyle = 'rgba(0,0,0,' + (0.16 * k) + ')'; ctx.fillRect(x0 + 3, y0 + 3, w, h); }
     else {
       const shx = H * SUN.dx * SUN.len * 1.6, sxe = shx >= 0 ? x0 + w : x0;
@@ -577,7 +609,7 @@ function drawBuilding(b) {
     ctx.fillStyle = nf > 0.5 ? 'rgba(30,30,50,.75)' : 'rgba(40,60,100,.45)';
     const cols = Math.max(1, Math.floor(w / 7)), rows = Math.max(1, Math.floor((H - 6) / 8));
     const cw = w / cols;
-    for (let r = 0; r < rows; r++) for (let k = 0; k < cols; k++) ctx.fillRect(x0 + k * cw + 2, fy + 4 + r * 8, cw - 4, 4);
+    ctx.beginPath(); for (let r = 0; r < rows; r++) for (let k = 0; k < cols; k++) ctx.rect(x0 + k * cw + 2, fy + 4 + r * 8, cw - 4, 4); ctx.fill();   // Part 16: one fill per facade
   }
   // Entrance (faces the building's rotation: 0 south, 1 east, 2 north, 3 west)
   const rot = (b.rot | 0) & 3;
@@ -597,7 +629,7 @@ function drawBuilding(b) {
   if (isAI(b) && CAM.zoom > 0.8) { const a = aiDef(b.owner); if (a) { ctx.fillStyle = a.color; ctx.fillRect(x0 + w - 6, fy - h + 2, 4, 4); } }
   if (S.settings.skin === 'neon' && !FX.lightPass) { ctx.strokeStyle = shade(d.color, 30); ctx.lineWidth = 1.5; ctx.strokeRect(x0 + 0.5, fy - h + 0.5, w - 1, h + H - 1); }
   // Roof details by type
-  if (d.id === 'solar') { ctx.fillStyle = '#26547c'; for (let yy = 2; yy < h - 3; yy += 7) for (let xx = 2; xx < w - 3; xx += 9) { ctx.fillRect(x0 + xx, fy - h + yy, 7, 5); } ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(x0 + 2, fy - h + 2, w - 4, 1); }
+  if (d.id === 'solar') { ctx.fillStyle = '#26547c'; ctx.beginPath(); for (let yy = 2; yy < h - 3; yy += 7) for (let xx = 2; xx < w - 3; xx += 9) ctx.rect(x0 + xx, fy - h + yy, 7, 5); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(x0 + 2, fy - h + 2, w - 4, 1); }
   else if (d.id === 'wind') {
     for (let k = 0; k < 4; k++) {
       const tx = x0 + 10 + (k % 2) * (w - 20), ty = fy - h + 10 + Math.floor(k / 2) * (h - 20);
@@ -764,21 +796,31 @@ function drawLights(v, vis) {
   const tier = typeof veTierIndex === 'function' ? veTierIndex() : 1, out = typeof inOutage === 'function';
   // Street lamps
   const spr = lampSprite(); const R = glow ? 18 : 12; let lamps = 0;
+  // Part 16 STREET LIGHT BATCHING: the district tint discs are collected per colour and filled as ONE path per colour
+  // (a handful of fills instead of one per lamp); the glow sprite stays a single drawImage per lamp
+  const tint = tier >= 2 && typeof districtLampStyle === 'function' ? new Map() : null, tr = R * 0.6;
   ctx.globalAlpha = nf;
   for (let y = v.ty0; y <= v.ty1; y++) for (let x = v.tx0; x <= v.tx1; x++) {
     const n = typeof streetLampAt === 'function' ? streetLampAt(x, y) : (MAP.roads[idx(x, y)] && !((x + y) % 2) ? 1 : 0);
     if (!n || (out && inOutage(x, y))) continue;
-    if (tier >= 2 && typeof districtLook === 'function') { const c = districtLook(x, y).lamp; ctx.fillStyle = 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',.22)'; ctx.beginPath(); ctx.arc(x * TILE + 4, y * TILE + 4, R * 0.6, 0, 6.283); ctx.fill(); }
+    if (tint) { const k = districtLampStyle(x, y); let a = tint.get(k); if (!a) tint.set(k, a = []); a.push(x * TILE + 4, y * TILE + 4); }
     ctx.drawImage(spr, x * TILE + 4 - R, y * TILE + 4 - R, R * 2, R * 2); lamps++;
     if (n > 1) { ctx.drawImage(spr, x * TILE + TILE - 4 - R, y * TILE + TILE - 4 - R, R * 2, R * 2); lamps++; }
   }
+  if (tint) tint.forEach(function (a, col) { ctx.fillStyle = col; ctx.beginPath(); for (let i = 0; i < a.length; i += 2) { ctx.moveTo(a[i] + tr, a[i + 1]); ctx.arc(a[i], a[i + 1], tr, 0, 6.283); } ctx.fill(); });
   ctx.globalAlpha = 1;
-  // Traffic-light glow
-  if (CAM.zoom >= 0.55 && tier >= 1) for (let y = v.ty0; y <= v.ty1; y++) for (let x = v.tx0; x <= v.tx1; x++) {
-    const i = idx(x, y); if (!MAP.inter[i]) continue;
-    if (out && inOutage(x, y)) { if (Math.floor(FX.time * 2) % 2) { ctx.fillStyle = 'rgba(255,190,60,' + (0.5 * nf) + ')'; ctx.beginPath(); ctx.arc(x * TILE + 3, y * TILE + 3, 4, 0, 6.283); ctx.fill(); } continue; }
-    const s1 = lightState(i, 'NS'); ctx.fillStyle = (s1 === 'g' ? 'rgba(56,242,138,' : s1 === 'y' ? 'rgba(255,209,102,' : 'rgba(255,77,77,') + (0.45 * nf) + ')';
-    ctx.beginPath(); ctx.arc(x * TILE + 3, y * TILE + 3, 4, 0, 6.283); ctx.fill();
+  // Traffic-light glow (batched: one path per signal colour)
+  if (CAM.zoom >= 0.55 && tier >= 1) {
+    const sig = { g: [], y: [], r: [], o: [] }, blink = Math.floor(FX.time * 2) % 2;
+    for (let y = v.ty0; y <= v.ty1; y++) for (let x = v.tx0; x <= v.tx1; x++) {
+      const i = idx(x, y); if (!MAP.inter[i]) continue;
+      if (out && inOutage(x, y)) { if (blink) sig.o.push(x * TILE + 3, y * TILE + 3); continue; }
+      const s1 = lightState(i, 'NS'); (s1 === 'g' ? sig.g : s1 === 'y' ? sig.y : sig.r).push(x * TILE + 3, y * TILE + 3);
+    }
+    [['g', 'rgba(56,242,138,', 0.45], ['y', 'rgba(255,209,102,', 0.45], ['r', 'rgba(255,77,77,', 0.45], ['o', 'rgba(255,190,60,', 0.5]].forEach(function (c) {
+      const a = sig[c[0]]; if (!a.length) return;
+      ctx.fillStyle = c[1] + (c[2] * nf) + ')'; ctx.beginPath(); for (let i = 0; i < a.length; i += 2) { ctx.moveTo(a[i] + 4, a[i + 1]); ctx.arc(a[i], a[i + 1], 4, 0, 6.283); } ctx.fill();
+    });
   }
   // Windows & signs (LOD)
   const lod = CAM.zoom >= 0.9 ? 'near' : CAM.zoom >= 0.55 ? 'mid' : 'far', maxLod = typeof VE !== 'undefined' ? VE.b.windows : 'near';
@@ -798,10 +840,12 @@ function drawLights(v, vis) {
       if (useLod === 'far') { ctx.globalAlpha = occ; ctx.fillRect(x0 + 2, fy + 3, w - 4, H - 6); ctx.globalAlpha = 1; wins++; }
       else {
         const cols = Math.max(1, Math.floor(w / 7)), rows = Math.max(1, Math.floor((H - 6) / 8)), cw = w / cols, rnd = mulberry32(b.id * 31 + hb * 7);
+        ctx.beginPath();                                          // Part 16: all lit windows of a building = one path, one fill (they never overlap)
         for (let r = 0; r < rows; r++) {
-          if (useLod === 'mid') { const lit = Math.round(cols * occ * (0.6 + rnd() * 0.8)); if (lit > 0) { ctx.fillRect(x0 + 2, fy + 4 + r * 8, Math.min(cols, lit) * cw - 4, 4); wins += lit; } continue; }
-          for (let k = 0; k < cols; k++) if (rnd() < occ) { ctx.fillRect(x0 + k * cw + 2, fy + 4 + r * 8, cw - 4, 4); wins++; }
+          if (useLod === 'mid') { const lit = Math.round(cols * occ * (0.6 + rnd() * 0.8)); if (lit > 0) { ctx.rect(x0 + 2, fy + 4 + r * 8, Math.min(cols, lit) * cw - 4, 4); wins += lit; } continue; }
+          for (let k = 0; k < cols; k++) if (rnd() < occ) { ctx.rect(x0 + k * cw + 2, fy + 4 + r * 8, cw - 4, 4); wins++; }
         }
+        ctx.fill();
       }
     }
     if ((d.cat === 'Commercial' || d.sector === 'FUEL' || d.sector === 'ENTERTAINMENT') && H >= 10 && !emergency) {   // neon signs (nightlife)
@@ -831,20 +875,25 @@ function drawLights(v, vis) {
 /* headlights (night, rain, fog, snow), brake glow and emergency lights — also used in the daytime when it is dark and wet */
 function drawVehicleLights(v, nf) {
   const k = Math.max(nf, typeof VE !== 'undefined' ? (VE.wx.fog * 0.6 + (FX.weather === 'rain' || FX.weather === 'heavyrain' || FX.weather === 'storm' || FX.weather === 'snow' ? 0.45 : 0)) : 0);
-  if (k <= 0.05) return;
+  const anySiren = AG.vehicles.some(function (vh) { return vh.siren; });
+  if (k <= 0.05 && !anySiren) return;
   const glow = perf().glow && !PERF.noGlow;
   AG.vehicles.forEach(function (vh) {
     if (vh.x < v.x0 || vh.x > v.x1 || vh.y < v.y0 || vh.y > v.y1) return;
+    const ls = vehicleLightState(vh);
+    if (!ls.head) { if (ls.emergency) { ctx.fillStyle = (Math.floor(FX.time * 8) % 2 ? 'rgba(255,23,68,' : 'rgba(41,121,255,') + '0.3)'; ctx.beginPath(); ctx.arc(vh.x, vh.y, 10, 0, 6.283); ctx.fill(); } return; }   // DAY: only emergency lights
     if (glow || PERF.scale > 0.7) { ctx.fillStyle = 'rgba(255,240,180,' + (0.3 * k) + ')'; ctx.beginPath(); ctx.moveTo(vh.x + vh.hx * 6, vh.y + vh.hy * 6); ctx.lineTo(vh.x + vh.hx * 22 - vh.hy * 7, vh.y + vh.hy * 22 + vh.hx * 7); ctx.lineTo(vh.x + vh.hx * 22 + vh.hy * 7, vh.y + vh.hy * 22 - vh.hx * 7); ctx.fill(); }
     ctx.fillStyle = 'rgba(255,240,180,' + (0.35 * k) + ')';
     ctx.beginPath(); ctx.arc(vh.x + vh.hx * (vh.len / 2 + 6), vh.y + vh.hy * (vh.len / 2 + 6), 6, 0, 6.283); ctx.fill();
-    if (vh.speed === 0 && vh.stopped > 0.2) { ctx.fillStyle = 'rgba(255,40,40,' + (0.35 * k) + ')'; ctx.beginPath(); ctx.arc(vh.x - vh.hx * (vh.len / 2 + 2), vh.y - vh.hy * (vh.len / 2 + 2), 4, 0, 6.283); ctx.fill(); }
-    if (vh.siren) { ctx.fillStyle = (Math.floor(FX.time * 8) % 2 ? 'rgba(255,23,68,' : 'rgba(41,121,255,') + (0.6 * Math.max(k, 0.5)) + ')'; ctx.beginPath(); ctx.arc(vh.x, vh.y, 12, 0, 6.283); ctx.fill(); }
+    if (ls.brake) { ctx.fillStyle = 'rgba(255,40,40,' + (0.35 * k) + ')'; ctx.beginPath(); ctx.arc(vh.x - vh.hx * (vh.len / 2 + 2), vh.y - vh.hy * (vh.len / 2 + 2), 4, 0, 6.283); ctx.fill(); }
+    if (ls.emergency) { ctx.fillStyle = (Math.floor(FX.time * 8) % 2 ? 'rgba(255,23,68,' : 'rgba(41,121,255,') + (0.6 * Math.max(k, 0.5)) + ')'; ctx.beginPath(); ctx.arc(vh.x, vh.y, 12, 0, 6.283); ctx.fill(); }
   });
 }
 
 /* --- Main render --------------------------------------------------------------------- */
 function render() {
+  VL_FRAME++;
+  if (typeof VE !== 'undefined') VE.stats.shadows = 0;
   const season = currentSeason();
   updateSun();
   const L = S.settings.layers;
@@ -879,7 +928,7 @@ function render() {
       if (o > 0.6) ctx.fillRect(x * TILE + 6 + o * 6, y * TILE + 12, 10, 1.5);
     }
   }
-  if (typeof veGroundFx === 'function') veGroundFx(v);        // Part 15: wet roads, puddles, snow cover, water reflections / foam / rain rings
+  const tV0 = performance.now(); if (typeof veGroundFx === 'function') veGroundFx(v); let tVE = performance.now() - tV0;        // Part 15: wet roads, puddles, snow cover, water reflections / foam / rain rings
   if (SIM.flood) {
     ctx.fillStyle = 'rgba(47,127,191,.45)';
     S.buildings.list.forEach(function (b) { if (b._nearWater) { const d = bdef(b); ctx.fillRect(b.x * TILE - 6, b.y * TILE - 6, d.w * TILE + 12, d.h * TILE + 12); } });
@@ -895,7 +944,7 @@ function render() {
   // Depth-sorted drawables
   const items = [];
   const vis = weBuildingsInView(v, []);           // spatial partitioning: only chunks around the view are scanned
-  if (typeof veCrowds === 'function') { veCrowds(v); veConstructionLife(vis); }      // Part 15: event / nightlife crowds, construction crews
+  { const t = performance.now(); if (typeof veCrowds === 'function') { veCrowds(v); veConstructionLife(vis); } tVE += performance.now() - t; }      // Part 15: event / nightlife crowds, construction crews
   for (let i = 0; i < vis.length; i++) { const b = vis[i]; items.push({ y: (b.y + bdef(b).h) * TILE, k: 0, o: b }); }
   if (L.terrain) for (let y = v.ty0; y <= v.ty1; y++) for (let x = v.tx0; x <= v.tx1; x++) if (MAP.nature[idx(x, y)] === 1) items.push({ y: y * TILE + TILE - 4, k: 1, x: x, yy: y });
   // Level of detail: citizens only when zoomed in, vehicles hidden in the far "city view"
@@ -945,7 +994,7 @@ function render() {
     else { ctx.fillStyle = p.color; ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size); }
   }
   ctx.globalAlpha = 1;
-  if (typeof veCloudShadows === 'function') veCloudShadows(v);   // Part 15: drifting cloud shadows
+  { const t = performance.now(); if (typeof veCloudShadows === 'function') veCloudShadows(v); tVE += performance.now() - t; }   // Part 15: drifting cloud shadows
   // Floating texts
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   FX.texts.forEach(function (t) {
@@ -960,7 +1009,7 @@ function render() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.fillStyle = 'rgba(8,12,40,' + (0.55 * nf) + ')'; ctx.fillRect(0, 0, CW, CH);
     applyWorldTransform(sx, sy);
-    FX.lightPass = true; drawLights(v, vis); FX.lightPass = false;
+    { const t = performance.now(); FX.lightPass = true; drawLights(v, vis); FX.lightPass = false; tVE += performance.now() - t; }
   } else if (typeof drawVehicleLights === 'function') { ctx.globalCompositeOperation = 'lighter'; drawVehicleLights(v, 0); ctx.globalCompositeOperation = 'source-over'; }   // headlights on in rain / fog by day
   if (SUN.tint > 0.005 && !FX.cleanShot) { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = SUN.warm ? 'rgba(255,150,60,' + SUN.tint + ')' : 'rgba(255,190,120,' + SUN.tint + ')'; ctx.fillRect(0, 0, CW, CH); }
   // Part 5 world overlays: accident scenes, problem highlights, citizen speech bubbles
@@ -982,18 +1031,19 @@ function render() {
   else if (FX.weather === 'fog') { ctx.fillStyle = 'rgba(215,222,232,.38)'; ctx.fillRect(0, 0, CW, CH); }
   else if (FX.weather !== 'clear' && FX.weather !== 'heatwave') {
     if (FX.weather === 'coldwave') { ctx.fillStyle = 'rgba(160,200,255,.16)'; ctx.fillRect(0, 0, CW, CH); }
-    if (FX.weather === 'snow' || FX.weather === 'coldwave') { ctx.fillStyle = 'rgba(255,255,255,.9)'; FX.drops.forEach(function (d) { ctx.fillRect(d.x, d.y, 2.5 * d.s, 2.5 * d.s); }); }
+    if (FX.weather === 'snow' || FX.weather === 'coldwave') { ctx.fillStyle = 'rgba(255,255,255,.9)'; for (let i = 0; i < FX.dropN; i++) { const d = FX.drops[i]; ctx.fillRect(d.x, d.y, 2.5 * d.s, 2.5 * d.s); } }
     else {
       ctx.strokeStyle = 'rgba(180,200,255,.45)'; ctx.lineWidth = 1; ctx.beginPath();
       const k = FX.weather === 'storm' ? 0.35 : FX.weather === 'heavyrain' ? 0.25 : 0.15;
-      FX.drops.forEach(function (d) { ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - 12 * k * d.s * 2, d.y + 14 * d.s); });
+      for (let i = 0; i < FX.dropN; i++) { const d = FX.drops[i]; ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - 12 * k * d.s * 2, d.y + 14 * d.s); }
       ctx.stroke();
       ctx.fillStyle = 'rgba(20,30,60,' + (FX.weather === 'storm' ? 0.25 : FX.weather === 'heavyrain' ? 0.2 : 0.1) + ')'; ctx.fillRect(0, 0, CW, CH);
     }
   }
   if (FX.weather === 'heatwave') { ctx.fillStyle = 'rgba(255,140,40,.10)'; ctx.fillRect(0, 0, CW, CH); }
   ctx.globalAlpha = 1;
-  if (typeof veAtmosphere === 'function') { veAtmosphere(); veDepthEffect(); }       // Part 15: haze, pollution haze, fog banks, photo depth effect
+  { const t = performance.now(); if (typeof veAtmosphere === 'function') { veAtmosphere(); veDepthEffect(); } tVE += performance.now() - t; }
+  if (typeof VE !== 'undefined') VE.prof.veAcc += tVE;       // Part 15: haze, pollution haze, fog banks, photo depth effect
   if (FX.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (FX.flash * 0.6) + ')'; ctx.fillRect(0, 0, CW, CH); }
   if (PHOTO.on && PHOTO.bars) { const bh = Math.round(CH * 0.1); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CW, bh); ctx.fillRect(0, CH - bh, CW, bh); }
   if (UI.gamepadCursor && !PHOTO.on) { ctx.strokeStyle = 'rgba(255,209,102,.9)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(CW / 2, CH / 2, 10, 0, 6.283); ctx.moveTo(CW / 2 - 16, CH / 2); ctx.lineTo(CW / 2 + 16, CH / 2); ctx.moveTo(CW / 2, CH / 2 - 16); ctx.lineTo(CW / 2, CH / 2 + 16); ctx.stroke(); }

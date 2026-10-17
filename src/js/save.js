@@ -749,10 +749,16 @@ function rollbackMigration(slot) {
   catch (e) { return { ok: false, reason: e.message }; }
 }
 /* Load (with fallbacks): main save → backup → legacy saves → new game */
+/* Part 16: load stages are timed (Read → Migrate → Validate → World → Simulation → Visual), logged and listed in F3 */
+const LOAD_PROF = { read: 0, migrate: 0, validate: 0, world: 0, sim: 0, visual: 0, total: 0, bytes: 0, at: 0 };
+function loadProfLine() { const p = LOAD_PROF; if (!p.at) return ''; const f = function (v) { return v.toFixed(1); }; return 'LAST LOAD ' + f(p.total) + ' ms (' + Math.round(p.bytes / 1024) + ' KB) · read ' + f(p.read) + ' · migrate ' + f(p.migrate) + ' · validate ' + f(p.validate) + ' · world ' + f(p.world) + ' · simulation ' + f(p.sim) + ' · visual ' + f(p.visual); }
 function loadGame(slot) {
   slot = slot || activeSlot();
   const notes = [];
+  const lp = LOAD_PROF, t0 = performance.now(); lp.migrate = lp.validate = 0;
+  try { const raw = Store.getItem(slotKey(slot)); lp.bytes = raw ? raw.length : 0; } catch (e) { lp.bytes = 0; }
   let data = loadRaw(slotKey(slot));
+  lp.read = performance.now() - t0;
   let st = null;
   const tryUse = function (d, label) {
     if (!d) return false;
@@ -760,7 +766,7 @@ function loadGame(slot) {
     // UPDATE SAFETY: an older save is copied to a pre-update backup before it is migrated; the original file is
     // never overwritten by a failed migration (ROLLBACK = keep using the untouched original / backup).
     if (label === 'Main' && from < SAVE_VERSION) backupBeforeMigration(slot, from);
-    try { st = sanitizeState(migrateSave(d)); if (from < SAVE_VERSION) { notes.push('Save migrated v' + from + ' → v' + SAVE_VERSION + ' (pre-update backup kept).'); Log.info('Save slot ' + slot + ' migrated v' + from + ' → v' + SAVE_VERSION); } return true; }
+    try { const ta = performance.now(), md = migrateSave(d), tb = performance.now(); st = sanitizeState(md); lp.migrate += tb - ta; lp.validate += performance.now() - tb; if (from < SAVE_VERSION) { notes.push('Save migrated v' + from + ' → v' + SAVE_VERSION + ' (pre-update backup kept).'); Log.info('Save slot ' + slot + ' migrated v' + from + ' → v' + SAVE_VERSION); } return true; }
     catch (e) { notes.push(label + ' save ' + (from < SAVE_VERSION ? 'could not be migrated (rolled back, original kept)' : 'was corrupted') + '.'); Log.warn(label + ' save slot ' + slot + ' load/migration failed: ' + (e && e.message)); return false; }
   };
   if (data === undefined) notes.push('Main save was corrupted.');
@@ -778,6 +784,7 @@ function loadGame(slot) {
   if (!st) st = defaultState();
   S = st;
   S.slot = slot;
+  const tw = performance.now();
   initMap(isNew);
   const dropped = validateBuildings(S._rawBuildings || []);
   delete S._rawBuildings;
@@ -785,9 +792,13 @@ function loadGame(slot) {
   if (isNew) generateCity();
   else if (S._part4Gen) { upgradeCityToPart4(); notes.push('City upgraded to ULTRA CITY SIMULATION (save v' + SAVE_VERSION + '): terrain, resources and Town Hall added.'); }
   delete S._part4Gen;
+  const ts = performance.now(); lp.world = ts - tw;
   onMapChanged();
   applyCompanyNames(); RNG.seed(S.p6.rng);
+  const tv = performance.now(); lp.sim = tv - ts;
   if (typeof applyGlobalSettingsToGame === 'function') applyGlobalSettingsToGame();
+  lp.visual = performance.now() - tv; lp.total = performance.now() - t0; lp.at = Date.now();
+  if (!isNew && typeof Log !== 'undefined') Log.info(loadProfLine());
   return { isNew: isNew, notes: notes };
 }
 

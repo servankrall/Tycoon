@@ -33,21 +33,50 @@ const VE = {
   sun: { elev: 0.8, azi: 0, intensity: 1, kelvin: 5600, rise: 6, set: 18, phase: 'Noon' },
   wx: { k: 1, last: 'clear', plan: [], wet: 0, snow: 0, fog: 0, cloud: 0, wind: 0, windLevel: 'None' },
   clouds: [], outage: new Set(), outageCheck: 0, stats: { visible: 0, drawnCitizens: 0, lights: 0, windows: 0, lamps: 0, chunks: 0 },
-  cine: null, tour: null, depth: false, simPause: false, ambient: null
+  cine: null, tour: null, depth: false, simPause: false, ambient: null,
+  dirty: { lighting: true, weather: true, district: true, power: true }, sunKey: '', wxAcc: 0, prof: { ve: 0, veAcc: 0 }, grad: {}
 };
 /* tier: GSET.veQuality (AUTO = the graphics quality), one step lower when the device struggles or gets hot */
+/* Part 16 — QUALITY GOVERNOR with hysteresis (no flapping): a step down only after the frame rate stayed below
+   75 % of the target for 5 s, heat (thermal ≥ 2 / ≥ 3) or low memory force a floor, and quality comes back ONE step
+   at a time after 30 s above 92 % of the target, at most one change per 20 s. The player is told once per session. */
+const VE_GOV = { drop: 0, lowSince: 0, highSince: 0, changedAt: 0, partStep: 0, pLowSince: 0, pHighSince: 0, pChangedAt: 0, log: [] };
+const VE_PART_STEPS = [1, 0.66, 0.46, 0.27];                 // 1500 → 1000 → 700 → 400 (ULTRA), same ratios on every tier
+function veFpsTarget() { return window.BCT_FPS_CAP || 60; }
+function veGovern(now) {
+  // with Performance = AUTO the AUTO PERFORMANCE watchdog (settings2.js) already steps S.settings.quality down / up;
+  // the visual tier follows it, so the governor only steps the visual tier itself under a fixed performance mode
+  const fps = PERF.fps || 60, tgt = veFpsTarget(), G = VE_GOV, auto = (!GSET.veQuality || GSET.veQuality === 'AUTO') && GSET.perfMode !== 'AUTO';
+  if (!auto && G.drop) { G.drop = 0; G.log.unshift('handed over to AUTO PERFORMANCE'); }
+  const low = fps < tgt * 0.75, high = fps > tgt * 0.92;
+  G.lowSince = low ? (G.lowSince || now) : 0; G.highSince = high ? (G.highSince || now) : 0;
+  if (auto && STARTED && now - G.changedAt > 20000) {
+    if (G.lowSince && now - G.lowSince > 5000 && G.drop < 3) { G.drop++; G.changedAt = now; G.lowSince = 0; G.log.unshift('drop → ' + G.drop + ' (' + Math.round(fps) + ' FPS)'); }
+    else if (G.highSince && now - G.highSince > 30000 && G.drop > 0) { G.drop--; G.changedAt = now; G.highSince = 0; G.log.unshift('restore → ' + G.drop + ' (' + Math.round(fps) + ' FPS)'); }
+    if (G.log.length > 8) G.log.length = 8;
+  }
+  // particle budget follows the frame rate faster (3 s down / 10 s up), also in fixed quality
+  G.pLowSince = low ? (G.pLowSince || now) : 0; G.pHighSince = high ? (G.pHighSince || now) : 0;
+  if (now - G.pChangedAt > 3000) {
+    if (G.pLowSince && now - G.pLowSince > 3000 && G.partStep < VE_PART_STEPS.length - 1) { G.partStep++; G.pChangedAt = now; G.pLowSince = 0; }
+    else if (G.pHighSince && now - G.pHighSince > 10000 && G.partStep > 0) { G.partStep--; G.pChangedAt = now; G.pHighSince = 0; }
+  }
+}
 function veComputeTier() {
   let t = GSET.veQuality && GSET.veQuality !== 'AUTO' ? GSET.veQuality : (S && S.settings && S.settings.quality) || 'MEDIUM';
-  let i = Math.max(0, VE_TIERS.indexOf(t));
+  const base = Math.max(0, VE_TIERS.indexOf(t)); let i = base;
   if (!GSET.veQuality || GSET.veQuality === 'AUTO') {
-    if (PERF.scale < 0.6 || (PERF.fps && PERF.fps < 22)) i--;
-    if (IS_MOBILE && typeof Platform !== 'undefined' && Platform.thermal && Platform.thermal() >= 2) i--;
-    if (IS_MOBILE && typeof MOB !== 'undefined' && MOB.lowMem) i--;
+    i -= VE_GOV.drop;
+    const th = IS_MOBILE && typeof Platform !== 'undefined' && Platform.thermal ? Platform.thermal() : 0;
+    if (th >= 3) i = Math.min(i, base - 2); else if (th >= 2) i = Math.min(i, base - 1);
+    if (IS_MOBILE && typeof MOB !== 'undefined' && MOB.lowMem) i = 0;
   }
   i = clamp(i, 0, 3);
+  const prev = VE.tier;
   VE.tier = VE_TIERS[i]; VE.b = VE_BUDGET[VE.tier];
+  if (i < base && prev !== VE.tier && STARTED) { Log.info('Visual Engine: ' + prev + ' → ' + VE.tier); if (typeof perfReducedNotice === 'function') perfReducedNotice(); }
 }
-function veParticleCap() { const c = VE.b.particles; return GSET.powerMode === 'battery' ? Math.round(c * 0.5) : c; }
+function veParticleCap() { const c = Math.round(VE.b.particles * VE_PART_STEPS[VE_GOV.partStep]); return GSET.powerMode === 'battery' ? Math.round(c * 0.5) : c; }
 function veTierIndex() { return VE_TIERS.indexOf(VE.tier); }
 
 /* ===================================== DAY / NIGHT · SUN ===================================== */
@@ -59,7 +88,10 @@ function veDaylight() { const s = S ? currentSeason().id : 'spring'; return VE_D
 function dayPhase(h) { if (h === undefined) h = veHour(); let p = VE_PHASES[0]; for (let i = 0; i < VE_PHASES.length; i++) if (h >= VE_PHASES[i][0]) p = VE_PHASES[i]; return { name: p[1], icon: p[2] }; }
 /* sun: elevation 0 (horizon) → 1 (noon), azimuth −1 (east, morning) → +1 (west, evening), intensity, colour temperature */
 function veUpdateSun() {
-  const h = veHour(), dl = veDaylight(), rise = dl[0], set = dl[1], t = (h - rise) / (set - rise), s = VE.sun;
+  const h = veHour(), key = Math.floor(h * 60) + '|' + (S ? seasonIndex() : 0) + '|' + Math.round(VE.wx.cloud * 20) + '|' + Math.round(VE.wx.fog * 20);
+  if (key === VE.sunKey) return VE.sun;                       // Part 16 dirty flag: once per game minute, not every frame
+  VE.sunKey = key; VE.dirty.lighting = true;
+  const dl = veDaylight(), rise = dl[0], set = dl[1], t = (h - rise) / (set - rise), s = VE.sun;
   s.rise = rise; s.set = set;
   s.elev = t > 0 && t < 1 ? Math.sin(Math.PI * t) : 0;
   s.azi = clamp(t * 2 - 1, -1, 1);
@@ -195,6 +227,12 @@ function districtCharacters() {
 }
 function districtCharacterAt(x, y) { const g = districtCharacters(), n = MAP.dN || Math.ceil(MAP.W / 8); return g[Math.floor(clamp(y, 0, MAP.H - 1) / 8) * n + Math.floor(clamp(x, 0, MAP.W - 1) / 8)] || ''; }
 function districtLook(x, y) { return VE_DISTRICT_LOOK[districtCharacterAt(x, y)] || VE_DISTRICT_LOOK.Downtown; }
+/* shared lamp colour per district (one string per district, rebuilt only when the map changes) */
+function districtLampStyle(x, y) {
+  const g = districtCharacters(), n = MAP.dN || Math.ceil(MAP.W / 8), k = Math.floor(clamp(y, 0, MAP.H - 1) / 8) * n + Math.floor(clamp(x, 0, MAP.W - 1) / 8);
+  if (VE_DCHAR.lampVer !== VE_DCHAR.at) { VE_DCHAR.lampVer = VE_DCHAR.at; VE_DCHAR.lamp = g.map(function (c) { const L = (VE_DISTRICT_LOOK[c] || VE_DISTRICT_LOOK.Downtown).lamp; return 'rgba(' + L[0] + ',' + L[1] + ',' + L[2] + ',.22)'; }); }
+  return VE_DCHAR.lamp[k] || 'rgba(255,214,150,.22)';
+}
 function cityEvolution() { const t = cityTier(); return { name: t.name, stage: CITY_TIERS.indexOf(t), max: CITY_TIERS.length - 1 }; }
 
 /* ===================================== POWER-BASED LIGHTING ===================================== */
@@ -212,7 +250,7 @@ function veOutageTick() {
     if (f.until <= now) return;
     const key = f.x + ',' + f.y + ',' + f.cause; live.add(key);
     if (VE.outage.has(key)) return;
-    VE.outage.add(key);
+    VE.outage.add(key); VE.dirty.power = true;
     let lamps = 0, sig = 0, bld = 0;
     for (let y = Math.max(0, f.y - f.r - 1); y <= Math.min(MAP.H - 1, f.y + f.r + 1); y++) for (let x = Math.max(0, f.x - f.r - 1); x <= Math.min(MAP.W - 1, f.x + f.r + 1); x++) { const i = idx(x, y); if (MAP.roads[i]) { if (streetLampAt(x, y)) lamps++; if (MAP.inter[i]) sig++; } }
     S.buildings.list.forEach(function (b) { if (b.built && Math.hypot(b.x - f.x, b.y - f.y) <= f.r + 1) bld++; });
@@ -220,7 +258,12 @@ function veOutageTick() {
     if (typeof noteAt === 'function') noteAt({ x: f.x, y: f.y });
     notify('⚡ POWER OUTAGE · ' + where + ' — Street lights: OFF (' + lamps + ') · Traffic lights: OFF (' + sig + ', 4-way stop) · Buildings: emergency power (' + bld + ')', 'bad');
   });
-  VE.outage.forEach(function (k) { if (!live.has(k)) VE.outage.delete(k); });
+  VE.outage.forEach(function (k) {
+    if (live.has(k)) return;
+    VE.outage.delete(k); VE.dirty.power = true;
+    const p = k.split(','), where = (typeof districtName === 'function' && districtName(+p[0], +p[1])) || 'the city';
+    if (p[2] !== 'selftest' && p[2] !== 'qa') notify('💡 Power restored · ' + where + ' — street lights ON · traffic lights normal · buildings back on the grid', 'good');
+  });
 }
 /* street lamp placement by road type: small every 3rd tile, medium every 2nd, large / highway every tile */
 function streetLampAt(x, y) {
@@ -237,7 +280,7 @@ function veGroundFx(v) {
   // wet asphalt + puddles (rain), snow cover (winter)
   if (wx.wet > 0.05 && veTierIndex() >= 0) {
     ctx.fillStyle = 'rgba(10,18,40,' + (0.16 * wx.wet) + ')';
-    for (let y = v.ty0; y <= v.ty1; y++) for (let x = v.tx0; x <= v.tx1; x++) if (MAP.roads[idx(x, y)] && MAP.nature[idx(x, y)] !== 2) ctx.fillRect(x * T, y * T, T, T);
+    ctx.beginPath(); for (let y = v.ty0; y <= v.ty1; y++) for (let x = v.tx0; x <= v.tx1; x++) if (MAP.roads[idx(x, y)] && MAP.nature[idx(x, y)] !== 2) ctx.rect(x * T, y * T, T, T); ctx.fill();   // Part 16: one fill for all wet roads
     if (b.puddles && wx.wet > 0.35) {
       const rain = FX.weather === 'rain' || FX.weather === 'heavyrain' || FX.weather === 'storm';
       let n = 0;
@@ -251,22 +294,24 @@ function veGroundFx(v) {
     }
   }
   if (wx.snow > 0.05) {
-    ctx.fillStyle = 'rgba(245,250,255,' + (0.42 * wx.snow) + ')';
+    const road = new Path2D(), land = new Path2D();             // Part 16: two fills (ploughed roads · snow cover) instead of one per tile
     for (let y = v.ty0; y <= v.ty1; y++) for (let x = v.tx0; x <= v.tx1; x++) {
       const i = idx(x, y); if (MAP.nature[i] === 2) continue;
-      if (MAP.roads[i]) { ctx.fillStyle = 'rgba(235,242,250,' + (0.22 * wx.snow) + ')'; ctx.fillRect(x * T, y * T, T, T); ctx.fillStyle = 'rgba(245,250,255,' + (0.42 * wx.snow) + ')'; }
-      else ctx.fillRect(x * T, y * T, T, T);
+      (MAP.roads[i] ? road : land).rect(x * T, y * T, T, T);
     }
+    ctx.fillStyle = 'rgba(235,242,250,' + (0.22 * wx.snow) + ')'; ctx.fill(road);
+    ctx.fillStyle = 'rgba(245,250,255,' + (0.42 * wx.snow) + ')'; ctx.fill(land);
   }
   // water: sky reflection tint by time of day, shore foam, rain rings
   if (b.water) {
     const nf = nightFactor(), s = VE.sun;
     const refl = nf > 0.5 ? 'rgba(40,60,140,.18)' : s.elev < 0.3 && s.intensity > 0.05 ? 'rgba(255,170,90,.14)' : 'rgba(200,230,255,.10)';
     const rain = FX.weather === 'rain' || FX.weather === 'heavyrain' || FX.weather === 'storm';
-    let rings = 0;
+    let rings = 0; const reflP = new Path2D();                   // Part 16: sky reflection = one fill (first pass), then foam / rain rings
+    for (let y = v.ty0; y <= v.ty1; y++) for (let x = v.tx0; x <= v.tx1; x++) if (MAP.nature[idx(x, y)] === 2) reflP.rect(x * T, y * T, T, T * 0.5);
+    ctx.fillStyle = refl; ctx.fill(reflP);
     for (let y = v.ty0; y <= v.ty1; y++) for (let x = v.tx0; x <= v.tx1; x++) {
       if (MAP.nature[idx(x, y)] !== 2) continue;
-      ctx.fillStyle = refl; ctx.fillRect(x * T, y * T, T, T * 0.5);
       if (b.water >= 2) {
         ctx.fillStyle = 'rgba(255,255,255,' + (0.18 + 0.1 * Math.sin(FX.time * 2 + x + y)) + ')';
         if (x > 0 && MAP.nature[idx(x - 1, y)] !== 2) ctx.fillRect(x * T, y * T, 2, T);
@@ -285,10 +330,13 @@ function veGroundFx(v) {
 function veCrowds(v) {
   const cap = VE.b.crowd; if (!cap || CAM.zoom < 0.55) return;
   const h = veHour(), evening = h >= 18 || h < 1, ev = S.events.active.length;
-  const venues = [];
-  const L = MAP.lists, add = function (list, w) { (list || []).forEach(function (b) { if (b.built && b.x * TILE >= v.x0 - 60 && b.x * TILE <= v.x1 + 60 && b.y * TILE >= v.y0 - 60 && b.y * TILE <= v.y1) venues.push([b, w]); }); };
-  if (ev) { add(L.parks, 1); add(L.ENTERTAINMENT, 1.5); }
-  if (evening) { add(L.ENTERTAINMENT, 1); add(L.FOOD, 0.6); }
+  let venues = VE.venues;
+  if (!venues || FX.time - VE.venuesAt > 0.5) {                    // Part 16: venue list cached (0.5 s), crowd positions still animate every frame
+    venues = VE.venues = []; VE.venuesAt = FX.time;
+    const L = MAP.lists, add = function (list, w) { (list || []).forEach(function (b) { if (b.built && b.x * TILE >= v.x0 - 60 && b.x * TILE <= v.x1 + 60 && b.y * TILE >= v.y0 - 60 && b.y * TILE <= v.y1) venues.push([b, w]); }); };
+    if (ev) { add(L.parks, 1); add(L.ENTERTAINMENT, 1.5); }
+    if (evening) { add(L.ENTERTAINMENT, 1); add(L.FOOD, 0.6); }
+  }
   veParade();
   if (!venues.length) return;
   let n = 0;
@@ -305,7 +353,8 @@ function veCrowds(v) {
 /* CITY PARADE: floats and a band march up and down the longest street while the event runs */
 function veParade() {
   if (!activeEvent('parade') || CAM.zoom < 0.5 || !VE.b.crowd) return;
-  const R = (MAP.roadNames || []).slice().sort(function (a, b) { return b.len - a.len; })[0]; if (!R) return;
+  if (VE.paradeVer !== MAP.version) { VE.paradeVer = MAP.version; VE.paradeRoad = (MAP.roadNames || []).reduce(function (a, r) { return !a || r.len > a.len ? r : a; }, null); }   // cached per map change
+  const R = VE.paradeRoad; if (!R) return;
   const rx = Math.round(R.x), ry = Math.round(R.y), horiz = inMap(rx + 1, ry) && inMap(rx - 1, ry) && !!MAP.roads[idx(rx + 1, ry)] && !!MAP.roads[idx(rx - 1, ry)];
   const t = (Math.sin(FX.time * 0.08) + 1) / 2, len = R.len * TILE;
   for (let k = 0; k < 14; k++) {
@@ -389,15 +438,17 @@ function veAtmosphere() {
   if (!VE.b.haze || PHOTO.cleanShot) return;
   const nf = nightFactor();
   if (CAM.zoom < 0.75) {
-    const k = clamp((0.75 - CAM.zoom) / 0.45, 0, 1) * 0.22, g = ctx.createLinearGradient(0, 0, 0, CH * 0.45);
-    g.addColorStop(0, nf > 0.5 ? 'rgba(30,40,90,' + k + ')' : 'rgba(190,210,235,' + k + ')'); g.addColorStop(1, 'rgba(190,210,235,0)');
+    const k = Math.round(clamp((0.75 - CAM.zoom) / 0.45, 0, 1) * 22) / 100, key = 'haze' + CH + (nf > 0.5) + k;
+    let g = VE.grad[key];
+    if (!g) { VE.grad = {}; g = VE.grad[key] = ctx.createLinearGradient(0, 0, 0, CH * 0.45); g.addColorStop(0, nf > 0.5 ? 'rgba(30,40,90,' + k + ')' : 'rgba(190,210,235,' + k + ')'); g.addColorStop(1, 'rgba(190,210,235,0)'); }   // Part 16: cached, not rebuilt every frame
     ctx.fillStyle = g; ctx.fillRect(0, 0, CW, CH * 0.45);
   }
   const pol = S.city.pollution || 0;
   if (pol > 45) { ctx.fillStyle = 'rgba(150,140,110,' + Math.min(0.1, (pol - 45) / 600) + ')'; ctx.fillRect(0, 0, CW, CH); }   // never greys the screen out
   if (VE.wx.fog > 0.05) {
-    const k = VE.wx.fog * VE.wx.k, g = ctx.createRadialGradient(CW / 2, CH / 2, Math.min(CW, CH) * 0.15, CW / 2, CH / 2, Math.max(CW, CH) * 0.7);
-    g.addColorStop(0, 'rgba(215,222,232,' + (0.12 * k) + ')'); g.addColorStop(1, 'rgba(215,222,232,' + (0.5 * k) + ')');
+    const k = Math.round(VE.wx.fog * VE.wx.k * 20) / 20, key = 'fog' + CW + 'x' + CH + k;
+    let g = VE.grad[key];
+    if (!g) { g = VE.grad[key] = ctx.createRadialGradient(CW / 2, CH / 2, Math.min(CW, CH) * 0.15, CW / 2, CH / 2, Math.max(CW, CH) * 0.7); g.addColorStop(0, 'rgba(215,222,232,' + (0.12 * k) + ')'); g.addColorStop(1, 'rgba(215,222,232,' + (0.5 * k) + ')'); }
     ctx.fillStyle = g; ctx.fillRect(0, 0, CW, CH);
   }
 }
@@ -424,7 +475,7 @@ function camSnap() { return { x: CAM.x, y: CAM.y, z: CAM.zoom, r: PHOTO.on ? PHO
 function cineSetPoint(k) { VE.cinePts = VE.cinePts || {}; VE.cinePts[k] = camSnap(); toast('🎬 Point ' + k + ' set', 'good'); }
 function cinePlay(dur) {
   const P = VE.cinePts || {}; if (!P.A || !P.B) { toast('🎬 Set Point A and Point B first', 'bad'); return false; }
-  stopCityTour(); VE.cine = { a: P.A, b: P.B, t0: performance.now(), dur: clamp(+dur || 10, 2, 120) * 1000 };
+  stopCityTour(); VE.cine = { a: P.A, b: P.B, t0: performance.now(), dur: clamp(+dur || 10, 1, 120) * 1000 };
   cancelAnimationFrame(VE.cineRaf); VE.cineRaf = requestAnimationFrame(cineFrame); return true;
 }
 function cineFrame(now) {
@@ -434,13 +485,14 @@ function cineFrame(now) {
   CAM.tx = null; CAM.ty = null; FX.fly = null;
   CAM.x = c.a.x + (c.b.x - c.a.x) * e; CAM.y = c.a.y + (c.b.y - c.a.y) * e; CAM.zoom = c.a.z + (c.b.z - c.a.z) * e;
   if (PHOTO.on) PHOTO.rot = c.a.r + (c.b.r - c.a.r) * e;
+  clampCamera();
   if (t >= 1) { VE.cine = null; toast('🎬 Cinematic finished', ''); return; }
   VE.cineRaf = requestAnimationFrame(cineFrame);
 }
 function stopCinematic() { if (!VE.cine) return false; VE.cine = null; cancelAnimationFrame(VE.cineRaf); return true; }
 /* CITY TOUR: downtown, landmarks, industry, homes and tourism — the camera glides between them on its own */
 function cityTourStops() {
-  const stops = [], used = new Set(), push = function (b, label) { if (!b || used.has(b.id)) return; used.add(b.id); const c = buildingCenter(b); stops.push({ x: c.x, y: c.y, z: 1.15, label: label }); };
+  const stops = [], used = new Set(), push = function (b, label) { if (!b || used.has(b.id) || !inMap(b.x, b.y) || (typeof inUnlocked === 'function' && !inUnlocked(b.x, b.y))) return; used.add(b.id); const c = buildingCenter(b); stops.push({ x: clamp(c.x, 0, MAP.W * TILE), y: clamp(c.y, 0, MAP.H * TILE), z: 1.15, label: label }); };
   const L = S.buildings.list.filter(function (b) { return b.built; });
   const tallest = L.slice().sort(function (a, b) { return buildingHeight(b) - buildingHeight(a); })[0]; push(tallest, '🏙️ Downtown');
   L.filter(function (b) { return bdef(b).landmark || b.type === 'townhall' || b.type === 'stadium' || b.type === 'airport'; }).slice(0, 3).forEach(function (b) { push(b, '⭐ ' + bdef(b).name); });
@@ -465,7 +517,8 @@ function tourFrame(now) {
   if (T.i < 0 || now - T.t0 > seg) { T.i++; if (T.i >= T.stops.length) { stopCityTour(); toast('🎥 City tour finished', 'good'); return; } T.t0 = now; T.from = camSnap(); toast(T.stops[T.i].label, ''); }
   const s = T.stops[T.i], t = clamp((now - T.t0) / 2400, 0, 1), e = ease(t);
   CAM.tx = null; CAM.ty = null; FX.fly = null;
-  CAM.x = T.from.x + (s.x - T.from.x) * e + Math.sin(now / 3000) * 6; CAM.y = T.from.y + (s.y - T.from.y) * e; CAM.zoom = T.from.z + (s.z - T.from.z) * e;
+  CAM.x = T.from.x + (s.x - T.from.x) * e + Math.sin((now - T.t0) / 3000) * 6 * e; CAM.y = T.from.y + (s.y - T.from.y) * e; CAM.zoom = T.from.z + (s.z - T.from.z) * e;   // drift starts at 0: no jump
+  clampCamera();
   VE.tourRaf = requestAnimationFrame(tourFrame);
 }
 function stopCityTour() { if (!VE.tour) return false; VE.tour = null; cancelAnimationFrame(VE.tourRaf); return true; }
@@ -555,7 +608,8 @@ function veAmbientTick() {
   // what is on screen
   const tl = screenToWorld(0, 0), br = screenToWorld(CW, CH), mix = { city: 0, ind: 0, park: 0, air: 0, res: 0 };
   let n = 0;
-  S.buildings.list.forEach(function (b) {
+  const inView = typeof weBuildingsInView === 'function' ? weBuildingsInView({ x0: tl.x, y0: tl.y, x1: br.x, y1: br.y }, []) : S.buildings.list;   // Part 16: spatial index, not the whole city
+  inView.forEach(function (b) {
     const x = b.x * TILE, y = b.y * TILE; if (x < tl.x || x > br.x || y < tl.y || y > br.y) return;
     const d = bdef(b); n++;
     if (d.cat === 'Industry' || d.cat === 'Resources' || d.cat === 'Logistics') mix.ind++; else if (d.cat === 'Commercial' || (d.height || 0) >= 60) mix.city++; else if (d.id === 'park' || d.cat === 'Leisure') mix.park++; else if (d.housing) mix.res++;
@@ -577,16 +631,6 @@ function veAmbientTick() {
     SND.cur = 'sfx';
   }
 }
-/* emergency vehicles on screen: a quiet two-tone siren (pooled with top priority) */
-function veSirens() {
-  if (!SND.ctx || !S.settings.sound) return;
-  const tl = screenToWorld(0, 0), br = screenToWorld(CW, CH);
-  const on = AG.vehicles.some(function (v) { return v.siren && v.x > tl.x && v.x < br.x && v.y > tl.y && v.y < br.y; });
-  if (!on) return;
-  const now = performance.now(); if (now - (VE.sirenAt || 0) < 1300) return; VE.sirenAt = now;
-  SND.cur = 'emergency'; SND.tone(960, 0.32, 'triangle', 0.03); SND.tone(760, 0.32, 'triangle', 0.03, 0.34); SND.cur = 'sfx';
-}
-
 /* ===================================== QUALITY PRESETS (developer / admin) ===================================== */
 const VE_PRESETS = {
   'MOBILE LOW': { perfMode: 'LOW', veQuality: 'LOW', fpsTarget: '30', particles: 'REDUCED' },
@@ -609,15 +653,46 @@ function veApplyPreset(name) {
 /* ===================================== FRAME / TICK ===================================== */
 function veFrame(dt) {
   if (!S) return;
-  if (performance.now() - VE.at > 1000) { VE.at = performance.now(); veComputeTier(); if (STARTED) { veOutageTick(); historySample(false); veAmbientTick(); } }
-  veUpdateWeatherState(dt);
-  veUpdateSun();
-  if (STARTED) veSirens();
+  const t0 = performance.now();
+  if (t0 - VE.at > 1000) { VE.at = t0; veGovern(t0); veComputeTier(); if (STARTED) { veOutageTick(); historySample(false); veAmbientTick(); } }
+  VE.wxAcc += dt;
+  if (VE.wxAcc >= 0.1) { veUpdateWeatherState(VE.wxAcc); VE.wxAcc = 0; }      // weather blend / wet / snow / wind at 10 Hz
+  VE.prof.veAcc += performance.now() - t0;                    // the sun is updated by the renderer (once per game minute)
+}
+/* ===================================== FRAME BUDGET PROFILER (Part 16) ===================================== */
+/* 60 FPS = 16.67 ms · 30 FPS = 33.33 ms. Exponential averages per phase; "other" = the rest of the frame interval
+   (browser compositing, garbage collection, idle). */
+const VE_PROF = { input: 0, sim: 0, ui: 0, render: 0, ve: 0, audio: 0, particles: 0, frame: 0, interval: 0, last: 0, draws: 0, drawsFrame: 0, heap: [], gcGuess: 0 };
+function veProfileFrame(input, sim, ui) {
+  const P = VE_PROF, a = 0.1, now = performance.now();
+  P.input += (input - P.input) * a; P.sim += (sim - P.sim) * a; P.ui += (ui - P.ui) * a;
+  P.render = PERF.renderMs || 0; P.frame = PERF.frameMs || 0;
+  P.ve += (VE.prof.veAcc - P.ve) * a; VE.prof.veAcc = 0;
+  P.audio += ((VE.prof.audioAcc || 0) - P.audio) * a; VE.prof.audioAcc = 0;
+  if (P.last) { const iv = now - P.last; P.interval += (iv - P.interval) * a; if (iv > Math.max(50, P.interval * 3)) P.gcGuess++; }   // long pauses with no work of ours = GC / OS
+  P.last = now;
+  if (VE_DRAW.on) { P.drawsFrame = VE_DRAW.n; VE_DRAW.n = 0; P.draws += (P.drawsFrame - P.draws) * a; }
+  VE_DRAW.want = !!((typeof DBG !== 'undefined' && DBG.on) || GSET.veDebug);
+  if (VE_DRAW.want !== VE_DRAW.on) veDrawCounter(VE_DRAW.want);
+}
+/* DRAW CALL counter: canvas draw operations per frame — installed only while the debug overlay is open */
+const VE_DRAW = { on: false, want: false, n: 0, orig: null };
+function veDrawCounter(on) {
+  const names = ['fillRect', 'strokeRect', 'fill', 'stroke', 'drawImage', 'fillText', 'strokeText', 'clearRect'];
+  if (on && !VE_DRAW.on) { VE_DRAW.orig = {}; names.forEach(function (n) { const f = ctx[n]; VE_DRAW.orig[n] = f; ctx[n] = function () { VE_DRAW.n++; return f.apply(this, arguments); }; }); VE_DRAW.on = true; }
+  else if (!on && VE_DRAW.on) { names.forEach(function (n) { if (VE_DRAW.orig[n]) ctx[n] = VE_DRAW.orig[n]; }); VE_DRAW.on = false; VE_DRAW.n = 0; }
+}
+function veBudgetLine() {
+  const P = VE_PROF, f = function (v) { return v.toFixed(2); }, tgt = 1000 / veFpsTarget();
+  return 'FRAME BUDGET ' + tgt.toFixed(2) + ' ms (' + veFpsTarget() + ' FPS) · interval ' + f(P.interval) + ' ms · work ' + f(P.frame) + ' ms\n' +
+    'input ' + f(P.input) + ' · simulation ' + f(P.sim) + ' · UI ' + f(P.ui) + ' · render ' + f(P.render) + ' (visual engine ' + f(P.ve) + ') · audio ' + f(P.audio) + ' · long pauses (GC/OS) ' + P.gcGuess + '\n' +
+    'draw calls ' + (VE_DRAW.on ? Math.round(P.draws) : '—') + ' · lights ' + ((VE.stats.lamps || 0) + (VE.stats.windows || 0)) + ' · shadow casters ' + (VE.stats.shadows || 0) + ' · particles ' + FX.particles.length + '/' + veParticleCap() + ' · drops ' + (FX.dropN || 0) + '/' + FX.drops.length + ' pooled\n' +
+    'quality governor: drop ' + VE_GOV.drop + ' · particle step ' + VE_GOV.partStep + (VE_GOV.log.length ? ' · ' + VE_GOV.log[0] : '') + '\n';
 }
 /* developer overlay (development / test builds only; F3 on desktop already shows the same numbers) */
 function veDebugLines() {
   const s = VE.stats;
-  return 'VISUAL ENGINE tier ' + VE.tier + (GSET.veQuality && GSET.veQuality !== 'AUTO' ? ' (fixed)' : ' (auto)') + ' · ' + VE.sun.phase + ' · sun ' + Math.round(VE.sun.elev * 100) + '% ' + VE.sun.kelvin + 'K\n' +
+  return veBudgetLine() + (typeof loadProfLine === 'function' && LOAD_PROF.at ? loadProfLine() + '\n' : '') + 'VISUAL ENGINE tier ' + VE.tier + (GSET.veQuality && GSET.veQuality !== 'AUTO' ? ' (fixed)' : ' (auto)') + ' · ' + VE.sun.phase + ' · sun ' + Math.round(VE.sun.elev * 100) + '% ' + VE.sun.kelvin + 'K\n' +
     'Visible objects ' + s.visible + ' · citizens drawn ' + s.drawnCitizens + ' · lamps ' + s.lamps + ' · lit windows ' + s.windows + '\n' +
     'Loaded chunks ' + (typeof WE !== 'undefined' && WE.ground ? WE.ground.size : 0) + ' · particles ' + FX.particles.length + '/' + veParticleCap() + ' · weather ' + FX.weather + (VE.wx.plan.length ? ' → ' + VE.wx.plan.join(' → ') : '') + ' · wind ' + VE.wx.windLevel + ' · wet ' + Math.round(VE.wx.wet * 100) + '% · snow ' + Math.round(VE.wx.snow * 100) + '%\n';
 }

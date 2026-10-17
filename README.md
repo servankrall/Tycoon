@@ -1,6 +1,6 @@
 # 🏙️ BLOCK CITY TYCOON — Windows EXE + Android APK
 
-**Build. Manage. Expand.** · Sürüm **2.4.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
+**Build. Manage. Expand.** · Sürüm **2.4.1** · Kayıt formatı **v12 (CITY_SAVE_V4)**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
 `BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE — ve 2.0.0 ile bir **Android uygulaması** (APK). Windows ve Android **aynı oyun motorunu** kullanır; yalnızca girdi, arayüz, dosya sistemi ve performans katmanı platforma özeldir. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
@@ -39,8 +39,8 @@ Build sonrası:
 ```text
 dist/
 ├── windows/
-│   ├── BLOCK-CITY-TYCOON-Setup-2.4.0.exe       ← kurulum sihirbazı
-│   ├── BLOCK-CITY-TYCOON-Portable-2.4.0.exe    ← kurulumsuz, çift tıkla çalışır
+│   ├── BLOCK-CITY-TYCOON-Setup-2.4.1.exe       ← kurulum sihirbazı
+│   ├── BLOCK-CITY-TYCOON-Portable-2.4.1.exe    ← kurulumsuz, çift tıkla çalışır
 │   └── win-unpacked/BLOCK CITY TYCOON.exe      ← paketlenmiş uygulamanın kendisi
 └── android/
     ├── BLOCK-CITY-TYCOON-Android.apk           ← debug APK (geliştirme)
@@ -525,6 +525,24 @@ Görseller simülasyonu asla bekletmez: her sistem durumu okur, kalite seviyesin
 Testler: Android self-test 30 adım (yeni 29 Visual Engine · Night City · Weather, 30 Photo Mode 2.0 · City Tour · History);
 `npm run test:mobile-ui` yeni kontroller: gece / yağmur, Photo Mode 2.0, landscape → portrait → landscape regresyonu (minimap
 kontrolleri, yorum balonu, danışman düğmesi eski koordinatta kalmaz).
+
+## 6k. Derin QA, performans ve sağlamlaştırma (2.4.1)
+2.4.1 yeni büyük özellik eklemez; 2.4.0'ı hızlı, kararlı, bellek güvenli ve mobil güvenli yapar.
+
+| Alan | Ne değişti |
+|---|---|
+| Kare bütçesi | F3 (geliştirici / yetkili admin): input · simülasyon · UI · render · Visual Engine · ses · uzun duraklamalar (GC/OS), draw call, ışık, gölge, particle ve son yüklemenin aşamaları |
+| Kalite yöneticisi | 5 sn düşük FPS → bir kademe düşüş, 20 sn bekleme, 30 sn iyi FPS → bir kademe geri; particle bütçesi 100 / 66 / 46 / 27 %; ısınmada ULTRA → HIGH → MEDIUM → LOW; oturumda tek bildirim. Performance = AUTO iken AUTO PERFORMANCE yönetir (çift düşüş yok) |
+| Düşük bellek | detay hemen düşer; 3 dk yeni uyarı gelmezse kalite kademe kademe geri gelir (düşük RAM'li cihazlar hariç) |
+| Toplu çizim | pencereler, lamba renkleri, trafik ışıkları, ıslak yol / kar / su tek path ile; emoji sprite önbelleği |
+| Determinizm | aynı seed → aynı arazi, yollar, binalar, ilçeler ve vatandaşlar; aynı durum → aynı kayıt |
+| Fotoğraf modu | telefonda çubuk ekranın en fazla yarısı; kritik uyarılar fotoğraf modundan çıkınca gösterilir |
+
+Testler:
+```
+node scripts/qa-test.js [--profile=android|windows|both] [--only=save,weather,…] [--out=dist/qa]
+```
+49 kontrol (Android + Windows profili): dosya deposu ve paket denetimi, determinizm, kayıt uyumluluğu (v2.4 / 2.3 / 2.2 / 2.1, v11 göçü, Windows ↔ Android, yedekten kurtarma), kayıt / yükleme süresi, 9 × 9 hava geçişi, mevsim × hava, elektrik kesintisi + gece / hava, araç ışık durumları, sinematik kamera 1 / 5 / 10 / 30 / 60 sn, City Tour, hız 0.5–100×, etkinlik stresi ve temizliği, bellek sızıntısı döngüleri, dünya boyutları, nüfus 10K–500K, kalite yöneticisi, ayarların kalıcılığı, fotoğraf modu dokunma, ses havuzu, ilçe / silüet / bina seviyeleri / inşaat, kontrolcü, pil / arka plan / düşük bellek, draw call bütçesi, en kötü senaryo (MEGA + 500K + gece + fırtına + kesinti + festival + 100×) ve sürüm güvenliği. Hatalar Test / Expected / Actual / Device / Resolution / Build / Commit ile yazılır; CI'da mobile-ui işinde çalışır.
 
 ## 7. Pencere ve ayarlar
 

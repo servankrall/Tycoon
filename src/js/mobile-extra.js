@@ -252,8 +252,11 @@ function critTarget() {
 }
 function showCriticalAlert(kind, def, force) {
   if (!mobOn() || GSET.critAlerts === false || !STARTED || (selftestActive() && !force)) return;
+  // Part 16: photo mode keeps a clean scene — the alert waits until the player leaves photo mode (a banner over the
+  // world would also swallow the camera drag)
+  if (typeof PHOTO !== 'undefined' && PHOTO.on && !force) { MOBX.critPending = [kind, def]; return; }
   const b = critTarget(), unit = CRIT_UNIT[def.id] || (kind === 'crisis' ? null : 'maintenance');
-  MOBX.crit = { b: b, unit: unit, loc: b ? locOf(b) : null };
+  MOBX.crit = { b: b, unit: unit, loc: b ? locOf(b) : null }; MOBX.critDef = [kind, def];
   let el = document.getElementById('mCrit');
   if (!el) {
     el = document.createElement('div'); el.id = 'mCrit'; document.body.appendChild(el);
@@ -506,7 +509,8 @@ function mobileExtraBoot() {
   /* minimap emergency markers, photo mode HIDE UI, touch training after the tutorial, HELP in the pause menu */
   wrap('drawMinimap', function (f0) { return function () { const r = f0.apply(this, arguments); try { if (mobOn()) drawMinimapMarks(); } catch (e) { /* markers only */ } return r; }; });
   wrap('renderPhotoBar', function (f0) { return function () { const r = f0.apply(this, arguments); photoTouchBar(); return r; }; });
-  wrap('exitPhoto', function (f0) { return function () { document.body.classList.remove('photoHide'); return f0.apply(this, arguments); }; });
+  wrap('exitPhoto', function (f0) { return function () { document.body.classList.remove('photoHide'); const r = f0.apply(this, arguments); const p = MOBX.critPending; MOBX.critPending = null; if (p && S.events.active.some(function (e) { return e.id === p[1].id; })) showCriticalAlert(p[0], p[1]); return r; }; });
+  wrap('enterPhoto', function (f0) { return function () { const c = MOBX.crit, el = document.getElementById('mCrit'); if (c && el && !el.classList.contains('hidden') && MOBX.critDef) { MOBX.critPending = MOBX.critDef; hideCriticalAlert(); } return f0.apply(this, arguments); }; });
   wrap('endMobileTutorial', function (f0) { return function (skipped) { const r = f0.apply(this, arguments); if (!skipped && !GSET.touchTrainDone) setTimeout(function () { showTouchTraining(false); }, 400); return r; }; });
   wrap('openPauseMenu', function (f0) {
     return function () {

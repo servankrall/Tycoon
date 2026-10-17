@@ -76,10 +76,18 @@ function deviceBenchmark() {
 }
 function setQualityLevel(lvl, why) {
   if (!S || !S.settings || QUALITY_ORDER.indexOf(lvl) < 0 || S.settings.quality === lvl) return;
+  const prev = S.settings.quality;
   S.settings.quality = lvl; GSET.graphics = lvl; if (GSET.perfMode === 'AUTO') GSET.autoPerfLevel = lvl; saveGSET();
   FX.particles.length = 0;
   AUTOP.log.unshift(new Date().toLocaleTimeString() + ' → ' + lvl + (why ? ' (' + why + ')' : '')); AUTOP.log.length = Math.min(AUTOP.log.length, 12);
-  if (why) { Log.info('AUTO PERFORMANCE: quality → ' + lvl + ' (' + why + ')'); toast('⚙️ AUTO PERFORMANCE: graphics → ' + lvl + ' (' + why + ')', ''); }
+  if (why) { Log.info('AUTO PERFORMANCE: quality → ' + lvl + ' (' + why + ')'); if (QUALITY_ORDER.indexOf(lvl) < QUALITY_ORDER.indexOf(prev)) perfReducedNotice(); }
+}
+/* Part 16: ONE notice per session when the game lowers quality on its own (AUTO PERFORMANCE or the visual governor);
+   restores are silent (logged, listed in Settings → Recent) so the player is never spammed */
+const PERF_NOTICE = { told: false };
+function perfReducedNotice() {
+  if (PERF_NOTICE.told || !STARTED || (typeof selftestActive === 'function' && selftestActive())) return false;
+  PERF_NOTICE.told = true; toast('⚙️ Performance reduced to keep the game stable.', ''); return true;
 }
 /* Apply the chosen mode: fixed quality, or AUTO starting from the benchmark result */
 function applyPerfMode() {

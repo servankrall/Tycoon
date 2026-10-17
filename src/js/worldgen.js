@@ -1096,7 +1096,7 @@ function applyClimate(cfg) {
 const WEATHER_TYPES = ['clear', 'cloudy', 'rain', 'storm', 'snow', 'fog', 'heatwave'];
 function setWeather(w, hours) {
   if (WEATHER_TYPES.indexOf(w) < 0) return false;
-  FX.weather = w; FX.lock = w; FX.drops = [];
+  FX.weather = w; FX.lock = w; FX.dropN = 0;
   FX.weatherUntil = S.clock.gameSec + (hours || 6) * 3600;
   SND.setRain(w === 'rain' || w === 'storm' || w === 'heavyrain');
   return true;

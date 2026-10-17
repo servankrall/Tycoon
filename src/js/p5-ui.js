@@ -597,5 +597,7 @@ function sirenAudioTick(dt) {
   const tl = screenToWorld(0, 0), br = screenToWorld(CW, CH);
   if (!AG.sirens.some(function (v) { return v.x > tl.x && v.x < br.x && v.y > tl.y && v.y < br.y; })) return;
   sirenAcc = 1.4;
+  SND.cur = 'emergency';                                   // Part 16: highest priority in the voice pool
   SND.tone(740, 0.35, 'square', 0.025, 0, 960); SND.tone(960, 0.35, 'square', 0.025, 0.38, 740);
+  SND.cur = 'sfx';
 }

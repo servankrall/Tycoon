@@ -858,10 +858,29 @@ function lowMemoryMode(why) {
   if (first) toast('🧹 Low memory: distant detail reduced — your city is safe', '');
 }
 window.bctLowMemory = function (level) { lowMemoryMode('Android trim level ' + level); return 'ok'; };
+/* Part 16: LOW MEMORY RESTORE — 3 min without a new low-memory signal and the heap below 60 % → the mode ends, and
+   quality climbs back ONE step at a time (the visual governor / AUTO PERFORMANCE raise it again after good FPS),
+   never straight back to full detail. Low-RAM devices stay in the mode. */
+function lowMemoryRestore(now) {
+  if (!MOB.lowMem || (IS_ANDROID_APP && ANDROID_INFO.lowRam) || !MOB.lowMemAt || now - MOB.lowMemAt < 180000) return false;
+  const m = performance.memory; if (m && m.jsHeapSizeLimit && m.usedJSHeapSize / m.jsHeapSizeLimit > 0.6) return false;
+  MOB.lowMem = false;
+  // first step: LOW → MEDIUM; every further step needs good FPS for a while (AUTO PERFORMANCE: 60 s, visual governor: 30 s).
+  // Only phones drop the visual tier to LOW in low-memory mode (visual-engine.js), so only they climb back step by step.
+  if (!IS_MOBILE) { /* desktop: only the agent / particle caps were lowered — they return with the flag */ }
+  else if (GSET.perfMode === 'AUTO' && S && S.settings && typeof setQualityLevel === 'function') { if (QUALITY_ORDER.indexOf(S.settings.quality) > 1) setQualityLevel('MEDIUM'); }
+  else if (typeof VE_GOV !== 'undefined' && typeof veComputeTier === 'function') {
+    const base = Math.max(0, VE_TIERS.indexOf(GSET.veQuality && GSET.veQuality !== 'AUTO' ? GSET.veQuality : S.settings.quality));
+    VE_GOV.drop = Math.max(VE_GOV.drop, base - 1); VE_GOV.changedAt = performance.now(); VE_GOV.highSince = 0; VE_GOV.log.unshift('low memory over → restore step by step');
+  }
+  updateFpsCap(); Log.info('LOW MEMORY MODE ended: quality returns step by step');
+  return true;
+}
 setInterval(function () {
   try {
     const m = performance.memory; if (m && m.jsHeapSizeLimit && m.usedJSHeapSize / m.jsHeapSizeLimit > 0.85) lowMemoryMode('heap ' + Math.round(m.usedJSHeapSize / 1048576) + ' MB');
     if (IS_ANDROID_APP && ANDROID_INFO.lowRam && !MOB.lowMem && STARTED) lowMemoryMode('low-RAM device');
+    lowMemoryRestore(Date.now());
     updateFpsCap();
   } catch (e) { /* never break the game */ }
 }, 5000);

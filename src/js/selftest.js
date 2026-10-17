@@ -17,6 +17,8 @@ function stPhase() {
   return +m[1] || 1;
 }
 function stWait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+/* wait-until with a deadline (Part 16: no fixed sleeps where a state change is awaited) */
+function stUntil(fn, ms) { const end = performance.now() + (ms || 2000); return new Promise(function (r) { (function tick() { let v = false; try { v = fn(); } catch (e) { v = false; } if (v || performance.now() > end) r(!!v); else setTimeout(tick, 25); })(); }); }
 function stLoad() { try { return JSON.parse(Store.getItem(SELFTEST.key) || 'null'); } catch (e) { return null; } }
 function stStore() { try { Store.setItem(SELFTEST.key, JSON.stringify({ steps: SELFTEST.steps, t0: SELFTEST.t0, data: SELFTEST.data })); } catch (e) { /* storage */ } }
 async function stStep(n, name, fn) {
@@ -484,13 +486,22 @@ async function runAndroidSelfTest(phase) {
         stopCameraMotion(); CAM.rot = 0; CAM.zoom = 1; CAM.x = (spot.x + 0.5) * TILE; CAM.y = (spot.y + 0.5) * TILE; clampCamera(); await stWait(60);   // camera pinned (no fly / easing) before the tap point is computed
         if (UI.ghost && Math.abs(UI.ghost.x - spot.x) <= 2 && Math.abs(UI.ghost.y - spot.y) <= 2) { UI.ghost = { x: spot.x + 4, y: spot.y + 4 }; renderBuildBar(); }   // start away from the spot
         const p = worldToScreen((spot.x + 0.5) * TILE, (spot.y + 0.5) * TILE);
-        stPtr('pointerdown', 1, p.x, p.y); await stWait(40); stPtr('pointerup', 1, p.x, p.y); await stWait(60);    // tap → the ghost moves there (nothing is built yet)
-        const moved = !!UI.ghost && UI.ghost.x === spot.x && UI.ghost.y === spot.y && S.buildings.list.length === n0;
+        // tap → the ghost moves there (nothing is built yet). Waits for the result instead of a fixed delay; if the emulator
+        // stalled so long that the synthetic press itself lasted > 650 ms (a long press, not a tap), the tap is repeated once
+        const atSpot = function () { return !!UI.ghost && UI.ghost.x === spot.x && UI.ghost.y === spot.y; };
+        let retried = '';
+        for (let k = 0; k < 2 && !atSpot(); k++) {
+          const t0 = performance.now(); stPtr('pointerdown', 1, p.x, p.y); await stWait(40); const held = performance.now() - t0; stPtr('pointerup', 1, p.x, p.y);
+          await stUntil(atSpot, 1500);
+          if (!atSpot() && held < 650) break;                     // a real miss: report it
+          if (!atSpot()) retried = ' (press stretched to ' + Math.round(held) + ' ms by a stalled frame → tapped again)';
+        }
+        const moved = atSpot() && S.buildings.list.length === n0;
         const checks = $('mbInfo').querySelectorAll('.mChk').length, state = ($('mbInfo').querySelector('.mbState') || {}).textContent || '';
         const cf = MOB.buildBar.querySelector('[data-mb="confirm"]'); cf.click(); cf.disabled = false; cf.click(); await stWait(100);   // the second fast press is ignored
         const built = S.buildings.list.length - n0;
         MOB.buildBar.querySelector('[data-mb="cancel"]').click();
-        return { ok: cats === 8 && bar && moved && checks === 5 && /✓ VALID/.test(state) && built === 1, detail: cats + ' categories · ' + d.name + ' · build bar ' + bar + ' · tap moved the ghost ' + moved + ' · ' + state.slice(0, 30) + ' · ' + checks + ' checks · CONFIRM ×2 → ' + built + ' building' };
+        return { ok: cats === 8 && bar && moved && checks === 5 && /✓ VALID/.test(state) && built === 1, detail: cats + ' categories · ' + d.name + ' · build bar ' + bar + ' · tap moved the ghost ' + moved + retried + (moved ? '' : ' (ghost ' + (UI.ghost ? UI.ghost.x + ',' + UI.ghost.y : 'none') + ', spot ' + spot.x + ',' + spot.y + ')') + ' · ' + state.slice(0, 30) + ' · ' + checks + ' checks · CONFIRM ×2 → ' + built + ' building' };
       });
     });
     await stStep(7, 'Road Building (START → DRAG → END → CONFIRM)', function () {

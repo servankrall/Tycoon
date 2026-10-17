@@ -295,7 +295,7 @@ body.mobileUI #levelFlash div{font-size:max(24px,calc(var(--u)*30));}
 body.mobileUI #dailyCard{right:var(--R);left:auto;bottom:var(--above-bar);width:min(300px,calc(var(--vw) - var(--L) - var(--R)));max-height:calc(var(--vh) - var(--below-hud) - var(--above-bar));overflow-y:auto;}
 body.mobileUI #heatLegend{left:calc(var(--L) + var(--touch) + 10px);top:var(--below-hud);}
 body.mobileUI #admPill{right:var(--R);bottom:calc(var(--above-bar) + 4px);min-height:36px;}
-body.mobileUI #photoBar{bottom:var(--B);left:var(--L);right:var(--R);flex-wrap:wrap;transform:none;width:auto;max-height:calc(var(--vh) - var(--T) - var(--B) - 8px);overflow-y:auto;overscroll-behavior:contain;}   /* Part 15: photo mode 2.0 has more rows — scroll, never off-screen */
+body.mobileUI #photoBar{bottom:var(--B);left:var(--L);right:var(--R);flex-wrap:wrap;transform:none;width:auto;max-height:max(calc(var(--touch) * 2 + 24px), calc((var(--vh) - var(--T) - var(--B)) * 0.46));overflow-y:auto;overscroll-behavior:contain;}   /* Part 15: photo mode 2.0 has more rows — scroll, never off-screen · Part 16: at most ~half the screen, the city above stays visible and touchable */
 body.mobileUI #photoBar .btn{min-height:var(--touch);}
 body.mobileUI #paletteWrap{padding:var(--T) var(--R) var(--B) var(--L);}
 
