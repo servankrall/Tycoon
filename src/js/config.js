@@ -387,7 +387,13 @@ const GLOBAL_EVENTS = [
   { id: 'festival', name: 'City Festival', icon: '🎡', cost: 20000, dur: 150, tour: 0.3, hap: 8, rev: 0.10, desc: 'Parades and stalls across the city.' },
   { id: 'racing', name: 'Racing Event', icon: '🏎️', cost: 60000, dur: 120, tour: 0.5, hap: 5, rev: 0.12, desc: 'Race cars roar through the streets.' },
   { id: 'fireworks', name: 'Firework Night', icon: '🎆', cost: 35000, dur: 120, tour: 0.25, hap: 10, rev: 0.08, desc: 'Spectacular fireworks after dark.' },
-  { id: 'music', name: 'Music Festival', icon: '🎵', cost: 80000, dur: 180, tour: 0.6, hap: 9, rev: 0.15, desc: 'Headliners from around the world.' }
+  { id: 'music', name: 'Music Festival', icon: '🎵', cost: 80000, dur: 180, tour: 0.6, hap: 9, rev: 0.15, desc: 'Headliners from around the world.' },
+  /* Part 15: more city events — crowds, lights, traffic and money around their venues */
+  { id: 'concert', name: 'Open-Air Concert', icon: '🎤', cost: 30000, dur: 120, tour: 0.25, hap: 6, rev: 0.06, traffic: 0.08, desc: 'A stage in the park, crowds until late.' },
+  { id: 'sports', name: 'Sports Final', icon: '🏟️', cost: 50000, dur: 120, tour: 0.4, hap: 7, rev: 0.1, traffic: 0.15, needs: 'stadium', desc: 'A sold-out match at the stadium.' },
+  { id: 'market', name: 'Street Market', icon: '🛍️', cost: 12000, dur: 150, tour: 0.12, hap: 4, rev: 0.08, traffic: 0.04, desc: 'Stalls and food trucks in the parks.' },
+  { id: 'holiday', name: 'Public Holiday', icon: '🎌', cost: 15000, dur: 180, tour: 0.2, hap: 8, rev: -0.03, traffic: -0.1, desc: 'Offices close, parks fill up.' },
+  { id: 'parade', name: 'City Parade', icon: '🎺', cost: 25000, dur: 120, tour: 0.3, hap: 7, rev: 0.05, traffic: 0.12, desc: 'Floats and bands march down the main street.' }
 ];
 const CRISES = [
   { id: 'crash', name: 'MARKET CRASH', icon: '📉', dur: 180, desc: 'Revenue -20%, stock prices tumble.' },

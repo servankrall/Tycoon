@@ -487,6 +487,7 @@ function loop(ts) {
       recoveryTick(dt);
     }
     updateWeather(dt);
+    if (typeof veFrame === 'function') veFrame(dt);          // Part 15: Visual Engine 2.0 (sun, weather blend, outages, ambience)
     updateFX(dt);
     updateRockets(dt);
     updateCinematic(dt);

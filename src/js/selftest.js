@@ -434,7 +434,7 @@ async function part12DesktopSteps() {
 
 /* ===================================== Part 12/13: Android APK self-test (24 steps) ===================================== */
 async function runAndroidSelfTest(phase) {
-  SELFTEST.total = 28;
+  SELFTEST.total = 30;
   const native = IS_ANDROID_APP;
   if (phase === 1) {
     SELFTEST.t0 = Date.now(); SELFTEST.steps = []; SELFTEST.data = {};
@@ -674,6 +674,33 @@ async function runAndroidSelfTest(phase) {
     let valid = false; try { const o = JSON.parse(raw); valid = !!o && !validateSaveObject(o).length; } catch (e) { valid = false; }
     const set = Store.getItem('bct_settings') !== null || Store.keys().some(function (k) { return /settings/.test(k); });
     return { ok: ok && valid && set, detail: 'save written atomically and validated ' + valid + ' (' + Math.round((raw || '').length / 1024) + ' KB) · settings stored separately ' + set + ' · autosave 5/10/15/30 min · ' + esc(SaveProviders.active.name) };
+  });
+  /* ---------- Part 15: VISUAL ENGINE 2.0 ---------- */
+  await stStep(29, 'Visual Engine 2.0 · Night City · Weather', async function () {
+    const h0 = gameHour(), w0 = FX.weather;
+    setHour(22); setWeather('clear', 1); CAM.zoom = 1; const c = cityCentre(); CAM.x = c.x; CAM.y = c.y; clampCamera();
+    VE.at = 0; veFrame(0.016); render();
+    const night = nightFactor() > 0.5, lamps = VE.stats.lamps, wins = VE.stats.windows, phase = dayPhase(22).name;
+    setHour(12); veFrame(0.016); updateSun(); const noon = VE.sun.elev > 0.8 && VE.sun.intensity > 0 && SUN.on !== false;
+    setHour(2); veFrame(0.016); updateSun(); const noSun = VE.sun.intensity === 0 && SUN.on === false;
+    const chain = weatherPath('clear', 'storm').join('>');
+    const cap = veParticleCap(), budgets = VE_TIERS.map(function (t) { return VE_BUDGET[t].particles; }).join('/');
+    const sub = S.buildings.list.find(function (b) { return b.built; });
+    S.p9.util.failures.push({ x: sub.x, y: sub.y, r: 3, until: S.clock.runSec + 20, cause: 'selftest' });
+    VE.at = 0; veFrame(0.016); const out = inOutage(sub.x, sub.y) && /POWER OUTAGE/.test((UI.notifs[0] || {}).msg || '');
+    S.p9.util.failures = S.p9.util.failures.filter(function (f) { return f.cause !== 'selftest'; });
+    setHour(h0); FX.lock = null; FX.weather = w0;
+    return { ok: night && lamps > 0 && wins > 0 && noon && noSun && chain === 'cloudy>rain>heavyrain>storm' && cap > 0 && out, detail: 'tier ' + VE.tier + ' · 22:00 ' + phase + ': ' + lamps + ' street lights, ' + wins + ' lit windows · noon sun ' + noon + ' · 02:00 no direct sun ' + noSun + ' · weather ' + chain + ' · particle budget ' + budgets + ' (now ' + cap + ') · power outage → lights off + notice ' + out };
+  });
+  await stStep(30, 'Photo Mode 2.0 · City Tour · History', async function () {
+    enterPhoto(); await stWait(80);
+    const ctl = ['phHide', 'phDepth', 'phPause', 'phA', 'phB', 'phPlay', 'phTour'].every(function (id) { return !!document.getElementById(id); });
+    $('phPause').click(); const paused = S.settings.speed === 0; $('phPause').click();
+    cineSetPoint('A'); CAM.x += 120; cineSetPoint('B'); const cine = cinePlay(3); stopCinematic();
+    exitPhoto();
+    const tour = startCityTour(), stops = VE.tour ? VE.tour.stops.length : 0; stopCityTour();
+    historySample(true); openCityHistory(); await stWait(60); const graphs = document.querySelectorAll('[data-vehist]').length; closeModal();
+    return { ok: ctl && paused && cine && tour && stops > 0 && graphs === 6 && !!S.p15 && S.p15.hist.length > 0, detail: 'photo controls ' + ctl + ' · pause simulation ' + paused + ' · cinematic A→B ' + cine + ' · city tour ' + stops + ' stops · history graphs ' + graphs + ' (' + S.p15.hist.length + ' samples, saved with the city)' };
   });
   stDone();
 }

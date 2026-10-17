@@ -8,6 +8,8 @@
    twist, tap-to-place, START → DRAG → END → CONFIRM road drawing — all through CDP touch events.
    Part 14 adds: HUD modes, speed sheet, search, long press + smart selection, double tap, UNDO, critical alerts, quests,
    daily report, minimap 2.0, readable text (no tiny fonts), HUD overlap and a memory-leak loop over the panels.
+   Part 15 adds: Visual Engine night city / rain, Photo Mode 2.0 (HIDE UI) and the landscape → portrait → landscape
+   regression (minimap controls, comment bubble, advisor button never stay at old coordinates).
    Usage:  node scripts/mobile-ui-test.js [--out=dist/mobile-ui] [--only=small-phone,tablet] [--shots]
    Needs Playwright (npm i --no-save playwright && npx playwright install chromium) or PLAYWRIGHT_PATH. */
 const fs = require('fs');
@@ -265,6 +267,31 @@ async function runDevice(browser, base, dev) {
       return { dMB: Math.round((heap() - h0) / 1048576), dDom: document.getElementsByTagName('*').length - d0 };
     });
     return { ok: r.dMB < 40 && r.dDom < 400, detail: '12× open/close of every panel → heap ' + (r.dMB >= 0 ? '+' : '') + r.dMB + ' MB · DOM ' + (r.dDom >= 0 ? '+' : '') + r.dDom + ' nodes' };
+  });
+  await check('Visual Engine (night · rain)', async function () {
+    const r = await ev(function () { setHour(22); setWeather('rain', 2); VE.wx.wet = 1; VE.wx.k = 1; VE.at = 0; veFrame(0.016); render(); const o = { lamps: VE.stats.lamps, wins: VE.stats.windows, tier: VE.tier, phase: dayPhase().name }; setHour(12); setWeather('clear', 1); FX.lock = null; return o; });
+    return { ok: r.lamps > 0 && r.wins > 0, detail: 'tier ' + r.tier + ' · ' + r.phase + ': ' + r.lamps + ' street lights, ' + r.wins + ' lit windows, rain + wet roads' };
+  });
+  await check('Photo mode 2.0', async function () {
+    await ev(function () { enterPhoto(); }); await sleep(250);
+    const r = await ev(function () { return ['phHide', 'phDepth', 'phPause', 'phA', 'phB', 'phPlay', 'phTour'].filter(function (id) { const e = document.getElementById(id); return e && visibleEl(e); }).length; });
+    await ev(function () { $('phHide').scrollIntoView({ block: 'nearest' }); }); await sleep(80);
+    await tapSel('#phHide'); await sleep(150);
+    const hid = await ev(function () { return document.body.classList.contains('photoHide') && !shown($('photoBar')); });
+    await tap(dev.w / 2, dev.h / 2); await sleep(150);
+    const back = await ev(function () { return !document.body.classList.contains('photoHide') && shown($('photoBar')); });
+    const a = await audit(); await ev(function () { exitPhoto(); }); await sleep(150);
+    return { ok: r >= 7 && hid && back && !a.ui.length, detail: r + ' photo controls · HIDE UI ' + hid + ' · tap brings them back ' + back };
+  });
+  await check('Rotation regression (landscape → portrait → landscape)', async function () {
+    if (dev.portrait) return { ok: true, detail: 'portrait device' };
+    await ev(function () { S.settings.minimap = true; $('minimap').classList.remove('hidden'); UI.advice = UI.advice || { id: 'rt', msg: 'Rotation test advice' }; MOBX.commentAt = 0; const c = AG.citizens.find(function (x) { return !x.inside; }); if (c) c.bubble = { text: 'Rotation test', until: FX.time + 30 }; setSpeed(1); }); await sleep(1300);
+    const pos = async function () { return ev(function () { const m = $('minimap').getBoundingClientRect(), k = $('mMiniCtl').getBoundingClientRect(), s = MOB.side.getBoundingClientRect(), cm = document.getElementById('mComment'), cr = cm && shown(cm) ? cm.getBoundingClientRect() : null; return { ctl: shown($('mMiniCtl')) ? Math.abs(k.top - (m.bottom + 4)) < 3 && Math.abs(k.right - m.right) < 3 : true, cm: !cr || cr.left >= s.right - 1, adv: !!document.getElementById('mAdvBtn') }; }); };
+    const p0 = await pos();
+    await page.setViewportSize({ width: dev.h, height: dev.w }); await sleep(500);
+    await page.setViewportSize({ width: dev.w, height: dev.h }); await sleep(600);
+    const p1 = await pos(); const a = await audit(); await ev(function () { setSpeed(0); });
+    return { ok: p0.ctl && p1.ctl && p0.cm && p1.cm && !a.ui.length && !a.touch.length, detail: 'minimap controls under the minimap ' + p0.ctl + '→' + p1.ctl + ' · comment bubble right of the side buttons ' + p0.cm + '→' + p1.cm + ' · advisor button ' + p1.adv };
   });
   await check('Settings', async function () {
     await ev(function () { openSettings('graphics'); }); await sleep(200);

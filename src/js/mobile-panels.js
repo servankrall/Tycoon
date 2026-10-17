@@ -194,7 +194,7 @@ function renderInspector() {
       insRow('🏷 Value', money(typeof buildingValue === 'function' ? buildingValue(b) : buildCost(d))) + (dist ? insRow('🗺 Land value', '×' + landValue(b).toFixed(2)) : '') + (!isAI(b) && b.level < MAX_LEVEL ? insRow('⬆ Next level', money(upgradeCost(b))) : '');
     else body = insRow('⚡ Power', d.power > 0 ? '+' + fmt(Math.round(b._gen || d.power)) : d.power < 0 ? (b._powered === false ? '✕ No power' : '✓ ' + fmt(-d.power * lvlMult(b.level))) : '—', d.power < 0 && b._powered === false ? 'neg' : '') +
       insRow('💧 Water', d.water > 0 ? '+' + fmt(d.water * lvlMult(b.level)) : d.water < 0 ? '✓ ' + fmt(-d.water * lvlMult(b.level)) : '—') + insRow('🛣 Road access', d.noRoad || b._road ? '✓ Connected' : '✕ No road', d.noRoad || b._road ? 'pos' : 'neg') +
-      insRow('🗺 District', esc(districtName(b.x, b.y))) + insRow('📍 Location', b.x + ', ' + b.y);
+      insRow('🗺 District', esc(districtName(b.x, b.y)) + (typeof districtCharacterAt === 'function' && districtCharacterAt(b.x, b.y) ? ' · ' + esc(districtCharacterAt(b.x, b.y)) : '')) + insRow('📍 Location', b.x + ', ' + b.y);
     if (!isAI(b) && b.built && b.level < MAX_LEVEL && !b.upg && d.cost > 0) acts += '<button class="btn gold' + (funds(ownerPayer(b)) < upgradeCost(b) ? ' dis' : '') + '" data-mi="upgrade">⬆ UPGRADE</button>';
     if (b._tip > S.clock.runSec) acts += '<button class="btn gold" data-mi="tip">💰 COLLECT</button>';
     acts += '<button class="btn" data-mi="more">ℹ INFO</button>';
@@ -343,7 +343,7 @@ function renderMobilePage(first) {
       statCard('🏥', 'Health', pct((SIM.cov.health || 0) * 100), 'healthcare coverage of homes', (SIM.cov.health || 0) * 100, (SIM.cov.health || 0) < 0.5 ? 'warn' : '') +
       statCard('🚓', 'Safety', pct(safety), 'police ' + pct((SIM.cov.police || 0) * 100) + ' · fire ' + pct((SIM.cov.fire || 0) * 100) + ' · crime ' + Math.round(c.crime || 0), safety, safety < 60 ? 'warn' : '') +
       statCard('🏷️', 'Land Value', '×' + avgLandValue().toFixed(2), 'average of all buildings') +
-      '</div><div class="mActs"><button class="btn blue" data-mpg="stats">📊 All statistics</button><button class="btn" data-mpg="services">🚒 Services</button><button class="btn" data-mpg="housing">🏘 Housing & education</button><button class="btn" data-mpg="research">🔬 Research</button><button class="btn" data-mpg="companies">🏢 Companies</button><button class="btn" data-mpg="world">🌍 World</button><button class="btn" data-mpg="quests">🎯 Quests</button><button class="btn" data-mpg="report">📰 Daily report</button></div>';
+      '</div><div class="mActs"><button class="btn blue" data-mpg="stats">📊 All statistics</button><button class="btn" data-mpg="services">🚒 Services</button><button class="btn" data-mpg="housing">🏘 Housing & education</button><button class="btn" data-mpg="research">🔬 Research</button><button class="btn" data-mpg="companies">🏢 Companies</button><button class="btn" data-mpg="world">🌍 World</button><button class="btn" data-mpg="quests">🎯 Quests</button><button class="btn" data-mpg="report">📰 Daily report</button><button class="btn" data-mpg="history">📈 City history</button><button class="btn" data-mpg="tour">🎥 City tour</button></div>';
   } else if (MPAGE.kind === 'economy') {
     const inc = SIM.income || 0, ex = SIM.expenses || 0, infl = S.p6 && S.p6.econ ? S.p6.econ.infl || 0 : 0, rate = typeof interestRate === 'function' ? interestRate() : 0;
     const debt = (S.bank && S.bank.loans ? S.bank.loans.reduce(function (a, l) { return a + l.remaining; }, 0) : 0);
@@ -385,6 +385,8 @@ function pageClick(e) {
   if (k === 'hall') { openCityHall(); return; }
   if (k === 'quests') { if (typeof openQuestPage === 'function') openQuestPage(); else { closeMobilePage(); openQuestsPanel(); } return; }
   if (k === 'report') { closeMobilePage(); if (typeof openDailyReport === 'function') openDailyReport(); return; }
+  if (k === 'history') { closeMobilePage(); if (typeof openCityHistory === 'function') openCityHistory(); return; }
+  if (k === 'tour') { closeMobilePage(); if (typeof startCityTour === 'function') startCityTour(); return; }
   if (deskp) { closeMobilePage(); openPanel(deskp[0], deskp[1]); }
 }
 
@@ -694,6 +696,9 @@ function mobileSettings(tab) {
       h = mSetCard('🎨', 'Graphics', 'Now ' + perfModeLabel() + '. AUTO measures the device and lowers detail when it gets slow or hot.', mSeg(G, 'perfMode', ['LOW', 'MEDIUM', 'HIGH', 'ULTRA', 'AUTO'], null, GSET.perfMode)) +
         mSetCard('🌗', T('shadows'), '', gsTg('shadows')) + mSetCard('✨', T('particles'), '', gsSeg('particles', ['ON', 'REDUCED', 'OFF'])) +
         mSetCard('🌳', 'Decorations', 'Procedural trees, lamps and details.', sTog('deco')) + mSetCard('📟', 'Show FPS', 'Small FPS counter.', sTog('showFps')) +
+        mSetCard('🌆', 'Visual Engine', 'Day / night, weather, seasons, city lights, clouds, water and crowds. Now ' + (typeof VE !== 'undefined' ? VE.tier : '—') + '. AUTO steps down when the phone is slow or hot.', mSeg(G, 'veQuality', ['AUTO', 'LOW', 'MEDIUM', 'HIGH', 'ULTRA'], null, GSET.veQuality || 'AUTO')) +
+        (typeof vePresetsAllowed === 'function' && vePresetsAllowed() ? mSetCard('🧪', 'Visual presets', 'Developer / admin test presets.', '<div class="mBtns">' + Object.keys(VE_PRESETS).map(function (p) { return '<button class="btn small" data-gs2="vePreset" data-v="' + p + '">' + p.replace('MOBILE ', '📱 ').replace('DESKTOP ', '🖥 ') + '</button>'; }).join('') + '</div>') : '') +
+        ((BUILD.dev || BUILD.test) ? mSetCard('🐞', 'Visual debug overlay', 'FPS, frame time, simulation time, objects, chunks, particles, memory (development build).', mTog(G, 'veDebug', !!GSET.veDebug)) : '') +
         (IS_ANDROID ? mSetCard('🖼', 'Screen orientation', 'Landscape is recommended on phones.', mSeg(G, 'orientation', ['landscape', 'auto', 'portrait'], ['Landscape', 'Auto', 'Portrait'], GSET.orientation)) : '') +
         (BUILD.dev ? mSetCard('📐', 'SHOW UI BOUNDS', 'Development build only: X · Y · width · height of every UI element.', mTog(A, 'uiBounds', !!MOB.bounds)) : '');
       break;
@@ -879,7 +884,7 @@ function noteError() {
 /* ===================================== UI BOUNDS AUDIT (automatic) & SHOW UI BOUNDS (development builds) ===================================== */
 /* Full-screen layers (#mPage, #mMap, #adminCenter) paint their background edge to edge on purpose (under the notch);
    their header and content are what has to stay inside the safe area, so those are audited */
-const AUDIT_SEL = ['#mChooser', '#mCrit', '#mAch', '#mAdv', '#mComment', '#mTrack', '#mMiniCtl', '#undoBar', '#mHud', '#mSide', '#mBar', '#mBuildBar', '#mRoad', '#mSheet', '#mInspect', '#mNotes', '#mPage .mPageHead', '#mPage .mPageBody', '#mMap .mMapHead', '#mMap .mMapBody', '#modal', '#sysBox', '#minimap', '#leftPanel.open', '#rightPanel', '#mTut .mtCard', '#dialogBox', '#admPill', '#mToolHint', '#mSaveChip', '#mHeld', '#issuesBar', '#wgBox', '#admLoginBox', '#admTop', '#admMain', '#dailyCard', '#fpsBox'];
+const AUDIT_SEL = ['#photoBar', '#mChooser', '#mCrit', '#mAch', '#mAdv', '#mComment', '#mTrack', '#mMiniCtl', '#undoBar', '#mHud', '#mSide', '#mBar', '#mBuildBar', '#mRoad', '#mSheet', '#mInspect', '#mNotes', '#mPage .mPageHead', '#mPage .mPageBody', '#mMap .mMapHead', '#mMap .mMapBody', '#modal', '#sysBox', '#minimap', '#leftPanel.open', '#rightPanel', '#mTut .mtCard', '#dialogBox', '#admPill', '#mToolHint', '#mSaveChip', '#mHeld', '#issuesBar', '#wgBox', '#admLoginBox', '#admTop', '#admMain', '#dailyCard', '#fpsBox'];
 function safeRect() { return { l: RESP.sa.l, t: RESP.sa.t, r: window.innerWidth - RESP.sa.r, b: window.innerHeight - RESP.sa.b }; }
 function visibleEl(el) { if (!el || el.classList.contains('hidden')) return false; const cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0; }
 /* finite entrance animations (slide / pop) jump to their end before measuring; endless effects (pulse) are left alone */

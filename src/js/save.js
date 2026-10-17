@@ -120,6 +120,7 @@ function defaultState(meta, settings, achievements, lifetime, opts) {
   st.p9 = newP9(st.city.seed);
   st.p10 = newP10(st.city.seed);
   st.p11 = newP11(st.city.seed);
+  st.p15 = { hist: [], lastMonth: -1 };                // Part 15: city history samples (one per game month)
   NPC_STOCKS.forEach(function (s) { st.companies.stocks[s.id] = { price: s.base, hist: [s.base] }; });
   PRODUCT_IDS.forEach(function (p) { st.economy.inventory[p] = 0; st.economy.prices[p] = PRODUCTS[p].base; st.trade.mode[p] = 'auto'; });
   MARKET_SECTORS.forEach(function (m) { st.market.price[m] = 1; });
@@ -156,6 +157,15 @@ function serializeBuilding(b) {
     discount: b.discount ? 1 : 0, su: b.su ? { name: b.su.name, stage: b.su.stage, prog: +b.su.prog.toFixed(4), age: Math.floor(b.su.age), value: Math.round(b.su.value) } : undefined };
 }
 
+/* Part 15: city history (Year 1 · 5 · 10 · 25 graphs) — numbers only, at most 600 monthly samples; older saves start empty */
+function sanitizeP15(p) {
+  const out = { hist: [], lastMonth: -1 };
+  if (!p || typeof p !== 'object') return out;
+  const n = function (v) { v = Number(v); return isFinite(v) ? v : 0; };
+  if (Array.isArray(p.hist)) out.hist = p.hist.slice(-600).filter(function (h) { return h && typeof h === 'object'; }).map(function (h) { return { m: n(h.m), y: n(h.y), pop: n(h.pop), money: n(h.money), budget: n(h.budget), bld: n(h.bld), roads: n(h.roads), hap: n(h.hap), lv: n(h.lv) }; });
+  out.lastMonth = n(p.lastMonth);
+  return out;
+}
 function buildSaveObject() {
   if (typeof RNG !== 'undefined') RNG.sync();
   const o = {};
@@ -198,7 +208,7 @@ function saveHeader() {
       worldSeed: ['city.seed', 'p8.world.seedLabel'], chunks: ['p9.chunks'], regions: ['p9.regions', 'p9.neighbors'], households: ['p9.households'], traffic: ['p9.traffic', 'vehicles'], utilityNetworks: ['p9.util', 'p9.water', 'p9.env'],
       disasters: ['p9.disasters', 'p9.disasterLog'], weather: ['p9.weather'], timeline: ['p9.timeline', 'p9.history', 'p9.branch'], transit: ['p9.transit'],
       livingWorld: ['p10.lw', 'p10.pop', 'p10.corp', 'p10.news', 'p10.rep', 'p10.rank'], services: ['p10.edu', 'p10.research', 'p10.health', 'p10.air', 'p10.port', 'p10.rail', 'p10.shocks'], projects: ['p10.projects', 'p10.maint', 'p10.infra', 'p10.incidents'], civic: ['p10.petitions', 'p10.objectives', 'p10.goalsDone'], graphs: ['p10.graphs'], timeMachine: ['p10.tm'],
-      worldData: ['city', 'buildings', 'p8.world', 'p9.chunks', 'p9.regions'], simulationData: ['clock', 'economy', 'citizens', 'vehicles', 'p9', 'p10', 'p11'], origin: ['origin'],
+      worldData: ['city', 'buildings', 'p8.world', 'p9.chunks', 'p9.regions'], simulationData: ['clock', 'economy', 'citizens', 'vehicles', 'p9', 'p10', 'p11', 'p15'], origin: ['origin'],
       transport: ['p11.works', 'p11.trains', 'p11.regional', 'p11.ped', 'p11.bike', 'p11.modal'], finance: ['p11.contracts', 'p11.loans', 'p11.banks', 'p11.mort'], smartCity: ['p11.sensors', 'p11.storage', 'p11.landfill', 'p11.flood', 'p11.fire'], snapshots: ['bct_snap_index (separate files)']
     }
   };
@@ -635,6 +645,7 @@ function sanitizeState(d) {
   st.p9 = sanitizeP9(d.p9, st.city.seed);
   st.p10 = sanitizeP10(d.p10, st.city.seed);
   st.p11 = sanitizeP11(d.p11, st.city.seed);
+  st.p15 = sanitizeP15(d.p15);
   st.city.mapType = MAP_TYPES[c.mapType] ? c.mapType : 'standard';
   st._rawCitizens = Array.isArray(d.citizens) ? d.citizens.slice(0, 400) : null;
   st._rawVehicles = Array.isArray(d.vehicles) && d.vehicles.length ? d.vehicles.slice(0, 300) : null;
@@ -787,7 +798,7 @@ function exportSaveJSON() { try { return JSON.stringify(buildSaveObject(), null,
 /* IMPORT VALIDATION: version, data types, negative values, unknown properties and maximum values */
 const SAVE_TOP_KEYS = ['version', 'meta', 'money', 'budget', 'city', 'buildings', 'workers', 'research', 'technology', 'companies', 'bank', 'transport', 'economy', 'market', 'ai', 'trade',
   'diplomacy', 'contracts', 'investors', 'space', 'events', 'statistics', 'achievements', 'quests', 'tutorial', 'settings', 'clock', 'p5', 'lastNet', 'lastBudgetNet', 'lastSaveTime', 'slot',
-  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'p8', 'p9', 'p10', 'p11', 'origin', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
+  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'p8', 'p9', 'p10', 'p11', 'p15', 'origin', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
 function validateImport(d) {
   const errs = [];
   if (!d || typeof d !== 'object' || Array.isArray(d)) return ['The save is not a JSON object.'];

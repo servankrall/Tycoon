@@ -20,6 +20,20 @@
 ## Eski tarayıcı kayıtları
 Oyunu Chrome/Edge'de oynadıysanız: tarayıcıda Ayarlar → **📦 Export all saves** (veya **⬇️ Download .json**), sonra EXE'de **📦 Import old browser save** ile dosyayı seçin.
 
+## 2.4.0 — Part 15: Visual Engine 2.0, atmosfer ve yaşayan şehir
+- **Visual Engine 2.0:** mevcut renderer genişletildi — LOW / MEDIUM / HIGH / ULTRA kalite seviyeleri, yavaş veya ısınan cihazda otomatik düşüş, particle bütçesi 100 / 300 / 800 / 1500.
+- **Day/Night:** Dawn · Morning · Noon · Evening · Night · Midnight · Late Night; mevsime göre gün uzunluğu; güneş açısı, yoğunluk, renk sıcaklığı ve gölge yönü.
+- **Dynamic Lighting & Street Lights:** yol tipine göre sokak lambaları, ilçe renkleri, LOD'lu pencere ışıkları ve saate göre doluluk, neon tabelalar, landmark projektörleri, uçak ikaz ışıkları.
+- **Power-based lighting:** elektrik kesintisinde lambalar ve trafik ışıkları söner (kavşaklar 4 yönlü dur), binalar acil durum ışığına geçer, bildirim gelir.
+- **Vehicle Lights:** farlar (gece, yağmur, sis, kar), fren lambası, sinyal, tekerlekler, acil araç ışıkları ve siren.
+- **Weather:** yumuşak geçişler (Clear → Cloudy → Rain → Heavy Rain → Storm), ıslak yollar ve su birikintileri, kar örtüsü, sis, bulut gölgeleri; sis / kar / fırtına araç ve acil durum hızını hafifçe etkiler.
+- **Seasons:** sonbahar yaprak geçişi, ilkbahar çiçekleri, rüzgâra göre sallanan ağaçlar, su yansıması ve kıyı köpüğü.
+- **Building Animations:** inşaat ekipleri ve kamyonlar, seviyeye göre çatı detayları, seviye 5 / 8 / 10'da değişen Mega Mall ve Arcology.
+- **Living City & City Atmosphere:** ilçe kimliği (Downtown, Financial District, Industrial Zone, Old Town, Tourism District, Tech Valley, Suburbs, Luxury Coast), gece hayatı, yeni etkinlikler (konser, spor finali, sokak pazarı, resmî tatil, geçit töreni), şehir evrimi ve silüet, mesafe / kirlilik pusu, bölgeye göre ambiyans sesi.
+- **Photo Mode 2.0:** 8 hava durumu, HIDE UI, derinlik efekti, simülasyonu duraklatma, sinematik kamera (A → B), CITY TOUR; **City History** grafikleri ve Year 1 / 5 / 10 / 25 karşılaştırması.
+- **Performance Improvements:** ekrandaki vatandaş çizimi seviyeye göre sınırlı, chunk yükleme geçişi (fade), ses havuzu ve öncelik; v2.3.0 ile aynı kare süresi, kayıt süresi ve bellek.
+- **Testler:** Android self-test 30 adım, mobil UI testine gece / yağmur, Photo Mode 2.0 ve döndürme regresyonu eklendi; Part 14 düzeltmeleri (minimap, yorum balonu, danışman düğmesi, gamepad zamanlaması) korunuyor.
+
 ## 2.3.0 — Part 14: Mobile 2.0, dokunmatik UX, performans ve sürüm kalitesi
 - **Platform adapter:** ortak oyun motoru + `AndroidPlatformAdapter` / `WindowsPlatformAdapter`; dağınık `if Android` kontrolleri yerine tek katman. Ortak **Action** sistemi (dokunma · fare · klavye · kontrolcü).
 - **HUD 2.0:** seviye · şehir · tarih / nüfus · mutluluk / para · elektrik · su; **≡** ile FULL → COMPACT → MINIMAL (araç çubuğu TOOLS ▲ tutamacına katlanır).

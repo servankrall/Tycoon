@@ -94,6 +94,7 @@ function globalMods() {
   if (hasTech('c_tourism')) m.tour *= 1.25;
   part5Mods(m);
   part6Mods(m);
+  S.events.active.forEach(function (a) { if (a.kind !== 'global') return; const g = GLOBAL_EVENTS.find(function (x) { return x.id === a.id; }); if (g && g.traffic) m.traffic = (m.traffic || 1) * (1 + g.traffic); });   // Part 15: events move the traffic (after part5Mods resets it)
   part8Mods(m);
   part9Mods(m);
   if (typeof part10Mods === 'function') part10Mods(m);

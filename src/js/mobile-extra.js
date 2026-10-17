@@ -409,13 +409,16 @@ function buildZoomButtons() {
 
 /* ===================================== PHOTO MODE (touch): Hide UI · screenshot without HUD ===================================== */
 function photoTouchBar() {
-  const el = $('photoBar'); if (!el || !mobOn() || el.querySelector('#phHide')) return;
+  const el = $('photoBar'); if (!el || !mobOn()) return;
+  el.classList.add('mScroll');
+  if (el.querySelector('#phHide')) return;
   const row = el.querySelector('.pbRow'); if (!row) return;
   const b = document.createElement('button'); b.className = 'btn small gold'; b.id = 'phHide'; b.textContent = '🙈 HIDE UI';
   b.onclick = function () { document.body.classList.add('photoHide'); toast('Tap anywhere to show the photo controls again', ''); };
   row.insertBefore(b, row.querySelector('#phExit'));
 }
-document.addEventListener('pointerdown', function (e) { if (document.body.classList.contains('photoHide') && !(e.target.closest && e.target.closest('#photoBar'))) { document.body.classList.remove('photoHide'); } }, true);
+document.addEventListener('pointerdown', function (e) { if (document.body.classList.contains('photoHide') && !(e.target.closest && e.target.closest('#photoBar'))) { document.body.classList.remove('photoHide'); e.stopImmediatePropagation(); e.preventDefault(); PHOTO.eatClick = performance.now(); } }, true);   // the restoring tap only brings the controls back
+document.addEventListener('click', function (e) { if (PHOTO.eatClick && performance.now() - PHOTO.eatClick < 600) { PHOTO.eatClick = 0; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
 
 /* ===================================== MOBILE STRESS TEST (development / test builds · authorized developers only) ===================================== */
 function stressAllowed() {

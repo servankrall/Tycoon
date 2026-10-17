@@ -69,7 +69,7 @@ function refreshTopbar() {
   $('tClock').textContent = pad2(Math.floor(gameHour())) + ':' + pad2(Math.floor((S.clock.gameSec / 60) % 60));
   const se = currentSeason();
   const wx = { rain: '🌧️', snow: '🌨️', storm: '⛈️', heatwave: '🥵' }[FX.weather] || '';
-  $('tDate').textContent = weekdayName().slice(0, 3) + ' · Day ' + gameDay() + ' · ' + se.icon + ' ' + se.name + (wx ? ' ' + wx : '') + (specialWeekend() ? ' ' + specialWeekend().icon : '');
+  $('tDate').textContent = weekdayName().slice(0, 3) + ' · Day ' + gameDay() + ' · ' + se.icon + ' ' + se.name + (wx ? ' ' + wx : '') + (specialWeekend() ? ' ' + specialWeekend().icon : '') + (typeof dayPhase === 'function' ? ' · ' + dayPhase().icon + ' ' + dayPhase().name : '');
   $('tScore').textContent = S.p5.score.cur;
   $('tEcon').textContent = econPhase().icon;
   $('tCity').textContent = S.city.name;

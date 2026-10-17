@@ -152,10 +152,13 @@ function weDrawGround(v) {
   for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
     const k = chunkIndex(cx, cy);
     let g = WE.ground.get(k);
-    if (!g) g = drawGroundChunk(k, sc);                 // visible and missing: always load now (no holes)
+    if (!g) { g = drawGroundChunk(k, sc); g.fadeAt = FX.time; }   // visible and missing: always load now (no holes) — fades in (Part 15)
     else if (stale(g) && budget > 0) { g = drawGroundChunk(k, sc); budget--; }
     g.used = FX.time;
+    const fa = g.fadeAt !== undefined ? clamp((FX.time - g.fadeAt) / 0.3, 0, 1) : 1;
+    if (fa < 1) { ctx.fillStyle = currentSeason().grass; ctx.fillRect(g.x, g.y, g.w, g.h); ctx.globalAlpha = fa; }
     ctx.drawImage(g.cv, g.x, g.y, g.w, g.h);
+    if (fa < 1) ctx.globalAlpha = 1;
   }
   // Preload a ring of chunks around the view so panning never reaches an unloaded border
   for (let cy = Math.max(0, cy0 - 1); cy <= Math.min(WE.chh - 1, cy1 + 1) && budget > 0; cy++) for (let cx = Math.max(0, cx0 - 1); cx <= Math.min(WE.cw - 1, cx1 + 1) && budget > 0; cx++) {

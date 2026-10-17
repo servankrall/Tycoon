@@ -178,6 +178,8 @@ function drawDistrictLabels() {
     const x = d.x * TILE, y = d.y * TILE;
     ctx.fillStyle = 'rgba(8,10,25,.55)'; const w = ctx.measureText(d.name).width + 14 / CAM.zoom; ctx.fillRect(x - w / 2, y - 10 / CAM.zoom, w, 20 / CAM.zoom);
     ctx.fillStyle = '#ffd166'; ctx.fillText(d.name, x, y);
+    const ch = typeof districtCharacterAt === 'function' ? districtCharacterAt(Math.floor(d.x), Math.floor(d.y)) : '';      // Part 15: district identity
+    if (ch) { const L = VE_DISTRICT_LOOK[ch]; ctx.font = Math.round(10 / CAM.zoom) + 'px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillText((L ? L.icon + ' ' : '') + ch, x, y + 17 / CAM.zoom); ctx.font = 'bold ' + Math.round(13 / CAM.zoom) + 'px sans-serif'; }
   });
 }
 
@@ -189,7 +191,7 @@ function renderDebug6() {
   const mem = (performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MB (heap)' : '~' + ((AG.citizens.length * 0.6 + AG.vehicles.length * 0.9 + FX.particles.length * 0.15 + S.buildings.list.length * 0.4 + (S._saveBytes || 0) / 1024) / 1024).toFixed(2) + ' MB (est.)');
   let lod = [0, 0, 0]; AG.citizens.forEach(function (c) { if (!c.inside) lod[lodOf(c.x, c.y)]++; });
   const ev = S.events.active.map(function (a) { return a.id; }).concat(S.p5.world.active ? ['world:' + S.p5.world.active] : [], activeEffects().map(function (x) { return x.id; }));
-  $('debug6').textContent = 'DEBUG (F3)\n' +
+  $('debug6').textContent = 'DEBUG (F3)\n' + (typeof veDebugLines === 'function' ? veDebugLines() : '') +
     'FPS ' + Math.round(PERF.fps) + '  Frame time ' + (PERF.fps ? (1000 / PERF.fps).toFixed(1) : '0') + ' ms (work ' + (PERF.frameMs || 0).toFixed(2) + ' ms)\n' +
     'Simulation tick #' + Game.ticks + '  TPS ' + Game.tpsMeasured.toFixed(1) + '  speed ' + S.settings.speed + '×  errors ' + Game.errors + '\n' +
     'Entities ' + (AG.citizens.length + AG.vehicles.length + FX.particles.length + S.buildings.list.length) + '\n' +
@@ -455,7 +457,7 @@ function searchCommands(q) {
 /* --- Evolution & jobs in the bottom info ------------------------------------------------------------------------------------ */
 function bottomInfoExtras6(b) {
   const s = [], a = [];
-  const dn = districtName(b.x, b.y); if (dn) s.push('📍 <b>' + esc(dn) + '</b>');
+  const dn = districtName(b.x, b.y); if (dn) s.push('📍 <b>' + esc(dn) + '</b>' + (typeof districtCharacterAt === 'function' && districtCharacterAt(b.x, b.y) ? ' · ' + esc(districtCharacterAt(b.x, b.y)) : ''));
   const T = evolveTarget(b);
   if (T && !isAI(b) && b.built) { const c = evolveCheck(b, false); a.push('<button class="btn small ' + (c.ok ? 'gold' : 'dis') + '" data-act="evolve" title="' + esc(c.ok ? 'Evolve into ' + T.name : c.reason) + '">✨ ' + T.name + (c.ok ? ' ' + money(c.cost) : '') + '</button>'); }
   if (b.type === 'warehouse' && b._op) s.push('Stock <b>' + fmt(Math.round((SIM.storageUsed || 0) * (BUILDINGS.warehouse.storage * lvlMult(b.level)) / Math.max(1, SIM.storageCap || 1))) + '/' + fmt(BUILDINGS.warehouse.storage * lvlMult(b.level)) + '</b> · in ' + fmt(SIM.whIn || 0, 1) + '/s · out ' + fmt(SIM.whOut || 0, 1) + '/s');

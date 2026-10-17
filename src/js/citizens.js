@@ -306,7 +306,7 @@ function makeVehicle(type, path, opts) {
   const wp = laneWaypoints(path);
   const v = {
     id: AG.nextId++, type: type, path: path, wp: wp, seg: 0, t: 0, x: wp[0].x, y: wp[0].y, hx: 1, hy: 0,
-    speed: 0, maxSpeed: spec.speed * rand(0.9, 1.1), stopped: 0, ghost: 0, color: pick(spec.colors), len: spec.len, wid: spec.wid,
+    speed: 0, maxSpeed: spec.speed * rand(0.9, 1.1) * (typeof veVehicleWx === 'function' ? veVehicleWx(type) : 1), stopped: 0, ghost: 0, color: pick(spec.colors), len: spec.len, wid: spec.wid,
     siren: !!spec.siren, passenger: opts && opts.passenger || null, dest: opts && opts.dest || null, route: opts && opts.route, dwell: 0,
     ambient: !!(opts && opts.ambient), cleared: -1, life: 0,
     ev: type !== 'bus' && type !== 'race' && type !== 'firetruck' && Math.random() < (SIM.evShare || 0),
