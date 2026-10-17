@@ -692,3 +692,15 @@ body.cbHeat .hlBar{filter:hue-rotate(0deg);}
 #undoBar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
 #undoBar .closeX{background:none;border:0;color:var(--dim);font-size:16px;padding:4px 8px;cursor:pointer;}
 body.mobileUI #undoBar{bottom:calc(var(--above-bar) + 4px);font-size:var(--fs-s);} body.mobileUI #undoBar .btn{min-height:var(--touch);} body.mobileUI #undoBar .closeX{min-width:var(--touch);min-height:var(--touch);}
+
+/* Part 15 — Visual Engine 2.0: city history, photo mode 2.0, visual debug overlay */
+.veEvo{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-bottom:10px;font-size:12px;}
+.veEvo span{padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--dim);}
+.veEvo span.done{color:#8cffc1;border-color:#06d6a0;} .veEvo span.on{color:var(--gold);border-color:var(--gold);font-weight:900;} .veEvo i{font-style:normal;color:var(--dim);}
+.veHistGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;}
+.veHistCard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:6px 8px;min-width:0;}
+.veHistCard b{display:block;font-size:12px;margin-bottom:4px;} .veHistCard canvas{width:100%;height:auto;display:block;}
+.veH3{margin:12px 0 6px;font-size:14px;}
+.veHistTable{width:100%;border-collapse:collapse;font-size:12px;} .veHistTable th,.veHistTable td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;} .veHistTable td:first-child,.veHistTable th:first-child{text-align:left;}
+#photoBar .phDur{display:inline-flex;align-items:center;gap:6px;} #photoBar .phDur input{width:110px;}
+#veDebug{position:fixed;z-index:140;left:8px;bottom:8px;max-width:min(560px,92vw);margin:0;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.72);color:#7fffd4;font:10.5px/1.35 ui-monospace,Consolas,monospace;white-space:pre-wrap;pointer-events:none;}

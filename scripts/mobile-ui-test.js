@@ -8,6 +8,8 @@
    twist, tap-to-place, START → DRAG → END → CONFIRM road drawing — all through CDP touch events.
    Part 14 adds: HUD modes, speed sheet, search, long press + smart selection, double tap, UNDO, critical alerts, quests,
    daily report, minimap 2.0, readable text (no tiny fonts), HUD overlap and a memory-leak loop over the panels.
+   Part 15 adds: Visual Engine night city / rain, Photo Mode 2.0 (HIDE UI) and the landscape → portrait → landscape
+   regression (minimap controls, comment bubble, advisor button never stay at old coordinates).
    Usage:  node scripts/mobile-ui-test.js [--out=dist/mobile-ui] [--only=small-phone,tablet] [--shots]
    Needs Playwright (npm i --no-save playwright && npx playwright install chromium) or PLAYWRIGHT_PATH. */
 const fs = require('fs');
@@ -60,11 +62,15 @@ async function runDevice(browser, base, dev) {
   const touch = async function (type, pts) { await cdp.send('Input.dispatchTouchEvent', { type: type, touchPoints: pts.map(function (p, i) { return { x: p[0], y: p[1], id: p[2] !== undefined ? p[2] : i, radiusX: 4, radiusY: 4, force: 1 }; }) }); };
   const drag = async function (x0, y0, x1, y1, n) { n = n || 10; await touch('touchStart', [[x0, y0]]); for (let i = 1; i <= n; i++) { await touch('touchMove', [[x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n]]); await sleep(16); } await touch('touchEnd', []); await sleep(60); };
   const tap = async function (x, y) { await touch('touchStart', [[x, y]]); await sleep(40); await touch('touchEnd', []); await sleep(120); };
-  const tapSel = async function (sel) { const r = await ev(function (s) { const e = document.querySelector(s); if (!e) return null; const q = e.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; }, sel); if (!r) throw new Error('missing ' + sel); await tap(r[0], r[1]); };
+  /* Part 16 — NO FLAKY TESTS: wait for the state instead of hoping a fixed sleep was long enough on a busy CI runner */
+  const until = async function (fn, arg, ms) { try { await page.waitForFunction(fn, arg, { timeout: ms || 3000, polling: 50 }); return true; } catch (e) { return false; } };
+  const tapSel = async function (sel) { await until(function (s) { const e = document.querySelector(s); if (!e) return false; const q = e.getBoundingClientRect(); return q.width > 0 && q.height > 0; }, sel, 3000); const r = await ev(function (s) { const e = document.querySelector(s); if (!e) return null; const q = e.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; }, sel); if (!r) throw new Error('missing ' + sel); await tap(r[0], r[1]); };
   const audit = function () { return ev(function () { return { ui: mobileUiAudit(false).filter(function (a) { return !a.ok; }), touch: mobileTouchAudit().filter(function (t) { return t.small || t.covered; }) }; }); };
   const check = async function (name, fn) {
     const t0 = Date.now(); let ok = false, detail = '';
     try { const r = await fn(); ok = r.ok; detail = r.detail || ''; } catch (e) { ok = false; detail = 'ERROR ' + e.message; }
+    // layout settles asynchronously (HUD fit, sheet animations, toasts): give it up to 1.5 s; a real overlap still fails
+    await until(function () { try { return mobileUiAudit(false).every(function (a) { return a.ok; }) && !mobileTouchAudit().some(function (t) { return t.small || t.covered; }); } catch (e) { return true; } }, null, 1500);
     let a = { ui: [], touch: [] }; try { a = await audit(); } catch (e) { /* page gone */ }
     if (a.ui.length) { ok = false; detail += ' · OUT OF BOUNDS: ' + a.ui.map(function (x) { return x.id + ' (' + x.x + ',' + x.y + ' ' + x.w + '×' + x.h + ')'; }).join(', '); }
     if (a.touch.length) { ok = false; detail += ' · TOUCH: ' + a.touch.slice(0, 6).map(function (x) { return '"' + x.text + '" ' + x.w + '×' + x.h + (x.covered ? ' covered' : ' small'); }).join(', '); }
@@ -183,7 +189,7 @@ async function runDevice(browser, base, dev) {
     return { ok: n === 9 && sp.v === 5 && sp.closed, detail: n + ' speeds (⏸ 0.5× … 100×) · tap 5× → ' + sp.v + '× · sheet closed ' + sp.closed };
   });
   await check('Search', async function () {
-    await tapSel('#mSearchBtn'); await sleep(250);
+    await tapSel('#mSearchBtn'); await until(function () { return !!document.getElementById('mSearchQ'); });
     await ev(function () { const i = $('mSearchQ'); i.value = 'house'; i.dispatchEvent(new Event('input')); }); await sleep(120);
     const n = await ev(function () { return document.querySelectorAll('#mSearchRes [data-msr]').length; });
     await ev(function () { document.querySelector('[data-msc="district"]').click(); const i = $('mSearchQ'); i.value = ''; i.dispatchEvent(new Event('input')); }); await sleep(100);
@@ -266,6 +272,32 @@ async function runDevice(browser, base, dev) {
     });
     return { ok: r.dMB < 40 && r.dDom < 400, detail: '12× open/close of every panel → heap ' + (r.dMB >= 0 ? '+' : '') + r.dMB + ' MB · DOM ' + (r.dDom >= 0 ? '+' : '') + r.dDom + ' nodes' };
   });
+  await check('Visual Engine (night · rain)', async function () {
+    const r = await ev(function () { setHour(22); setWeather('rain', 2); VE.wx.wet = 1; VE.wx.k = 1; VE.at = 0; veFrame(0.016); render(); const o = { lamps: VE.stats.lamps, wins: VE.stats.windows, tier: VE.tier, phase: dayPhase().name }; setHour(12); setWeather('clear', 1); FX.lock = null; return o; });
+    return { ok: r.lamps > 0 && r.wins > 0, detail: 'tier ' + r.tier + ' · ' + r.phase + ': ' + r.lamps + ' street lights, ' + r.wins + ' lit windows, rain + wet roads' };
+  });
+  await check('Photo mode 2.0', async function () {
+    await ev(function () { enterPhoto(); }); await until(function () { const e = document.getElementById('phTour'); return !!e && e.getBoundingClientRect().width > 0; });
+    const r = await ev(function () { return ['phHide', 'phDepth', 'phPause', 'phA', 'phB', 'phPlay', 'phTour'].filter(function (id) { const e = document.getElementById(id); return e && visibleEl(e); }).length; });
+    await ev(function () { $('phHide').scrollIntoView({ block: 'nearest' }); }); await sleep(80);
+    await tapSel('#phHide'); await until(function () { return document.body.classList.contains('photoHide'); });
+    const hid = await ev(function () { return document.body.classList.contains('photoHide') && !shown($('photoBar')); });
+    await tap(dev.w / 2, dev.h / 2); await until(function () { return !document.body.classList.contains('photoHide'); });
+    await until(function () { try { return mobileUiAudit(false).every(function (a) { return a.ok; }); } catch (e) { return true; } }, null, 1500);
+    const back = await ev(function () { return !document.body.classList.contains('photoHide') && shown($('photoBar')); });
+    const a = await audit(); await ev(function () { exitPhoto(); }); await sleep(150);
+    return { ok: r >= 7 && hid && back && !a.ui.length, detail: r + ' photo controls · HIDE UI ' + hid + ' · tap brings them back ' + back + (a.ui.length ? ' · OUT OF BOUNDS in photo mode: ' + a.ui.map(function (x) { return x.id + ' (' + x.x + ',' + x.y + ' ' + x.w + '×' + x.h + ')'; }).join(', ') : '') };
+  });
+  await check('Rotation regression (landscape → portrait → landscape)', async function () {
+    if (dev.portrait) return { ok: true, detail: 'portrait device' };
+    await ev(function () { S.settings.minimap = true; $('minimap').classList.remove('hidden'); UI.advice = UI.advice || { id: 'rt', msg: 'Rotation test advice' }; MOBX.commentAt = 0; const c = AG.citizens.find(function (x) { return !x.inside; }); if (c) c.bubble = { text: 'Rotation test', until: FX.time + 30 }; setSpeed(1); }); await sleep(1300);
+    const pos = async function () { return ev(function () { const m = $('minimap').getBoundingClientRect(), k = $('mMiniCtl').getBoundingClientRect(), s = MOB.side.getBoundingClientRect(), cm = document.getElementById('mComment'), cr = cm && shown(cm) ? cm.getBoundingClientRect() : null; return { ctl: shown($('mMiniCtl')) ? Math.abs(k.top - (m.bottom + 4)) < 3 && Math.abs(k.right - m.right) < 3 : true, cm: !cr || cr.left >= s.right - 1, adv: !!document.getElementById('mAdvBtn') }; }); };
+    const p0 = await pos();
+    await page.setViewportSize({ width: dev.h, height: dev.w }); await sleep(500);
+    await page.setViewportSize({ width: dev.w, height: dev.h }); await sleep(600);
+    const p1 = await pos(); const a = await audit(); await ev(function () { setSpeed(0); });
+    return { ok: p0.ctl && p1.ctl && p0.cm && p1.cm && !a.ui.length && !a.touch.length, detail: 'minimap controls under the minimap ' + p0.ctl + '→' + p1.ctl + ' · comment bubble right of the side buttons ' + p0.cm + '→' + p1.cm + ' · advisor button ' + p1.adv };
+  });
   await check('Settings', async function () {
     await ev(function () { openSettings('graphics'); }); await sleep(200);
     const tabs = await ev(function () { return Array.from(document.querySelectorAll('[data-s2tab]')).map(function (b) { return b.dataset.s2tab; }); });
@@ -334,6 +366,12 @@ async function runDevice(browser, base, dev) {
   }
   await browser.close(); srv.close();
   report.ok = fail === 0; report.passed = total - fail; report.total = total;
+  /* Part 16: every failure as Test / Expected / Actual / Device / Resolution / Build / Commit */
+  const build = require('../package.json').version, commit = String(process.env.GITHUB_SHA || (function () { try { return require('child_process').execSync('git rev-parse HEAD', { cwd: path.join(__dirname, '..') }).toString().trim(); } catch (e) { return 'local'; } })()).slice(0, 10);
+  report.build = build; report.commit = commit;
+  report.failures = [];
+  report.devices.forEach(function (r) { r.results.forEach(function (x) { if (x.ok) return; report.failures.push({ test: x.name, expected: 'the screen works and every element stays inside the safe area, touch targets ≥ 36 px and not covered', actual: x.detail, device: r.device.name, resolution: r.device.w + '×' + r.device.h + ' @' + r.device.dpr + (r.device.insets ? ' insets ' + r.device.insets.join('/') : ''), build: build, commit: commit }); }); });
+  report.failures.forEach(function (f) { console.log('FAILURE\n  Test: ' + f.test + '\n  Expected: ' + f.expected + '\n  Actual: ' + f.actual + '\n  Device: ' + f.device + '\n  Resolution: ' + f.resolution + '\n  Build: ' + f.build + '\n  Commit: ' + f.commit); });
   fs.writeFileSync(path.join(OUT, 'mobile-ui-report.json'), JSON.stringify(report, null, 2));
   console.log('Mobile UI test: ' + (total - fail) + '/' + total + ' checks passed on ' + report.devices.length + ' screen sizes → ' + path.relative(process.cwd(), path.join(OUT, 'mobile-ui-report.json')));
   process.exit(fail ? 1 : 0);

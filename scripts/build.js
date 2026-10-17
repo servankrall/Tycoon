@@ -29,11 +29,15 @@ function run(bin, argv, opts) {
   const r = cp.spawnSync(bin, argv, Object.assign({ stdio: 'inherit', cwd: ROOT, shell: process.platform === 'win32' }, opts || {}));
   if (r.status !== 0) { console.error('✖ ' + bin + ' failed (exit ' + r.status + ')'); process.exit(r.status || 1); }
 }
-function copyDir(src, dst) {
+/* Source-only files (inputs of scripts/make-icon.js): never shipped in the APK; package.json "files" excludes them from the EXE */
+const SOURCE_ONLY = ['assets/icons/icon.svg', 'assets/icons/icon-256.png'];
+function copyDir(src, dst, base) {
+  base = base || src;
   fs.rmSync(dst, { recursive: true, force: true }); fs.mkdirSync(dst, { recursive: true });
   fs.readdirSync(src, { withFileTypes: true }).forEach(function (e) {
     const s = path.join(src, e.name), d = path.join(dst, e.name);
-    if (e.isDirectory()) copyDir(s, d); else fs.copyFileSync(s, d);
+    if (SOURCE_ONLY.indexOf(path.relative(base, s).replace(/\\/g, '/')) >= 0) return;
+    if (e.isDirectory()) copyDir(s, d, base); else fs.copyFileSync(s, d);
   });
 }
 function buildWindows() {

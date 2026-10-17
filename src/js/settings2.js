@@ -35,7 +35,9 @@ const PAD_ACTIONS = [['select', 'Select', 0], ['cancel', 'Cancel / back', 1], ['
   GSET.hudMode = pickIn(GSET.hudMode, ['full', 'compact', 'minimal'], 'full');
   GSET.powerMode = pickIn(GSET.powerMode, ['performance', 'balanced', 'quality', 'battery'], 'balanced');
   GSET.tutStep = Math.round(n(GSET.tutStep, 0, 0, 20));
-  GSET.miniSize = pickIn(GSET.miniSize, ['s', 'm', 'l'], 'm');                           // minimap 2.0 size
+  GSET.miniSize = pickIn(GSET.miniSize, ['s', 'm', 'l'], 'm');
+  GSET.veQuality = pickIn(GSET.veQuality, ['AUTO', 'LOW', 'MEDIUM', 'HIGH', 'ULTRA'], 'AUTO');            // Part 15: Visual Engine tier
+  GSET.veDebug = !!GSET.veDebug;                           // minimap 2.0 size
   GSET.touchTrainDone = !!GSET.touchTrainDone;
   const nt = {}; NOTIFY_CATS.forEach(function (c) { nt[c[0]] = !(GSET.notify && GSET.notify[c[0]] === false); }); GSET.notify = nt;
   const pm = {}; PAD_ACTIONS.forEach(function (a) { const v = GSET.padMap && GSET.padMap[a[0]]; pm[a[0]] = (v | 0) === v && v >= 0 && v < 20 ? v : a[2]; }); GSET.padMap = pm;
@@ -74,10 +76,18 @@ function deviceBenchmark() {
 }
 function setQualityLevel(lvl, why) {
   if (!S || !S.settings || QUALITY_ORDER.indexOf(lvl) < 0 || S.settings.quality === lvl) return;
+  const prev = S.settings.quality;
   S.settings.quality = lvl; GSET.graphics = lvl; if (GSET.perfMode === 'AUTO') GSET.autoPerfLevel = lvl; saveGSET();
   FX.particles.length = 0;
   AUTOP.log.unshift(new Date().toLocaleTimeString() + ' → ' + lvl + (why ? ' (' + why + ')' : '')); AUTOP.log.length = Math.min(AUTOP.log.length, 12);
-  if (why) { Log.info('AUTO PERFORMANCE: quality → ' + lvl + ' (' + why + ')'); toast('⚙️ AUTO PERFORMANCE: graphics → ' + lvl + ' (' + why + ')', ''); }
+  if (why) { Log.info('AUTO PERFORMANCE: quality → ' + lvl + ' (' + why + ')'); if (QUALITY_ORDER.indexOf(lvl) < QUALITY_ORDER.indexOf(prev)) perfReducedNotice(); }
+}
+/* Part 16: ONE notice per session when the game lowers quality on its own (AUTO PERFORMANCE or the visual governor);
+   restores are silent (logged, listed in Settings → Recent) so the player is never spammed */
+const PERF_NOTICE = { told: false };
+function perfReducedNotice() {
+  if (PERF_NOTICE.told || !STARTED || (typeof selftestActive === 'function' && selftestActive())) return false;
+  PERF_NOTICE.told = true; toast('⚙️ Performance reduced to keep the game stable.', ''); return true;
 }
 /* Apply the chosen mode: fixed quality, or AUTO starting from the benchmark result */
 function applyPerfMode() {
@@ -224,6 +234,10 @@ window.openSettings = function (tab) {
         tog('autoQuality', '⚙️ Adaptive effects (reduce glow and effects below 30 FPS)') + gsTog('shadows', '🌗 ' + T('shadows')) +
         '<div class="small">✨ ' + T('particles') + '</div>' + gsBtns('particles', ['ON', 'REDUCED', 'OFF'], ['ON', 'REDUCED', 'OFF']) +
         tog('deco', '🌳 Procedural decorations') + tog('showFps', '📟 FPS / TPS monitor') +
+        sec('🌆 Visual Engine 2.0') + g2('veQuality', ['AUTO', 'LOW', 'MEDIUM', 'HIGH', 'ULTRA'], ['⚙️ AUTO', 'LOW', 'MEDIUM', 'HIGH', 'ULTRA']) +
+        '<p class="small">Day / night lighting, weather, seasons, street & window lights, clouds, water, crowds and animations. Now: <b>' + (typeof VE !== 'undefined' ? VE.tier : '—') + '</b> · particle budget ' + (typeof veParticleCap === 'function' ? veParticleCap() : '—') + '. AUTO follows the graphics quality and steps down when the device is slow or hot.</p>' +
+        (typeof vePresetsAllowed === 'function' && vePresetsAllowed() ? '<div class="small">🧪 Visual presets (developer / admin)</div><div class="row s2Opts">' + Object.keys(VE_PRESETS).map(function (p) { return '<button class="btn small" data-gs2="vePreset" data-v="' + p + '">' + p + '</button>'; }).join('') + '</div>' : '') +
+        ((BUILD.dev || BUILD.test) ? t2('veDebug', '🐞 Visual debug overlay (development build)') : '') +
         sec('UI theme') + opt('theme', themes.map(function (t) { return t.id; }), themes.map(function (t) { return t.name; })) +
         sec('Building skin') + opt('skin', S.meta.skins, S.meta.skins.map(function (s) { return ({ classic: '🧱 Classic', neon: '🌈 Neon (NG+)', gold: '👑 Gold' })[s]; }));
       if (DESKTOP) { const mode = GSET.borderless ? 'borderless' : GSET.fullscreen ? 'fullscreen' : 'windowed'; h += sec('Display') + '<div class="small">' + T('resolution') + '</div>' + gsBtns('resolution', RESOLUTIONS, RESOLUTIONS.map(function (r) { return r.replace('x', '×'); })) + '<div class="small" style="margin-top:6px">' + T('windowMode') + ' (F11)</div><div class="row s2Opts">' + [['windowed', T('windowed')], ['fullscreen', T('fullscreen')], ['borderless', T('borderless')]].map(function (m) { return '<button class="btn small ' + (mode === m[0] ? 'gold' : '') + '" data-gset="windowMode" data-v="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>' + (PSH.restartNeeded ? '<p class="small">' + T('restartNote') + ' <button class="btn small blue" data-gset="restart" data-v="1">' + T('applyRestart') + '</button></p>' : ''); }
@@ -294,9 +308,10 @@ document.addEventListener('click', function (e) {
     case 'backupNow': { const slot = S.slot || 1; saveGame(true); try { Store.setItem(slotKey(slot) + '_manual', Store.getItem(slotKey(slot))); toast('🗄 Backup saved (slot ' + slot + ')', 'good'); } catch (err) { toast('❌ Backup failed', 'bad'); } return; }
     case 'rollback': confirmDialog('⏪ Roll back to the pre-update save?', 'The slot is replaced by the original save from before the last update (the current one is kept as backup).', 'Roll back', function () { const r = rollbackMigration(S.slot || 1); toast(r.ok ? '✅ ' + r.msg + ' — loading' : '❌ ' + r.reason, r.ok ? 'good' : 'bad'); if (r.ok) loadSlot(S.slot || 1); }); return;
     case 'adminLogout': AdminAuth.logout(); break;
+    case 'vePreset': if (typeof veApplyPreset === 'function' && veApplyPreset(v)) toast('🧪 Visual preset ' + v, 'good'); break;
     case 'adminLockMin': if (!AdminAuth.active()) return; GSET.adminLockMin = clamp(+v, 1, 120); AdminAuth.record('sec_lockMin', v, 'from Settings'); break;
     default: {
-      const bools = ['lowEnd', 'largeTouch', 'tutorialHints', 'rotateCam', 'invertPan', 'edgePan', 'cbHeat', 'safeSpeed'], nums = ['uiScale', 'cameraSpeed'];
+      const bools = ['lowEnd', 'largeTouch', 'tutorialHints', 'rotateCam', 'invertPan', 'edgePan', 'cbHeat', 'safeSpeed', 'veDebug'], nums = ['uiScale', 'cameraSpeed'];
       if (bools.indexOf(k) >= 0) GSET[k] = v === '1'; else if (nums.indexOf(k) >= 0) GSET[k] = +v; else GSET[k] = v;
       if (k === 'perfMode' && v === 'AUTO') GSET.autoPerfLevel = '';
       if (k === 'orientation') applyOrientation();

@@ -1,7 +1,7 @@
 {
   "name": "block-city-tycoon",
   "productName": "BLOCK CITY TYCOON",
-  "version": "2.3.0",
+  "version": "2.4.1",
   "description": "BLOCK CITY TYCOON — Build. Manage. Expand. City-building tycoon for Windows and Android.",
   "main": "main.js",
   "private": true,
@@ -43,7 +43,9 @@
       "preload.js",
       "package.json",
       "electron/**/*",
-      "src/**/*"
+      "src/**/*",
+      "!src/assets/icons/icon.svg",
+      "!src/assets/icons/icon-256.png"
     ],
     "asar": true,
     "win": {

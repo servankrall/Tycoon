@@ -17,6 +17,8 @@ function stPhase() {
   return +m[1] || 1;
 }
 function stWait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+/* wait-until with a deadline (Part 16: no fixed sleeps where a state change is awaited) */
+function stUntil(fn, ms) { const end = performance.now() + (ms || 2000); return new Promise(function (r) { (function tick() { let v = false; try { v = fn(); } catch (e) { v = false; } if (v || performance.now() > end) r(!!v); else setTimeout(tick, 25); })(); }); }
 function stLoad() { try { return JSON.parse(Store.getItem(SELFTEST.key) || 'null'); } catch (e) { return null; } }
 function stStore() { try { Store.setItem(SELFTEST.key, JSON.stringify({ steps: SELFTEST.steps, t0: SELFTEST.t0, data: SELFTEST.data })); } catch (e) { /* storage */ } }
 async function stStep(n, name, fn) {
@@ -434,7 +436,7 @@ async function part12DesktopSteps() {
 
 /* ===================================== Part 12/13: Android APK self-test (24 steps) ===================================== */
 async function runAndroidSelfTest(phase) {
-  SELFTEST.total = 28;
+  SELFTEST.total = 30;
   const native = IS_ANDROID_APP;
   if (phase === 1) {
     SELFTEST.t0 = Date.now(); SELFTEST.steps = []; SELFTEST.data = {};
@@ -484,13 +486,22 @@ async function runAndroidSelfTest(phase) {
         stopCameraMotion(); CAM.rot = 0; CAM.zoom = 1; CAM.x = (spot.x + 0.5) * TILE; CAM.y = (spot.y + 0.5) * TILE; clampCamera(); await stWait(60);   // camera pinned (no fly / easing) before the tap point is computed
         if (UI.ghost && Math.abs(UI.ghost.x - spot.x) <= 2 && Math.abs(UI.ghost.y - spot.y) <= 2) { UI.ghost = { x: spot.x + 4, y: spot.y + 4 }; renderBuildBar(); }   // start away from the spot
         const p = worldToScreen((spot.x + 0.5) * TILE, (spot.y + 0.5) * TILE);
-        stPtr('pointerdown', 1, p.x, p.y); await stWait(40); stPtr('pointerup', 1, p.x, p.y); await stWait(60);    // tap → the ghost moves there (nothing is built yet)
-        const moved = !!UI.ghost && UI.ghost.x === spot.x && UI.ghost.y === spot.y && S.buildings.list.length === n0;
+        // tap → the ghost moves there (nothing is built yet). Waits for the result instead of a fixed delay; if the emulator
+        // stalled so long that the synthetic press itself lasted > 650 ms (a long press, not a tap), the tap is repeated once
+        const atSpot = function () { return !!UI.ghost && UI.ghost.x === spot.x && UI.ghost.y === spot.y; };
+        let retried = '';
+        for (let k = 0; k < 2 && !atSpot(); k++) {
+          const t0 = performance.now(); stPtr('pointerdown', 1, p.x, p.y); await stWait(40); const held = performance.now() - t0; stPtr('pointerup', 1, p.x, p.y);
+          await stUntil(atSpot, 1500);
+          if (!atSpot() && held < 650) break;                     // a real miss: report it
+          if (!atSpot()) retried = ' (press stretched to ' + Math.round(held) + ' ms by a stalled frame → tapped again)';
+        }
+        const moved = atSpot() && S.buildings.list.length === n0;
         const checks = $('mbInfo').querySelectorAll('.mChk').length, state = ($('mbInfo').querySelector('.mbState') || {}).textContent || '';
         const cf = MOB.buildBar.querySelector('[data-mb="confirm"]'); cf.click(); cf.disabled = false; cf.click(); await stWait(100);   // the second fast press is ignored
         const built = S.buildings.list.length - n0;
         MOB.buildBar.querySelector('[data-mb="cancel"]').click();
-        return { ok: cats === 8 && bar && moved && checks === 5 && /✓ VALID/.test(state) && built === 1, detail: cats + ' categories · ' + d.name + ' · build bar ' + bar + ' · tap moved the ghost ' + moved + ' · ' + state.slice(0, 30) + ' · ' + checks + ' checks · CONFIRM ×2 → ' + built + ' building' };
+        return { ok: cats === 8 && bar && moved && checks === 5 && /✓ VALID/.test(state) && built === 1, detail: cats + ' categories · ' + d.name + ' · build bar ' + bar + ' · tap moved the ghost ' + moved + retried + (moved ? '' : ' (ghost ' + (UI.ghost ? UI.ghost.x + ',' + UI.ghost.y : 'none') + ', spot ' + spot.x + ',' + spot.y + ')') + ' · ' + state.slice(0, 30) + ' · ' + checks + ' checks · CONFIRM ×2 → ' + built + ' building' };
       });
     });
     await stStep(7, 'Road Building (START → DRAG → END → CONFIRM)', function () {
@@ -674,6 +685,33 @@ async function runAndroidSelfTest(phase) {
     let valid = false; try { const o = JSON.parse(raw); valid = !!o && !validateSaveObject(o).length; } catch (e) { valid = false; }
     const set = Store.getItem('bct_settings') !== null || Store.keys().some(function (k) { return /settings/.test(k); });
     return { ok: ok && valid && set, detail: 'save written atomically and validated ' + valid + ' (' + Math.round((raw || '').length / 1024) + ' KB) · settings stored separately ' + set + ' · autosave 5/10/15/30 min · ' + esc(SaveProviders.active.name) };
+  });
+  /* ---------- Part 15: VISUAL ENGINE 2.0 ---------- */
+  await stStep(29, 'Visual Engine 2.0 · Night City · Weather', async function () {
+    const h0 = gameHour(), w0 = FX.weather;
+    setHour(22); setWeather('clear', 1); CAM.zoom = 1; const c = cityCentre(); CAM.x = c.x; CAM.y = c.y; clampCamera();
+    VE.at = 0; veFrame(0.016); render();
+    const night = nightFactor() > 0.5, lamps = VE.stats.lamps, wins = VE.stats.windows, phase = dayPhase(22).name;
+    setHour(12); veFrame(0.016); updateSun(); const noon = VE.sun.elev > 0.8 && VE.sun.intensity > 0 && SUN.on !== false;
+    setHour(2); veFrame(0.016); updateSun(); const noSun = VE.sun.intensity === 0 && SUN.on === false;
+    const chain = weatherPath('clear', 'storm').join('>');
+    const cap = veParticleCap(), budgets = VE_TIERS.map(function (t) { return VE_BUDGET[t].particles; }).join('/');
+    const sub = S.buildings.list.find(function (b) { return b.built; });
+    S.p9.util.failures.push({ x: sub.x, y: sub.y, r: 3, until: S.clock.runSec + 20, cause: 'selftest' });
+    VE.at = 0; veFrame(0.016); const out = inOutage(sub.x, sub.y) && /POWER OUTAGE/.test((UI.notifs[0] || {}).msg || '');
+    S.p9.util.failures = S.p9.util.failures.filter(function (f) { return f.cause !== 'selftest'; });
+    setHour(h0); FX.lock = null; FX.weather = w0;
+    return { ok: night && lamps > 0 && wins > 0 && noon && noSun && chain === 'cloudy>rain>heavyrain>storm' && cap > 0 && out, detail: 'tier ' + VE.tier + ' · 22:00 ' + phase + ': ' + lamps + ' street lights, ' + wins + ' lit windows · noon sun ' + noon + ' · 02:00 no direct sun ' + noSun + ' · weather ' + chain + ' · particle budget ' + budgets + ' (now ' + cap + ') · power outage → lights off + notice ' + out };
+  });
+  await stStep(30, 'Photo Mode 2.0 · City Tour · History', async function () {
+    enterPhoto(); await stWait(80);
+    const ctl = ['phHide', 'phDepth', 'phPause', 'phA', 'phB', 'phPlay', 'phTour'].every(function (id) { return !!document.getElementById(id); });
+    $('phPause').click(); const paused = S.settings.speed === 0; $('phPause').click();
+    cineSetPoint('A'); CAM.x += 120; cineSetPoint('B'); const cine = cinePlay(3); stopCinematic();
+    exitPhoto();
+    const tour = startCityTour(), stops = VE.tour ? VE.tour.stops.length : 0; stopCityTour();
+    historySample(true); openCityHistory(); await stWait(60); const graphs = document.querySelectorAll('[data-vehist]').length; closeModal();
+    return { ok: ctl && paused && cine && tour && stops > 0 && graphs === 6 && !!S.p15 && S.p15.hist.length > 0, detail: 'photo controls ' + ctl + ' · pause simulation ' + paused + ' · cinematic A→B ' + cine + ' · city tour ' + stops + ' stops · history graphs ' + graphs + ' (' + S.p15.hist.length + ' samples, saved with the city)' };
   });
   stDone();
 }

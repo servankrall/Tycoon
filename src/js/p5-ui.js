@@ -186,6 +186,9 @@ function paletteCommands() {
   if (BUILD.dev || (typeof AdminAuth !== 'undefined' && AdminAuth.can('debugPanel'))) add('Toggle debug panel (F3)', '🐞', function () { toggleDebug6(); }, 'fps debug');
   add('Smart Advisor 2.0', '🧠', function () { openAdvisor2(); }, 'advisor analysis solution problems');
   add('City timeline & history', '📜', function () { openTimeline2(); }, 'timeline history years');
+  add('City history graphs (Year 1 · 5 · 10 · 25)', '📈', function () { openCityHistory(); }, 'history graphs population money buildings roads happiness land value evolution');
+  add('City tour (automatic camera)', '🎥', function () { startCityTour(); }, 'tour camera cinematic landmarks');
+  add('Photo mode 2.0', '📷', function () { enterPhoto(); }, 'photo screenshot cinematic depth');
   add('World, regions & neighbouring cities', '🌐', function () { openWorldOverview(); }, 'region neighbour chunks world');
   add('Entity inspector (pick on map)', '🔎', function () { EI.pick = true; toast('🎯 Click a citizen, vehicle, building, road or empty land', ''); }, 'inspect entity');
   if (typeof AdminAuth !== 'undefined' && AdminAuth.active()) add('World Control Center (admin, F10)', '🌐', function () { promptEnableAdmin('wc_world'); }, 'admin world control');
@@ -368,6 +371,8 @@ function enterPhoto() {
   firstTime('photo', '📷 Photo mode', 'Rotate the camera, change time and weather, add cinematic bars, then capture a PNG.');
 }
 function exitPhoto() {
+  if (typeof stopCityTour === 'function') { stopCityTour(); stopCinematic(); VE.depth = false; }
+  if (PHOTO.pausedSim) { setSpeed(PHOTO.pausedSim); PHOTO.pausedSim = 0; }
   PHOTO.on = false; PHOTO.rot = 0; PHOTO.hour = null; PHOTO.fov = 1; PHOTO.tilt = 1;
   if (PHOTO.weather) { FX.weather = PHOTO.prevWeather || 'clear'; PHOTO.weather = null; }
   document.body.classList.remove('photo');
@@ -382,8 +387,14 @@ function renderPhotoBar() {
     '<label>Time of day <input type="range" id="phHour" min="0" max="23.9" step="0.1" value="' + hr.toFixed(1) + '"></label>' +
     '<label>Height (building scale) <input type="range" id="phFov" min="0.5" max="1.8" step="0.05" value="' + PHOTO.fov + '"></label>' +
     '<label>Camera angle (tilt) <input type="range" id="phTilt" min="0.55" max="1" step="0.01" value="' + PHOTO.tilt + '"></label>' +
-    '<div class="pbRow">Weather: ' + ['clear', 'rain', 'snow', 'storm', 'heatwave'].map(function (w) { return '<button class="btn small ' + (FX.weather === w ? 'gold' : '') + '" data-phw="' + w + '">' + ({ clear: '☀️', rain: '🌧️', snow: '🌨️', storm: '⛈️', heatwave: '🥵' })[w] + '</button>'; }).join('') +
-    '<button class="btn small ' + (PHOTO.bars ? 'gold' : '') + '" id="phBars">🎬 Bars</button></div>';
+    '<div class="pbRow">Weather: ' + ['clear', 'cloudy', 'rain', 'heavyrain', 'storm', 'fog', 'snow', 'heatwave'].map(function (w) { return '<button class="btn small ' + (FX.weather === w ? 'gold' : '') + '" data-phw="' + w + '" title="' + w + '">' + ({ clear: '☀️', cloudy: '☁️', rain: '🌧️', heavyrain: '⛈️💧', storm: '⛈️', fog: '🌫️', snow: '🌨️', heatwave: '🥵' })[w] + '</button>'; }).join('') +
+    '<button class="btn small ' + (PHOTO.bars ? 'gold' : '') + '" id="phBars">🎬 Bars</button></div>' +
+    /* Part 15 — Photo Mode 2.0: hide UI, depth effect, pause the simulation, cinematic camera A → B, city tour */
+    '<div class="pbRow"><button class="btn small gold" id="phHide">🙈 Hide UI</button><button class="btn small ' + (typeof VE !== 'undefined' && VE.depth ? 'gold' : '') + '" id="phDepth">🔭 Depth effect</button>' +
+    '<button class="btn small ' + (PHOTO.pausedSim ? 'gold' : '') + '" id="phPause">' + (PHOTO.pausedSim ? '▶ Resume simulation' : '⏸ Pause simulation') + '</button></div>' +
+    '<div class="pbRow"><b>🎬 Cinematic</b><button class="btn small" id="phA">📍 Point A</button><button class="btn small" id="phB">📍 Point B</button>' +
+    '<label class="phDur">Duration <input type="range" id="phDur" min="3" max="60" step="1" value="' + (PHOTO.dur || 12) + '"> <span id="phDurV">' + (PHOTO.dur || 12) + ' s</span></label>' +
+    '<button class="btn small green" id="phPlay">▶ Play</button><button class="btn small blue" id="phTour">🎥 City tour</button></div>';
   $('phZoom').oninput = function () { CAM.zoom = +this.value; };
   $('phRot').oninput = function () { PHOTO.rot = +this.value * Math.PI / 180; };
   $('phHour').oninput = function () { PHOTO.hour = +this.value; };
@@ -391,6 +402,14 @@ function renderPhotoBar() {
   $('phTilt').oninput = function () { PHOTO.tilt = +this.value; };
   el.querySelectorAll('[data-phw]').forEach(function (b) { b.onclick = function () { PHOTO.weather = b.dataset.phw; FX.weather = PHOTO.weather; FX.weatherUntil = S.clock.runSec + 99999; renderPhotoBar(); }; });
   $('phBars').onclick = function () { PHOTO.bars = !PHOTO.bars; renderPhotoBar(); };
+  $('phHide').onclick = function () { document.body.classList.add('photoHide'); toast('Tap anywhere (or press Esc) to show the photo controls again', ''); };
+  $('phDepth').onclick = function () { VE.depth = !VE.depth; renderPhotoBar(); };
+  $('phPause').onclick = function () { if (PHOTO.pausedSim) { setSpeed(PHOTO.pausedSim); PHOTO.pausedSim = 0; } else { PHOTO.pausedSim = S.settings.speed || 1; setSpeed(0); } renderPhotoBar(); };
+  $('phA').onclick = function () { cineSetPoint('A'); };
+  $('phB').onclick = function () { cineSetPoint('B'); };
+  $('phDur').oninput = function () { PHOTO.dur = +this.value; $('phDurV').textContent = this.value + ' s'; };
+  $('phPlay').onclick = function () { cinePlay(PHOTO.dur || 12); };
+  $('phTour').onclick = function () { startCityTour(); };
   $('phShot').onclick = function () { exportCityPNG(); };
   $('phUI').onclick = function () { el.classList.toggle('mini'); };
   $('phExit').onclick = exitPhoto;
@@ -578,5 +597,7 @@ function sirenAudioTick(dt) {
   const tl = screenToWorld(0, 0), br = screenToWorld(CW, CH);
   if (!AG.sirens.some(function (v) { return v.x > tl.x && v.x < br.x && v.y > tl.y && v.y < br.y; })) return;
   sirenAcc = 1.4;
+  SND.cur = 'emergency';                                   // Part 16: highest priority in the voice pool
   SND.tone(740, 0.35, 'square', 0.025, 0, 960); SND.tone(960, 0.35, 'square', 0.025, 0.38, 740);
+  SND.cur = 'sfx';
 }

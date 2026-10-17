@@ -252,8 +252,11 @@ function critTarget() {
 }
 function showCriticalAlert(kind, def, force) {
   if (!mobOn() || GSET.critAlerts === false || !STARTED || (selftestActive() && !force)) return;
+  // Part 16: photo mode keeps a clean scene — the alert waits until the player leaves photo mode (a banner over the
+  // world would also swallow the camera drag)
+  if (typeof PHOTO !== 'undefined' && PHOTO.on && !force) { MOBX.critPending = [kind, def]; return; }
   const b = critTarget(), unit = CRIT_UNIT[def.id] || (kind === 'crisis' ? null : 'maintenance');
-  MOBX.crit = { b: b, unit: unit, loc: b ? locOf(b) : null };
+  MOBX.crit = { b: b, unit: unit, loc: b ? locOf(b) : null }; MOBX.critDef = [kind, def];
   let el = document.getElementById('mCrit');
   if (!el) {
     el = document.createElement('div'); el.id = 'mCrit'; document.body.appendChild(el);
@@ -409,13 +412,16 @@ function buildZoomButtons() {
 
 /* ===================================== PHOTO MODE (touch): Hide UI · screenshot without HUD ===================================== */
 function photoTouchBar() {
-  const el = $('photoBar'); if (!el || !mobOn() || el.querySelector('#phHide')) return;
+  const el = $('photoBar'); if (!el || !mobOn()) return;
+  el.classList.add('mScroll');
+  if (el.querySelector('#phHide')) return;
   const row = el.querySelector('.pbRow'); if (!row) return;
   const b = document.createElement('button'); b.className = 'btn small gold'; b.id = 'phHide'; b.textContent = '🙈 HIDE UI';
   b.onclick = function () { document.body.classList.add('photoHide'); toast('Tap anywhere to show the photo controls again', ''); };
   row.insertBefore(b, row.querySelector('#phExit'));
 }
-document.addEventListener('pointerdown', function (e) { if (document.body.classList.contains('photoHide') && !(e.target.closest && e.target.closest('#photoBar'))) { document.body.classList.remove('photoHide'); } }, true);
+document.addEventListener('pointerdown', function (e) { if (document.body.classList.contains('photoHide') && !(e.target.closest && e.target.closest('#photoBar'))) { document.body.classList.remove('photoHide'); e.stopImmediatePropagation(); e.preventDefault(); PHOTO.eatClick = performance.now(); } }, true);   // the restoring tap only brings the controls back
+document.addEventListener('click', function (e) { if (PHOTO.eatClick && performance.now() - PHOTO.eatClick < 600) { PHOTO.eatClick = 0; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
 
 /* ===================================== MOBILE STRESS TEST (development / test builds · authorized developers only) ===================================== */
 function stressAllowed() {
@@ -503,7 +509,8 @@ function mobileExtraBoot() {
   /* minimap emergency markers, photo mode HIDE UI, touch training after the tutorial, HELP in the pause menu */
   wrap('drawMinimap', function (f0) { return function () { const r = f0.apply(this, arguments); try { if (mobOn()) drawMinimapMarks(); } catch (e) { /* markers only */ } return r; }; });
   wrap('renderPhotoBar', function (f0) { return function () { const r = f0.apply(this, arguments); photoTouchBar(); return r; }; });
-  wrap('exitPhoto', function (f0) { return function () { document.body.classList.remove('photoHide'); return f0.apply(this, arguments); }; });
+  wrap('exitPhoto', function (f0) { return function () { document.body.classList.remove('photoHide'); const r = f0.apply(this, arguments); const p = MOBX.critPending; MOBX.critPending = null; if (p && S.events.active.some(function (e) { return e.id === p[1].id; })) showCriticalAlert(p[0], p[1]); return r; }; });
+  wrap('enterPhoto', function (f0) { return function () { const c = MOBX.crit, el = document.getElementById('mCrit'); if (c && el && !el.classList.contains('hidden') && MOBX.critDef) { MOBX.critPending = MOBX.critDef; hideCriticalAlert(); } return f0.apply(this, arguments); }; });
   wrap('endMobileTutorial', function (f0) { return function (skipped) { const r = f0.apply(this, arguments); if (!skipped && !GSET.touchTrainDone) setTimeout(function () { showTouchTraining(false); }, 400); return r; }; });
   wrap('openPauseMenu', function (f0) {
     return function () {

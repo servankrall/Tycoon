@@ -2,7 +2,8 @@
 # version) and by hand (Actions → "Release (Windows + Android)" → Run workflow).
 #   windows : Setup + Portable EXE (dist/windows) → automatic self-test of the built EXE (restart included)
 #   android : debug + signed release APK (dist/android) → automatic self-test of the release APK on an Android emulator
-#   mobile-ui: the Android UI on 8 phone / tablet screen sizes with real touch input (scripts/mobile-ui-test.js)
+#   mobile-ui: the Android UI on 9 phone / tablet screen sizes with real touch input (scripts/mobile-ui-test.js) and the
+#             deep QA run on the Android + Windows profiles (scripts/qa-test.js)
 #   release : one GitHub Release with the EXEs, APKs, both self-test reports and SHA-256 checksums
 name: Release (Windows + Android)
 
@@ -131,6 +132,11 @@ jobs:
         env:
           PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
         run: node scripts/mobile-ui-test.js --out=dist/mobile-ui
+      - name: Deep QA (determinism · saves · weather · outages · camera · speed · events · memory · world sizes · governor · release security)
+        if: always()
+        env:
+          PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
+        run: node scripts/qa-test.js --out=dist/mobile-ui/qa
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -108,6 +108,7 @@ function eventCost(g) { return Math.round(g.cost * costMult() * (SIM.mods ? SIM.
 function hostEvent(id) {
   const g = GLOBAL_EVENTS.find(function (x) { return x.id === id; });
   if (S.city.peakPop < 3000) { toast('🔒 Global events unlock at 3,000 population', 'bad'); sfx('error'); return; }
+  if (g.needs && !countBuilt(g.needs)) { toast('🔒 ' + g.name + ' needs a ' + BUILDINGS[g.needs].name, 'bad'); sfx('error'); return; }
   if (activeEvent(id)) { toast('Already running', 'bad'); return; }
   if ((S.events.cooldowns[id] || 0) > S.clock.runSec) { toast('⏳ On cooldown', 'bad'); sfx('error'); return; }
   const cost = eventCost(g);
@@ -131,7 +132,7 @@ function eventsTick(dt) {
     E.nextDisasterAt = t + RNG.range(1500, 2700) / ngf / difficulty().events / dfq;
   } else if (pop < 400 && E.nextDisasterAt < t + 600) E.nextDisasterAt = t + 600;
   if (S.city.peakPop >= 3000 && t >= E.nextGlobalAt) {
-    if (!E.active.some(function (a) { return a.kind === 'global'; })) startGlobalEvent(RNG.pick(GLOBAL_EVENTS), false);
+    if (!E.active.some(function (a) { return a.kind === 'global'; })) startGlobalEvent(RNG.pick(GLOBAL_EVENTS.filter(function (g) { return !g.needs || countBuilt(g.needs); })), false);
     E.nextGlobalAt = t + RNG.range(700, 1300);
   }
   // Tip bubbles on businesses (tap to collect)

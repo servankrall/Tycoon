@@ -1,6 +1,6 @@
 # 🏙️ BLOCK CITY TYCOON — Windows EXE + Android APK
 
-**Build. Manage. Expand.** · Sürüm **2.3.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
+**Build. Manage. Expand.** · Sürüm **2.4.1** · Kayıt formatı **v12 (CITY_SAVE_V4)**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
 `BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE — ve 2.0.0 ile bir **Android uygulaması** (APK). Windows ve Android **aynı oyun motorunu** kullanır; yalnızca girdi, arayüz, dosya sistemi ve performans katmanı platforma özeldir. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
@@ -39,8 +39,8 @@ Build sonrası:
 ```text
 dist/
 ├── windows/
-│   ├── BLOCK-CITY-TYCOON-Setup-2.3.0.exe       ← kurulum sihirbazı
-│   ├── BLOCK-CITY-TYCOON-Portable-2.3.0.exe    ← kurulumsuz, çift tıkla çalışır
+│   ├── BLOCK-CITY-TYCOON-Setup-2.4.1.exe       ← kurulum sihirbazı
+│   ├── BLOCK-CITY-TYCOON-Portable-2.4.1.exe    ← kurulumsuz, çift tıkla çalışır
 │   └── win-unpacked/BLOCK CITY TYCOON.exe      ← paketlenmiş uygulamanın kendisi
 └── android/
     ├── BLOCK-CITY-TYCOON-Android.apk           ← debug APK (geliştirme)
@@ -499,6 +499,51 @@ portre) HUD modlarını, hız sayfasını, aramayı, uzun bas + akıllı seçimi
 raporu, minimap 2.0'ı, 10 px altı yazıyı, HUD / yan düğme / minimap / araç çubuğu çakışmasını ve panel aç-kapa bellek sızıntısını da
 denetler. Android self-test 28 adım (yeni: platform adapter + lifecycle, UNDO, hız / arama / HUD / kritik uyarı, atomik kayıt).
 
+## 6j. Visual Engine 2.0 — atmosfer ve yaşayan şehir (2.4.0)
+`src/js/visual-engine.js` mevcut canvas renderer'ını (`renderer.js`) genişletir; Windows, Android ve tarayıcıda aynıdır.
+Görseller simülasyonu asla bekletmez: her sistem durumu okur, kalite seviyesine göre atlanır ve kapalıyken bedava çalışır.
+
+| Sistem | Ne yapar |
+|---|---|
+| Kalite | `LOW · MEDIUM · HIGH · ULTRA` (Ayarlar → Graphics → Visual Engine, AUTO = grafik kalitesi). Cihaz yavaşlar / ısınır / bellek azalırsa bir kademe düşer. Particle bütçesi 100 / 300 / 800 / 1500 (Battery Saver: yarısı) |
+| Gündüz / gece | Dawn 06 · Morning 08 · Noon 12 · Evening 17 · Night 20 · Midnight 00 · Late Night 04; gün doğumu/batımı mevsime göre (kış kısa, yaz uzun gün). Güneş açısı, yüksekliği, yoğunluğu, renk sıcaklığı ve gölge yönü saate göre; gece doğrudan güneş yok |
+| Gölgeler | LOW basit · MEDIUM dinamik · HIGH yumuşak · ULTRA yumuşak + temas gölgesi; bulut / sis gölgeleri zayıflatır; mobilde uzak gölgeler atlanır |
+| Gece şehri | yol tipine göre sokak lambaları (küçük her 3., orta her 2., büyük her kare, otoyol iki taraf), ilçe karakterine göre ışık rengi, pencere ışıkları NEAR tek tek · MID kat bazında · FAR tek parlama; saate göre doluluk (evler akşam, ofisler gündüz), neon tabelalar, landmark projektörü, uçak ikaz ışıkları, trafik ışığı parıltısı |
+| Elektrik | kesintide (S.p9.util.failures) bölgedeki sokak lambaları ve trafik ışıkları söner — kavşaklar 4 yönlü dur kuralına geçer (gerçek trafik davranışı), binalar acil durum ışığına geçer; oyuncuya *POWER OUTAGE · ilçe — Street lights: OFF · Traffic lights: OFF · Buildings: emergency power* bildirimi |
+| Araçlar | gece / yağmur / sis / karda farlar, fren lambası, sinyal (bir sonraki dönüşe göre), tekerlek, van ve itfaiye merdiveni, acil araç ışıkları + siren sesi |
+| Hava 2.0 | geçişler asla atlamaz: Clear → Cloudy → Rain → Heavy Rain → Storm (her adım 25 oyun dakikası) ve geri; doğal fırtına artık sürebilir. Islak asfalt, su birikintileri ve halkalar, kar örtüsü birikir / erir, sis bankaları, bulut gölgeleri rüzgârla süzülür. Oynanış: sis / kar / fırtına araç ve acil durum hızını hafifçe düşürür (mevcut trafik, turizm, kaza ve enerji etkilerine ek) |
+| Mevsim / rüzgâr / su | sonbaharda yapraklar yeşil → sarı → turuncu → kahverengi, ilkbaharda çiçek; rüzgâr seviyesi None · Light · Medium · Strong · Storm ağaçları sallar; suda gökyüzü yansıması, kıyı köpüğü, yağmur halkaları |
+| Yaşayan şehir | inşaat işçileri ve kamyonlar, çatı ekipmanı / bahçe / anten (bina seviyesine göre), Mega Mall ve Arcology seviye 5 / 8 / 10'da şekil değiştirir, yaya yürüyüş animasyonu, yaşa göre boy, şemsiye, şapka çeşitliliği; ekrandaki vatandaş çizimi seviyeye göre sınırlı (simülasyon varlığı ≠ görsel nesne) |
+| İlçe kimliği | Downtown, Financial District, Industrial Zone, Old Town, Tourism District, Tech Valley, Suburbs, Luxury Coast, Green Belt — gerçekten inşa edilenlerden hesaplanır; haritada etiket, inspector'da satır, lamba / pencere rengi |
+| Etkinlikler | yeni: Open-Air Concert, Sports Final (stadyum gerekir), Street Market, Public Holiday, City Parade — mutluluk, turizm, gelir ve **trafik** etkisi; kalabalıklar, ışık zincirleri, geçit töreni ana caddede yürür; akşamları eğlence / yemek bölgelerinde gece hayatı |
+| Silüet / evrim | Village → Town → Small City → City → Large City → Metropolis → Mega City; silüette landmark ve megabinalar |
+| Fotoğraf modu 2.0 | serbest kamera, zoom, açı, yükseklik, saat, 8 hava durumu, 🙈 HIDE UI (dokun / Esc ile geri), 🔭 derinlik efekti, ⏸ simülasyonu duraklat, 🎬 sinematik kamera (Point A · Point B · Duration · Play), 🎥 CITY TOUR (downtown, landmark, sanayi, konut, turizm) |
+| Şehir tarihi | 📈 CITY HISTORY: Population, Money, Buildings, Roads, Happiness, Land Value grafikleri + Year 1 / 5 / 10 / 25 karşılaştırması (kayıtla saklanır, `p15`) |
+| Ses | kameranın gördüğüne göre ambiyans (konut sessiz, merkez trafik, sanayi makine, park doğa, havalimanı uçak), gece cırcır böcekleri, rüzgâr; ses havuzu ve öncelik: Emergency > UI > Event > Vehicle > Environment > Ambient; Android'de arka planda durur, sessize alma anında, Battery Saver'da ambiyans azalır |
+| Geliştirici | F3 (yetkili) ve DEVELOPMENT build mobil katmanı: FPS, frame time, simulation time, visible objects, loaded chunks, particles, vehicles, citizens, memory. Görsel ön ayarlar MOBILE LOW / BALANCED / HIGH, DESKTOP HIGH / ULTRA yalnızca geliştirici build veya yetkili admin oturumunda |
+
+Testler: Android self-test 30 adım (yeni 29 Visual Engine · Night City · Weather, 30 Photo Mode 2.0 · City Tour · History);
+`npm run test:mobile-ui` yeni kontroller: gece / yağmur, Photo Mode 2.0, landscape → portrait → landscape regresyonu (minimap
+kontrolleri, yorum balonu, danışman düğmesi eski koordinatta kalmaz).
+
+## 6k. Derin QA, performans ve sağlamlaştırma (2.4.1)
+2.4.1 yeni büyük özellik eklemez; 2.4.0'ı hızlı, kararlı, bellek güvenli ve mobil güvenli yapar.
+
+| Alan | Ne değişti |
+|---|---|
+| Kare bütçesi | F3 (geliştirici / yetkili admin): input · simülasyon · UI · render · Visual Engine · ses · uzun duraklamalar (GC/OS), draw call, ışık, gölge, particle ve son yüklemenin aşamaları |
+| Kalite yöneticisi | 5 sn düşük FPS → bir kademe düşüş, 20 sn bekleme, 30 sn iyi FPS → bir kademe geri; particle bütçesi 100 / 66 / 46 / 27 %; ısınmada ULTRA → HIGH → MEDIUM → LOW; oturumda tek bildirim. Performance = AUTO iken AUTO PERFORMANCE yönetir (çift düşüş yok) |
+| Düşük bellek | detay hemen düşer; 3 dk yeni uyarı gelmezse kalite kademe kademe geri gelir (düşük RAM'li cihazlar hariç) |
+| Toplu çizim | pencereler, lamba renkleri, trafik ışıkları, ıslak yol / kar / su tek path ile; emoji sprite önbelleği |
+| Determinizm | aynı seed → aynı arazi, yollar, binalar, ilçeler ve vatandaşlar; aynı durum → aynı kayıt |
+| Fotoğraf modu | telefonda çubuk ekranın en fazla yarısı; kritik uyarılar fotoğraf modundan çıkınca gösterilir |
+
+Testler:
+```
+node scripts/qa-test.js [--profile=android|windows|both] [--only=save,weather,…] [--out=dist/qa]
+```
+49 kontrol (Android + Windows profili): dosya deposu ve paket denetimi, determinizm, kayıt uyumluluğu (v2.4 / 2.3 / 2.2 / 2.1, v11 göçü, Windows ↔ Android, yedekten kurtarma), kayıt / yükleme süresi, 9 × 9 hava geçişi, mevsim × hava, elektrik kesintisi + gece / hava, araç ışık durumları, sinematik kamera 1 / 5 / 10 / 30 / 60 sn, City Tour, hız 0.5–100×, etkinlik stresi ve temizliği, bellek sızıntısı döngüleri, dünya boyutları, nüfus 10K–500K, kalite yöneticisi, ayarların kalıcılığı, fotoğraf modu dokunma, ses havuzu, ilçe / silüet / bina seviyeleri / inşaat, kontrolcü, pil / arka plan / düşük bellek, draw call bütçesi, en kötü senaryo (MEGA + 500K + gece + fırtına + kesinti + festival + 100×) ve sürüm güvenliği. Hatalar Test / Expected / Actual / Device / Resolution / Build / Commit ile yazılır; CI'da mobile-ui işinde çalışır.
+
 ## 7. Pencere ve ayarlar
 
 - Başlangıç 1280×720, en küçük 1024×600; yeniden boyutlandırma, büyütme, küçültme, tam ekran.
@@ -515,7 +560,7 @@ denetler. Android self-test 28 adım (yeni: platform adapter + lifecycle, UNDO, 
 `electron/updater.js` dört adımı içerir: **Update Checker → Version Check → Download Update → Install Update**. Açmak için `package.json` içindeki `bctUpdate.manifestUrl` alanına https ile yayınlanan bir JSON adresi yazın:
 
 ```json
-{ "version": "2.0.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-2.3.0.exe", "sha256": "…", "notes": "Yeni binalar" }
+{ "version": "2.0.0", "url": "https://example.com/BLOCK-CITY-TYCOON-Setup-2.4.0.exe", "sha256": "…", "notes": "Yeni binalar" }
 ```
 
 Adres boşsa güncelleme kapalıdır. İnternet yoksa oyun sessizce devam eder. İndirilen installer'ın SHA-256 değeri doğrulanır. Kayıtlar kullanıcı klasöründe durduğu için güncellemeden etkilenmez.
@@ -559,5 +604,5 @@ Windows'ta son kontrol:
 
 ```text
 npm install → npm run dev → NEW CITY → şehir oluşur → Ctrl+S → pencereyi kapat (EXIT)
-→ npm run build:windows → dist\windows\BLOCK-CITY-TYCOON-Setup-2.3.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
+→ npm run build:windows → dist\windows\BLOCK-CITY-TYCOON-Setup-2.4.0.exe ile kur → masaüstü kısayolundan aç → CONTINUE → şehir geri gelir
 ```
