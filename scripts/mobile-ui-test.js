@@ -281,7 +281,7 @@ async function runDevice(browser, base, dev) {
     await tap(dev.w / 2, dev.h / 2); await sleep(150);
     const back = await ev(function () { return !document.body.classList.contains('photoHide') && shown($('photoBar')); });
     const a = await audit(); await ev(function () { exitPhoto(); }); await sleep(150);
-    return { ok: r >= 7 && hid && back && !a.ui.length, detail: r + ' photo controls · HIDE UI ' + hid + ' · tap brings them back ' + back };
+    return { ok: r >= 7 && hid && back && !a.ui.length, detail: r + ' photo controls · HIDE UI ' + hid + ' · tap brings them back ' + back + (a.ui.length ? ' · OUT OF BOUNDS in photo mode: ' + a.ui.map(function (x) { return x.id + ' (' + x.x + ',' + x.y + ' ' + x.w + '×' + x.h + ')'; }).join(', ') : '') };
   });
   await check('Rotation regression (landscape → portrait → landscape)', async function () {
     if (dev.portrait) return { ok: true, detail: 'portrait device' };
