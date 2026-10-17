@@ -793,7 +793,7 @@ function drawLights(v, vis) {
     // occupancy: homes light up in the evening, offices by day / early evening, few lights in the small hours
     const occ = emergency ? 0.12 : d.housing ? (h >= 18 && h < 23.5 ? 0.7 : h >= 23.5 || h < 5 ? 0.15 : 0.35) : d.cat === 'Commercial' || d.sector === 'ENTERTAINMENT' || d.sector === 'FOOD' ? (h >= 17 && h < 23.5 ? 0.8 : 0.3) : (h >= 17 && h < 21 ? 0.55 : 0.12);
     const wc = emergency ? [255, 120, 90] : typeof districtLook === 'function' && tier >= 2 ? districtLook(b.x, b.y).window : [255, 214, 120];
-    if (H >= 14 && d.sector !== 'ENERGY' && perf().windows) {
+    if (H >= 14 && d.sector !== 'ENERGY' && (perf().windows || useLod === 'far')) {      // LOW quality: no per-window detail, but the cheap FAR glow keeps the city lit
       ctx.fillStyle = 'rgba(' + wc[0] + ',' + wc[1] + ',' + wc[2] + ',' + ((emergency ? 0.5 : 0.75) * nf) + ')';
       if (useLod === 'far') { ctx.globalAlpha = occ; ctx.fillRect(x0 + 2, fy + 3, w - 4, H - 6); ctx.globalAlpha = 1; wins++; }
       else {
