@@ -812,6 +812,7 @@ async function runProfile(browser, base, dev) {
         await __qa.until(function () { const n = performance.now(); worst = Math.max(worst, n - last); last = n; return n - t0 > 6000; }, 9000);
         setSpeed(0); const ran = (S.clock.gameSec - g0) / 3600;
         const finite = isFinite(S.money) && isFinite(S.budget) && isFinite(P.gdp.total) && Object.keys(E2_GOODS).every(function (g) { return isFinite(e2GoodPrice(g)); });
+        for (let k = 0; k < 3; k++) createSnapshot('QA fill ' + k, true);      // browser storage full of snapshots: the save must still win
         const rate = interestRate(), saved = saveGame(true), n = S.buildings.list.length, kb = Math.round((Store.getItem(slotKey(3)) || '').length / 1024), lr = loadGame(3); resetSim(); resetAgents();
         Object.keys(S.p17.co).forEach(function (k) { if (/^st\d/.test(k)) delete S.p17.co[k]; }); E2.keys = null;
         FX.lock = null; FX.weather = 'clear'; setHour(12);

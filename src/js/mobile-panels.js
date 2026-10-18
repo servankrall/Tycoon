@@ -561,7 +561,10 @@ function mobileToast(msg, cls) {
 function heldPill() {
   let p = document.getElementById('mHeld');
   if (!p) { p = document.createElement('button'); p.id = 'mHeld'; p.onclick = function () { openNotificationCenter(); }; document.body.appendChild(p); }
-  p.textContent = '🔔 +' + MNOTE.held + ' more'; p.classList.remove('hidden');
+  p.textContent = '🔔 +' + MNOTE.held + ' more';
+  // never over an open panel, page or photo mode (it used to cover their buttons) — the bell still counts them
+  const busy = $('modalWrap').classList.contains('show') || (typeof PHOTO !== 'undefined' && PHOTO.on) || (typeof MPAGE !== 'undefined' && MPAGE.el && !MPAGE.el.classList.contains('hidden'));
+  p.classList.toggle('hidden', !!busy); if (busy) return;
   clearTimeout(p._t); p._t = setTimeout(function () { p.classList.add('hidden'); MNOTE.held = 0; }, 3500);
 }
 function refreshBell() { const n = document.getElementById('mBellN'); if (!n) return; n.textContent = MNOTE.unread > 99 ? '99+' : String(MNOTE.unread); n.classList.toggle('hidden', !MNOTE.unread); }

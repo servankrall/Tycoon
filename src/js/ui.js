@@ -42,6 +42,7 @@ function showModal(title, html, onClose) {
   $('modal').classList.remove('p10Wide');
   $('modalTitle').innerHTML = title; $('modalBody').innerHTML = html;
   $('modalWrap').classList.add('show');
+  const held = document.getElementById('mHeld'); if (held) held.classList.add('hidden');   // the "+N more" pill never covers a panel
   modalOnClose = onClose || null;
 }
 function closeModal() {

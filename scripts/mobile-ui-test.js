@@ -317,7 +317,7 @@ async function runDevice(browser, base, dev) {
     await ev(function () { openSettings('graphics'); }); await sleep(200);
     const tabs = await ev(function () { return Array.from(document.querySelectorAll('[data-s2tab]')).map(function (b) { return b.dataset.s2tab; }); });
     let bad = [];
-    for (const t of tabs) { await ev(function (x) { openSettings(x); }, t); await sleep(80); const a = await audit(); if (a.ui.length || a.touch.length) bad.push(t + '[' + a.ui.map(function (x) { return x.id; }).concat(a.touch.map(function (x) { return x.text + (x.covered ? ' covered' : ' small'); })).slice(0, 3).join(';') + ']'); }
+    for (const t of tabs) { await ev(function (x) { openSettings(x); }, t); await until(function () { try { return mobileUiAudit(false).every(function (a) { return a.ok; }) && !mobileTouchAudit().some(function (q) { return q.small || q.covered; }); } catch (e) { return true; } }, null, 1500); const a = await audit(); if (a.ui.length || a.touch.length) bad.push(t + '[' + a.ui.map(function (x) { return x.id; }).concat(a.touch.map(function (x) { return x.text + (x.covered ? ' covered' : ' small'); })).slice(0, 3).join(';') + ']'); }
     await ev(function () { openSettings('camera'); }); await sleep(100);
     const sens = await ev(function () { const r = document.querySelector('[data-mrange="camSens"]'); r.value = 2; r.dispatchEvent(new Event('change', { bubbles: true })); return GSET.camSens; });
     await ev(function () { openSettings('uiscale'); }); await sleep(80);

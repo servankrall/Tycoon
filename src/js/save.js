@@ -281,7 +281,20 @@ function saveGame(silent) {
     //    the whole save; setItem is atomic, so the previous main save stays intact until the new one is written
     if (prev) { try { Store.setItem(backupKey(slot), prev); } catch (e) { try { Store.removeItem(backupKey(slot)); } catch (e2) { /* blocked */ } logSaveError('Backup skipped (' + (e && e.message) + ')'); } }
     try { Store.setItem(slotKey(slot), json); }      // 5. main save
-    catch (e) { try { Store.removeItem(backupKey(slot)); } catch (e2) { /* blocked */ } Store.setItem(slotKey(slot), json); logSaveError('Saved without a backup: storage almost full'); }
+    catch (e) {
+      // storage full: the city save wins over secondary copies — first the stale backup, then the oldest automatic
+      // snapshots (Time Machine snapshots last), until the main save fits
+      try { Store.removeItem(backupKey(slot)); } catch (e2) { /* blocked */ }
+      for (let k = 0; ; k++) {
+        try { Store.setItem(slotKey(slot), json); break; }
+        catch (e3) {
+          const idx = typeof snapshotIndex === 'function' ? snapshotIndex() : [];
+          if (!idx.length || k > 25) throw e3;
+          const old = snapEvict(idx); Store.removeItem(snapKey(old.id)); Store.setItem(SNAP_INDEX, JSON.stringify(idx));
+        }
+      }
+      logSaveError('Storage almost full: saved without a backup' + (typeof snapshotIndex === 'function' ? ' (' + snapshotIndex().length + ' snapshots kept)' : ''));
+    }
     setActiveSlot(slot);
     S.lastSaveTime = Date.now(); S._saveBytes = json.length; S.origin = obj.origin;
     if (!silent) toast('💾 Game saved', 'good');
