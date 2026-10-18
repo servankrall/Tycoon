@@ -10,6 +10,9 @@
    memory-leak loops (photo mode, history, map, weather, season, events, chunk streaming), world sizes SMALL – HUGE,
    population / vehicle scale, the quality governor (step down, cooldown, restore), settings persistence and release
    security (no debug / stress / developer presets in a release build).
+   Part 17 adds the ECONOMY group: deterministic economy, markets, company lifecycle / gradual bankruptcy / unique names,
+   banking (1 % floor, loan stages, credit, mortgages), housing crisis, tax policy, 8 shocks × 4 severities, Economy 2.0
+   save / v2.4.1 migration / Windows ↔ Android, 10,000 companies, the economic stress scenario and the economy UI.
    Every wait is a wait-until with a deadline (no fixed sleeps that flake on a slow runner). A failure prints
    Test / Expected / Actual / Device / Resolution / Build / Commit.
    Usage:  node scripts/qa-test.js [--out=dist/qa] [--only=save,weather] [--profile=android|windows|both]
@@ -643,6 +646,208 @@ async function runProfile(browser, base, dev) {
         return { ran: ran / 3600, fps: fps, worst: worst, maxP: maxP, cap: cap, traffic: traffic, sirens: sirens, veh: AG.vehicles.length, finite: finite, saved: saved, sv: sv, ld: ld, same: !res.isNew && S.buildings.list.length === n, n: n, map: MAP.W };
       });
       return { ok: r.ran > 0 && r.finite && r.maxP <= r.cap && r.saved && r.same, actual: 'MEGA ' + r.map + '×' + r.map + ', ' + r.n + ' buildings · 6 s at 100× = ' + r.ran.toFixed(1) + ' game hours · ' + r.fps + ' FPS (longest frame ' + Math.round(r.worst) + ' ms) · particles peak ' + r.maxP + '/' + r.cap + ' · traffic ' + r.traffic + '% · state finite ' + r.finite + ' · save ' + r.sv.toFixed(0) + ' ms / load ' + r.ld.toFixed(0) + ' ms, city intact ' + r.same + ' (500K citizens and heavy traffic are simulated statistically; drawn agents stay inside the quality caps)' };
+    });
+
+  /* ===================== Part 17: ECONOMY 2.0 ===================== */
+  await ev(function () {
+    window.__e2h = function (n) { for (let i = 0; i < n; i++) { S.clock.gameSec += 3600; S.clock.runSec += 3600 / TIME_SCALE; econTick(1); part17Tick(); } };
+  });
+  await T('economy', 'Economy: deterministic from the same state', 'loading the same save twice and simulating 3 game days gives the same prices, GDP, housing and company numbers',
+    async function () {
+      const r = await ev(async function () {
+        await __qa.world('MEDIUM', 171717, 3); setSpeed(0); __e2h(6); saveGame(true);
+        // discrete results must match exactly; continuous ones within 1e-6 (a render-sampled traffic average adds ~1e-9 float noise)
+        const run = function () { loadGame(3); resetSim(); resetAgents(); E2.hourKey = -1; RNG.seed(S.p6.rng); __e2h(72); const P = S.p17; return { p: Object.keys(E2_GOODS).map(function (g) { return e2GoodPrice(g); }), gdp: [P.gdp.total], h: [P.housing.price], co: Object.keys(P.co).sort().map(function (k) { return P.co[k].stage + Math.round(P.co[k].cr); }).join(), sh: P.shocks.map(function (x) { return x.id + x.sev; }).join(), sent: P.sentiment }; };
+        const A = run(), B = run(), near = function (x, y) { return x.length === y.length && x.every(function (v, i) { return Math.abs(v - y[i]) <= Math.abs(v) * 1e-6 + 1e-9; }); };
+        const diff = ['p', 'gdp', 'h'].filter(function (k) { return !near(A[k], B[k]); }).concat(['co', 'sh', 'sent'].filter(function (k) { return A[k] !== B[k]; }));
+        const rel = Math.abs(A.gdp[0] - B.gdp[0]) / Math.max(1, A.gdp[0]);
+        return { same: diff.length === 0, diff: diff.join(', '), rel: rel, sample: A.p.slice(0, 4).map(function (v) { return v.toFixed(4); }).join('/') };
+      });
+      return { ok: r.same, actual: (r.same ? 'identical (GDP relative difference ' + r.rel.toExponential(1) + ')' : 'DIFFERENT: ' + r.diff) + ' · prices ' + r.sample };
+    });
+
+  await T('economy', 'Market: prices, history, categories, search', 'every product has a price, a daily history and a bounded daily move; category filters and search find products (bread → Bread)',
+    async function () {
+      const r = await ev(function () {
+        __e2h(24 * 5);
+        const rows = e2MarketRows('All', ''), cats = E2_CATS.map(function (c) { return c + ':' + e2MarketRows(c, '').length; });
+        const maxDay = rows.reduce(function (a, x) { return Math.max(a, Math.abs(x.ch)); }, 0);
+        const hist = rows.every(function (x) { return x.hist.length >= 5; }), priced = rows.every(function (x) { return x.price > 0 && isFinite(x.price); });
+        const search = e2MarketRows('All', 'bread').map(function (x) { return x.name; }), mobile = searchItems('bread', 'all').filter(function (x) { return x.cat === 'product'; }).length;
+        return { n: rows.length, cats: cats, maxDay: maxDay, hist: hist, priced: priced, search: search, mobile: mobile };
+      });
+      return { ok: r.n === 18 && r.priced && r.hist && r.maxDay < 0.6 && r.search.indexOf('Bread') >= 0 && r.mobile >= 1 && r.cats.every(function (c) { return +c.split(':')[1] > 0; }), actual: r.n + ' products · ' + r.cats.join(' ') + ' · biggest daily move ' + Math.round(r.maxDay * 100) + '% · history ' + r.hist + ' · search "bread" → ' + r.search.join(', ') + ' (mobile ' + r.mobile + ')' };
+    });
+
+  await T('economy', 'Companies: lifecycle, gradual bankruptcy, unique brand names', 'a failing company restructures before it goes bankrupt; 12 bankruptcies in a row never reuse a retired name and never duplicate a live one',
+    async function () {
+      const r = await ev(function () {
+        const P = S.p17, A = AI_DEFS.filter(function (a) { return S.ai[a.id] && !S.ai[a.id].acquired; });
+        const a = A[0], n0 = a.name; bankruptCompany(a.id); const restr = P.co[a.id].stage === 'Restructuring' && a.name === n0;
+        __e2h(48); bankruptCompany(a.id); const bankrupt = a.name !== n0;
+        const names = [n0, a.name];
+        for (let k = 0; k < 12; k++) { const c = A[k % A.length]; bankruptCompany(c.id); P.co[c.id].restr = gameDay() - 3; bankruptCompany(c.id); names.push(c.name); }
+        const retired = P.names.retired.slice(), live = AI_DEFS.map(function (x) { return x.name; });
+        const reused = live.filter(function (n) { return retired.indexOf(n.replace(/ (GROUP|HOLDINGS|GLOBAL)$/, '')) >= 0; });
+        const dup = live.filter(function (n, i) { return live.indexOf(n) !== i; });
+        const stages = {}; Object.keys(P.co).forEach(function (k) { stages[P.co[k].stage] = (stages[P.co[k].stage] || 0) + 1; });
+        return { restr: restr, bankrupt: bankrupt, retired: retired.length, reused: reused, dup: dup, stages: stages, hq: Object.keys(P.co).every(function (k) { return P.co[k].hq >= 1 && P.co[k].hq <= 5; }) };
+      });
+      return { ok: r.restr && r.bankrupt && r.reused.length === 0 && r.dup.length === 0 && r.retired >= 12 && r.hq, actual: 'restructuring first ' + r.restr + ' → bankruptcy ' + r.bankrupt + ' · ' + r.retired + ' retired names · reused ' + (r.reused.join(', ') || 'none') + ' · duplicates ' + (r.dup.join(', ') || 'none') + ' · stages ' + JSON.stringify(r.stages) };
+    });
+
+  await T('economy', 'Banking: 1 % floor, loan stages, credit scores, mortgages, central bank', 'the interest rate never goes below 1 % (live, crisis choice, save); a late loan becomes Restructuring before Default; scores stay 300–850; mortgage math is right',
+    async function () {
+      const r = await ev(function () {
+        const P = S.p17, r0 = S.p5.econ.rate;
+        S.p5.econ.rate = 0.001; const live = interestRate();
+        const o = JSON.parse(JSON.stringify(buildSaveObject())); o.p5.econ.rate = 0.002; const sp = sanitizeP5(o.p5).econ.rate;
+        S.p5.econ.rate = r0;
+        const a = AI_DEFS.find(function (x) { return S.ai[x.id]; }); S.p11.loans.push({ id: 9999, co: a.id, bank: 0, principal: 10000, rate: 0.05, years: 2, remaining: 10000, perSec: 1, start: 0, arrears: 0, kind: 'qa' });
+        const L = S.p11.loans[S.p11.loans.length - 1]; const seq = [];
+        L.arrears = 50; e2BankingDay(); seq.push(L.stage); S.clock.runSec += 1; e2BankingDay(); seq.push(L.stage); const pay = L.perSec;
+        L.arrears = 99999; S.clock.gameSec += 86400 * 3; e2BankingDay(); seq.push(L.stage);
+        S.p11.loans = S.p11.loans.filter(function (x) { return x.kind !== 'qa'; });
+        const m = mortgageQuote(300000, 0.2, 0.06, 25);
+        const scores = Object.keys(P.co).every(function (k) { return P.co[k].cr >= 300 && P.co[k].cr <= 850; }) && P.bank.citizenScore >= 300 && P.bank.citizenScore <= 850;
+        return { live: live, sp: sp, seq: seq, pay: pay, m: m, scores: scores, ms: P.bank.cb.ms, banks: e2Banks().length };
+      });
+      const mOk = Math.abs(r.m.monthly - 1546.39) < 2 && Math.abs(r.m.loan - 240000) < 1;
+      return { ok: r.live >= 0.01 && r.sp >= 0.01 && r.seq[0] === 'late' && r.seq[1] === 'restructuring' && r.pay < 1 && r.seq[2] === 'default' && r.scores && mOk, actual: 'rate floor live ' + (r.live * 100).toFixed(2) + '% · from save ' + (r.sp * 100).toFixed(2) + '% · loan ' + r.seq.join(' → ') + ' (payment 1 → ' + r.pay.toFixed(2) + ') · scores in range ' + r.scores + ' · mortgage $300K, 20 % down, 6 %, 25 y → ' + r.m.monthly.toFixed(2) + '/month · money supply ' + r.ms.toFixed(1) + ' · banks ' + r.banks };
+    });
+
+  await T('economy', 'Housing: prices, rent, vacancy, affordability, housing crisis', 'districts get price / rent / vacancy / affordability classes; demand ≫ supply raises a HOUSING CRISIS (happiness down) with an economic alert',
+    async function () {
+      const r = await ev(function () {
+        const P = S.p17; e2HousingHour();
+        const d = P.housing.districts, cls = Array.from(new Set(d.map(function (x) { return x.cls; })));
+        const keep = SIM.housingDemandRatio; SIM.housingDemandRatio = 1.6; e2HousingHour(); const crisis = P.housing.crisis;
+        const m = { hap: 0, growth: 1, demand: 1, rev: 1, tour: 1, jobs: 1, importMult: 1, powerDemand: 1, production: 1, rp: 1 }; part17Mods(m);
+        UI.notifs = []; P.alerts = {}; e2AlertsDay(); const alert = UI.notifs.some(function (n) { return /Housing market is overheating/.test(n.msg); });
+        SIM.housingDemandRatio = keep; e2HousingHour();
+        return { n: d.length, cls: cls, price: P.housing.price, rent: P.housing.rent, vac: P.housing.vacancy, crisis: crisis, hap: m.hap, alert: alert };
+      });
+      return { ok: r.n > 0 && r.price > 0 && r.rent > 0 && r.crisis === 1 && r.hap < 0 && r.alert, actual: r.n + ' districts (' + r.cls.join(', ') + ') · price ' + Math.round(r.price) + ' · rent ' + Math.round(r.rent) + ' · vacancy ' + Math.round(r.vac * 100) + '% · crisis ' + r.crisis + ' → happiness ' + r.hap.toFixed(1) + ' · alert ' + r.alert };
+    });
+
+  await T('economy', 'Taxes: 5 tax types, forecast, effects', 'raising business tax forecasts less than proportional revenue and slows growth; a sales tax creates sales-tax revenue; the classic income tax slider stays in sync',
+    async function () {
+      const r = await ev(function () {
+        const T = e2Tax(), keep = Object.assign({}, T);
+        const f = taxForecast('business', 25), prop = f.current * 25 / Math.max(0.001, T.business);
+        E2UI.draft = Object.assign({}, T, { sales: 5, business: 22, income: 14 }); e2ApplyTaxes();
+        econTick(1); const sales = (SIM.B || {}).salesTax || 0, inc = S.city.tax;
+        const m = { hap: 0, growth: 1, demand: 1, rev: 1, tour: 1, jobs: 1, importMult: 1, powerDemand: 1, production: 1, rp: 1 }; part17Mods(m);
+        E2UI.draft = keep; e2ApplyTaxes(); econTick(1);
+        return { cur: f.current, exp: f.expected, prop: prop, biz: f.biz, sales: sales, inc: inc, growth: m.growth, demand: m.demand };
+      });
+      return { ok: r.exp < r.prop && r.biz < 0 && r.sales > 0 && r.inc === 14 && r.growth < 1 && r.demand < 1, actual: 'business 25 %: ' + r.cur.toFixed(2) + ' → ' + r.exp.toFixed(2) + '/s (proportional ' + r.prop.toFixed(2) + ') · business growth ' + (r.biz * 100).toFixed(1) + '% · sales tax revenue ' + r.sales.toFixed(2) + '/s · income tax slider ' + r.inc + '% · growth ×' + r.growth.toFixed(2) + ' · demand ×' + r.demand.toFixed(2) };
+    });
+
+  await T('economy', 'Shocks: 8 types × 4 severities, responses, no game-breaking economy', 'every shock starts, moves its prices / modifiers within bounds, accepts a response and ends; the player\'s money is never reset',
+    async function () {
+      const r = await ev(function () {
+        const P = S.p17, out = [], m0 = S.money;
+        Object.keys(E2_SHOCKS).forEach(function (id) {
+          for (let sev = 0; sev < 4; sev++) {
+            P.shocks = []; const s = e2ShockStart(id, sev, true); s.start = S.clock.runSec - 600;
+            const m = { hap: 0, growth: 1, demand: 1, rev: 1, tour: 1, jobs: 1, importMult: 1, powerDemand: 1, production: 1, rp: 1 }; part17Mods(m);
+            const g = Object.keys(E2_SHOCKS[id].goods)[0], k = g ? e2ShockGoodMult(g) : 1;
+            const resp = e2ShockRespond(id, E2_SHOCKS[id].resp[0][0]).ok;
+            const bad = !isFinite(m.rev) || m.rev < 0.8 || m.rev > 1.2 || m.growth < 0.7 || m.growth > 1.3 || k > 2.5 || k < 1;
+            if (bad || !resp) out.push(id + '/' + E2_SEV[sev] + ' rev ' + m.rev.toFixed(2) + ' growth ' + m.growth.toFixed(2) + ' price ×' + k.toFixed(2));
+          }
+        });
+        P.shocks = [];
+        return { bad: out, money: S.money === m0 };
+      });
+      return { ok: r.bad.length === 0 && r.money, actual: '32 shock / severity combinations · out of bounds: ' + (r.bad.join(' | ') || 'none') + ' · player money untouched ' + r.money };
+    });
+
+  await T('economy', 'Save: Economy 2.0 data, v2.4.1 migration, Windows ↔ Android', 'the save carries markets, prices, companies, banking, loans, housing, trade, GDP, inflation, cycle and shocks; a v2.4.1 save without them loads with defaults; a Windows save keeps them on Android',
+    async function () {
+      const r = await ev(function () {
+        __e2h(24); saveGame(true);
+        const raw = JSON.parse(Store.getItem(slotKey(3))), P = raw.p17;
+        const keys = ['goods', 'co', 'bank', 'housing', 'gdp', 'infl', 'shocks', 'tax', 'hist', 'jobs', 'sentiment'].filter(function (k) { return P && P[k] !== undefined; });
+        const pr0 = P.goods.bread.h.length, co0 = Object.keys(P.co).length;
+        const old = JSON.parse(JSON.stringify(raw)); delete old.p17; old.header.gameVersion = '2.4.1'; Store.setItem(slotKey(3), JSON.stringify(old)); const lo = loadGame(3); const oldOk = !lo.isNew && !!S.p17 && Object.keys(S.p17.goods).length === 18 && validateImport(old).length === 0;
+        __e2h(30); const grows = S.p17.goods.bread.h.length >= 1;
+        const win = JSON.parse(JSON.stringify(raw)); win.header.platform = 'windows'; win.origin.platform = 'windows'; Store.setItem(slotKey(3), JSON.stringify(win)); loadGame(3);
+        const keep = S.p17.goods.bread.h.length === pr0 && Object.keys(S.p17.co).length === co0;
+        const bad = JSON.parse(JSON.stringify(raw)); bad.p17.goods.bread.p = 'x'; bad.p17.co.evil = { stage: '<script>', cr: 1e9 }; bad.p17.tax = { income: 999, business: -5 }; Store.setItem(slotKey(3), JSON.stringify(bad)); loadGame(3);
+        const san = isFinite(S.p17.goods.bread.p) && S.p17.co.evil.stage === 'Startup' && S.p17.co.evil.cr === 850 && S.p17.tax.income <= 30 && S.p17.tax.business >= 0;
+        return { keys: keys, oldOk: oldOk, grows: grows, keep: keep, san: san, kb: Math.round(JSON.stringify(raw.p17).length / 1024) };
+      });
+      return { ok: r.keys.length === 11 && r.oldOk && r.grows && r.keep && r.san, actual: 'saved ' + r.keys.join(', ') + ' (' + r.kb + ' KB) · v2.4.1 save → defaults ' + r.oldOk + ', keeps running ' + r.grows + ' · Windows → ' + (dev.mobile ? 'Android' : 'Windows') + ' kept ' + r.keep + ' · bad values sanitised ' + r.san };
+    });
+
+  await T('economy', 'Large city: 500K citizens · 10,000 companies', 'with 10,000 companies the hourly pass stays batched (≤ 500 companies) and fast, the daily pass finishes, the company list shows one page (25 rows), search stays quick',
+    async function () {
+      const r = await ev(async function () {
+        const P = S.p17; S.city.population = 500000;
+        const secs = ['FOOD', 'SHOPPING', 'TECHNOLOGY', 'FINANCE', 'ENTERTAINMENT', 'INDUSTRY', 'HOUSING'];
+        for (let i = 0; i < 10000; i++) { const c = e2NewCo(secs[i % 7], 'QA CO ' + i, 1); c.synthetic = true; c.rev = 50 + (i % 97); c.cash = 5000; P.co['qa' + i] = c; }
+        E2.keys = null;
+        let worstH = 0; for (let h = 0; h < 6; h++) { S.clock.gameSec += 3600; S.clock.runSec += 50; const t = performance.now(); part17Tick(); worstH = Math.max(worstH, performance.now() - t); }
+        const d0 = performance.now(); S.clock.gameSec += 86400; S.clock.runSec += 1200; part17Tick(); const dayMs = performance.now() - d0;
+        openEconomy2('companies'); await __qa.frames(2); const rows = document.querySelectorAll('#e2Root tr[data-e2co]').length, pager = (document.querySelector('#e2Root .e2Pager') || {}).innerText || '';
+        const s0 = performance.now(); searchItems('qa co 99', 'all'); const sMs = performance.now() - s0; closeModal();
+        Object.keys(P.co).forEach(function (k) { if (/^qa\d/.test(k)) delete P.co[k]; }); E2.keys = null; S.city.population = 20000;
+        return { worstH: worstH, dayMs: dayMs, rows: rows, pager: pager.replace(/\s+/g, ' '), sMs: sMs };
+      });
+      return { ok: r.worstH < 120 && r.dayMs < 1500 && r.rows === 25 && /10,0\d\d companies|10\.0\d\dK? companies|1\d\.?\d*K companies/.test(r.pager) && r.sMs < 300, actual: 'hourly pass worst ' + r.worstH.toFixed(1) + ' ms · daily pass ' + r.dayMs.toFixed(0) + ' ms · list rows ' + r.rows + ' (' + r.pager + ') · search ' + r.sMs.toFixed(1) + ' ms' };
+    });
+
+  await T('economy', 'Economic stress: MEGA · 500K · 10K companies · high inflation · housing + banking crisis · trade disruption · recession · storm · outage', 'the game keeps running at 100× for 6 s (no errors, finite state, the rate ≥ 1 %), the city still saves and loads',
+    async function () {
+      const r = await ev(async function () {
+        await __qa.world('MEGA', 919191, 3);
+        const P = S.p17; S.city.population = 500000; S.p6.econ.infl = 0.12; SIM.housingDemandRatio = 1.8;
+        for (let i = 0; i < 10000; i++) { const c = e2NewCo(['FOOD', 'SHOPPING', 'INDUSTRY'][i % 3], 'STRESS ' + i, 1); c.synthetic = true; c.rev = 40; P.co['st' + i] = c; } E2.keys = null;
+        e2ShockStart('banking', 3, true); e2ShockStart('trade', 2, true); forceEconPhase('RECESSION');
+        startDisaster(DISASTERS.find(function (d) { return d.id === 'storm'; })); FX.lock = 'storm'; FX.weather = 'storm'; FX.weatherUntil = S.clock.gameSec + 99999; setHour(22);
+        const c = cityCentre(); S.p9.util.failures.push({ x: Math.floor(c.x / TILE), y: Math.floor(c.y / TILE), r: 8, until: S.clock.runSec + 600, cause: 'qa' });
+        setSpeed(100); const t0 = performance.now(), g0 = S.clock.gameSec; let worst = 0, last = performance.now();
+        await __qa.until(function () { const n = performance.now(); worst = Math.max(worst, n - last); last = n; return n - t0 > 6000; }, 9000);
+        setSpeed(0); const ran = (S.clock.gameSec - g0) / 3600;
+        const finite = isFinite(S.money) && isFinite(S.budget) && isFinite(P.gdp.total) && Object.keys(E2_GOODS).every(function (g) { return isFinite(e2GoodPrice(g)); });
+        const rate = interestRate(), saved = saveGame(true), n = S.buildings.list.length, kb = Math.round((Store.getItem(slotKey(3)) || '').length / 1024), lr = loadGame(3); resetSim(); resetAgents();
+        Object.keys(S.p17.co).forEach(function (k) { if (/^st\d/.test(k)) delete S.p17.co[k]; }); E2.keys = null;
+        FX.lock = null; FX.weather = 'clear'; setHour(12);
+        return { ran: ran, worst: worst, fps: Math.round(PERF.fps), finite: finite, rate: rate, saved: saved, same: !lr.isNew && S.buildings.list.length === n, n: n, n2: S.buildings.list.length, isNew: lr.isNew, notes: lr.notes.join(' '), kb: kb, phase: e2Phase(), sent: P.sentiment, prof: E2.prof };
+      });
+      return { ok: r.ran > 0 && r.finite && r.rate >= 0.01 && r.saved && r.same, actual: '6 s at 100× = ' + r.ran.toFixed(1) + ' game hours · longest frame ' + Math.round(r.worst) + ' ms · ' + r.fps + ' FPS · economy hourly ' + r.prof.hour.toFixed(1) + ' ms / daily ' + r.prof.day.toFixed(0) + ' ms · ' + r.phase + ' · sentiment ' + r.sent + ' · rate ' + (r.rate * 100).toFixed(2) + '% · finite ' + r.finite + ' · save ' + r.kb + ' KB, load intact ' + r.same + (r.same ? '' : ' (' + r.n + ' → ' + r.n2 + ' buildings, new ' + r.isNew + ', ' + r.notes + ')') };
+    });
+
+  await T('economy', 'Economy UI: dashboard, every tab, mobile layout', 'the ECONOMY center opens from the city / economy page, every tab renders, nothing is outside the screen, the company list is paginated',
+    async function () {
+      const r = await ev(async function () {
+        await __qa.world('SMALL', 424242, 3); setSpeed(0); __e2h(30);
+        const out = []; let oob = [];
+        for (const t of E2_TABS) {
+          openEconomy2(t[0]); await __qa.frames(2);
+          const root = document.getElementById('e2Root'), len = root ? root.innerText.length : 0;
+          if (typeof mobileUiAudit === 'function' && document.body.classList.contains('mobileUI')) oob = oob.concat(mobileUiAudit(false).filter(function (a) { return !a.ok; }).map(function (a) { return t[0] + ':' + a.id; }));
+          const wide = Array.from(root.querySelectorAll('.e2Tile, .e2Card')).filter(function (e) { const q = e.getBoundingClientRect(); return q.right > innerWidth + 1 || q.left < -1; }).length;
+          out.push(t[0] + ':' + len + (wide ? ' (' + wide + ' outside)' : ''));
+        }
+        closeModal();
+        return { out: out, oob: oob };
+      });
+      const bad = r.out.filter(function (x) { return /outside/.test(x) || +x.split(':')[1].split(' ')[0] < 60; });
+      return { ok: bad.length === 0 && r.oob.length === 0, actual: r.out.join(' · ') + (r.oob.length ? ' · OUT OF BOUNDS ' + r.oob.join(', ') : '') };
+    });
+
+  await T('security', 'Economy admin tools are OWNER / ADMIN only', 'a normal player cannot start shocks, force the cycle or run ticks; the economy debug lines and admin view are hidden',
+    async function () {
+      const r = await ev(function () {
+        const n0 = S.p17.shocks.length, ph0 = S.p5.econ.phase;
+        const a = adminEcon2('shock:energy:3'), b = adminEcon2('phase', 'BOOM'), c = adminEcon2('endShocks');
+        const pal = paletteCommands().filter(function (x) { return /start .*shock|force .*cycle|economic tick|econ2/i.test(x.label); }).length;   // the player's own "Supply shocks" view is not an admin tool
+        return { denied: a === undefined && b === undefined && c === undefined, shocks: S.p17.shocks.length === n0, phase: S.p5.econ.phase === ph0, pal: pal, f3: DBG.on };
+      });
+      return { ok: r.denied && r.shocks && r.phase && r.pal === 0 && !r.f3, actual: 'admin economy commands denied ' + r.denied + ' · shocks unchanged ' + r.shocks + ' · cycle unchanged ' + r.phase + ' · palette admin entries ' + r.pal + ' · F3 ' + r.f3 };
     });
 
   await T('security', 'Release build hides debug, stress test and developer presets', 'release profile: no F3 debug, no visual debug overlay, presets refused, no stress test / test generator / debug commands for a normal player',

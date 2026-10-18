@@ -164,14 +164,14 @@ function stockTick(dt) {
   for (const cid in S.companies.list) {
     const c = S.companies.list[cid], cs = SIM.companies[cid] || { profit: 0, assets: 0 };
     const fundamental = Math.max(0.05, (Math.max(0, cs.profit) * 3600 + cs.assets * 0.5 + c.level * 50000) / SHARES_TOTAL * (crash ? 0.7 : 1));
-    c.price = Math.max(0.1, c.price + (fundamental - c.price) * 0.03 * dt + c.price * gauss() * 0.012 * Math.sqrt(dt));
+    c.price = Math.max(0.1, c.price + (fundamental - c.price) * 0.03 * dt + c.price * simGauss() * 0.012 * Math.sqrt(dt));
   }
   NPC_STOCKS.forEach(function (s) {
     const st = S.companies.stocks[s.id];
     const sec = s.link;
     const trend = SIM.saleMult[sec] !== undefined ? (SIM.saleMult[sec] - 1) * 0.0003 : 0;
     const target = s.base * (1 + Math.log10(1 + S.city.population) / 6);
-    st.price = Math.max(0.5, st.price * (1 + gauss() * s.vol * 0.5 * Math.sqrt(dt) + trend * dt + (crash ? -0.003 * dt : 0)) + (target - st.price) * 0.006 * dt);
+    st.price = Math.max(0.5, st.price * (1 + simGauss() * s.vol * 0.5 * Math.sqrt(dt) + trend * dt + (crash ? -0.003 * dt : 0)) + (target - st.price) * 0.006 * dt);
   });
 }
 function recordStockHistory() {

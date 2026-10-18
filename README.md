@@ -1,6 +1,6 @@
 # 🏙️ BLOCK CITY TYCOON — Windows EXE + Android APK
 
-**Build. Manage. Expand.** · Sürüm **2.4.1** · Kayıt formatı **v12 (CITY_SAVE_V4)**
+**Build. Manage. Expand.** · Sürüm **2.5.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
 `BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE — ve 2.0.0 ile bir **Android uygulaması** (APK). Windows ve Android **aynı oyun motorunu** kullanır; yalnızca girdi, arayüz, dosya sistemi ve performans katmanı platforma özeldir. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
@@ -39,8 +39,8 @@ Build sonrası:
 ```text
 dist/
 ├── windows/
-│   ├── BLOCK-CITY-TYCOON-Setup-2.4.1.exe       ← kurulum sihirbazı
-│   ├── BLOCK-CITY-TYCOON-Portable-2.4.1.exe    ← kurulumsuz, çift tıkla çalışır
+│   ├── BLOCK-CITY-TYCOON-Setup-2.5.0.exe       ← kurulum sihirbazı
+│   ├── BLOCK-CITY-TYCOON-Portable-2.5.0.exe    ← kurulumsuz, çift tıkla çalışır
 │   └── win-unpacked/BLOCK CITY TYCOON.exe      ← paketlenmiş uygulamanın kendisi
 └── android/
     ├── BLOCK-CITY-TYCOON-Android.apk           ← debug APK (geliştirme)
@@ -543,6 +543,23 @@ Testler:
 node scripts/qa-test.js [--profile=android|windows|both] [--only=save,weather,…] [--out=dist/qa]
 ```
 49 kontrol (Android + Windows profili): dosya deposu ve paket denetimi, determinizm, kayıt uyumluluğu (v2.4 / 2.3 / 2.2 / 2.1, v11 göçü, Windows ↔ Android, yedekten kurtarma), kayıt / yükleme süresi, 9 × 9 hava geçişi, mevsim × hava, elektrik kesintisi + gece / hava, araç ışık durumları, sinematik kamera 1 / 5 / 10 / 30 / 60 sn, City Tour, hız 0.5–100×, etkinlik stresi ve temizliği, bellek sızıntısı döngüleri, dünya boyutları, nüfus 10K–500K, kalite yöneticisi, ayarların kalıcılığı, fotoğraf modu dokunma, ses havuzu, ilçe / silüet / bina seviyeleri / inşaat, kontrolcü, pil / arka plan / düşük bellek, draw call bütçesi, en kötü senaryo (MEGA + 500K + gece + fırtına + kesinti + festival + 100×) ve sürüm güvenliği. Hatalar Test / Expected / Actual / Device / Resolution / Build / Commit ile yazılır; CI'da mobile-ui işinde çalışır.
+
+## 6l. Economy Engine 2.0 — piyasalar, şirketler, konut, bankacılık, ticaret (2.5.0)
+`src/js/economy2.js` (motor) ve `src/js/economy2-ui.js` (📊 EKONOMİ MERKEZİ) mevcut ekonomiyi genişletir; durum `S.p17` olarak kaydedilir.
+
+| Alan | Ne yapar |
+|---|---|
+| Piyasa | 18 ürün: arz, talep, üretim, tüketim, ithalat, ihracat, fiyat geçmişi; 7 kategori; arama |
+| Şirketler | yaşam döngüsü, kademeli iflas (önce yeniden yapılanma), HQ 1–5, kredi notu, fiyatlama AI, pazar payı, benzersiz marka adları; 10.000 şirkete kadar gruplu simülasyon |
+| İş ve hane | açık pozisyonlar, ortalama maaş / gelir, maaş baskısı, işsizlik seviyesi, hane bütçesi, tüketici harcaması |
+| Konut | ilçe fiyatı, kira, boşluk, erişilebilirlik, konut krizi, konut kredisi hesaplayıcı |
+| Bankacılık | merkez bankası (%1 taban), para arzı, acil likidite, kredi aşamaları, kredi notları |
+| Enflasyon ve döngü | kategori enflasyonu, beklentiler; Expansion · Peak · Slowdown · Recession · Recovery |
+| Şoklar | 8 ekonomik şok × 4 şiddet, ECONOMIC ALERT, politika yanıtları |
+| Ticaret, vergi, GSYH | ürün bazında ticaret dengesi; 5 vergi türü ve tahmin; sektörel GSYH, kişi başı GSYH |
+| Arayüz | panel, arama, komut paleti, ısı haritaları, danışman, günlük rapor, mobil düzen |
+
+Testler: masaüstü self-test adım 54, Android self-test adım 31, `scripts/qa-test.js` ekonomi grubu (determinizm, piyasa, şirketler, bankacılık, konut, vergiler, 32 şok, kayıt / göç / çapraz platform, 10.000 şirket, ekonomik stres, arayüz, güvenlik) ve mobil UI testinde EKONOMİ MERKEZİ.
 
 ## 7. Pencere ve ayarlar
 

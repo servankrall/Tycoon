@@ -9,7 +9,7 @@
    freshly built EXE) or in a browser with  index.html?selftest . It plays through the 20 checks of the release test plan,
    restarts the EXE in the middle (save → restart → load) and writes a JSON report to logs/selftest.json (and <file>).
    The self-test uses its own temporary user-data folder, so it never touches real cities. */
-const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 53, running: false };
+const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 54, running: false };
 function stPhase() {
   if (DESKTOP && BCT.selftest && BCT.selftest.phase) return BCT.selftest.phase;
   if (IS_ANDROID_APP && ANDROID_INFO.selftest) return ANDROID_INFO.selftestPhase || 1;
@@ -270,6 +270,7 @@ async function runSelfTest() {
     const sc = S.p10 && S.p10.genScore;
     return { ok: !!res && res.steps === 22 && !!sc && sc.overall >= 60 && STARTED, detail: res ? res.steps + '-step pipeline · ' + fmt(res.population) + ' citizens · ' + res.buildings + ' buildings · score ' + (sc ? sc.overall : '?') + '/100 · ' + res.seconds.toFixed(1) + ' s' : 'generation failed' };
   });
+  await stStep(54, 'Economy 2.0 · Market · Companies · Housing · Banking', stEconomy2);
   stDone();
 }
 /* ===================================== Part 12 helpers ===================================== */
@@ -436,7 +437,7 @@ async function part12DesktopSteps() {
 
 /* ===================================== Part 12/13: Android APK self-test (24 steps) ===================================== */
 async function runAndroidSelfTest(phase) {
-  SELFTEST.total = 30;
+  SELFTEST.total = 31;
   const native = IS_ANDROID_APP;
   if (phase === 1) {
     SELFTEST.t0 = Date.now(); SELFTEST.steps = []; SELFTEST.data = {};
@@ -713,7 +714,29 @@ async function runAndroidSelfTest(phase) {
     historySample(true); openCityHistory(); await stWait(60); const graphs = document.querySelectorAll('[data-vehist]').length; closeModal();
     return { ok: ctl && paused && cine && tour && stops > 0 && graphs === 6 && !!S.p15 && S.p15.hist.length > 0, detail: 'photo controls ' + ctl + ' · pause simulation ' + paused + ' · cinematic A→B ' + cine + ' · city tour ' + stops + ' stops · history graphs ' + graphs + ' (' + S.p15.hist.length + ' samples, saved with the city)' };
   });
+  await stStep(31, 'Economy 2.0 · Market · Companies · Housing · Banking', stEconomy2);
   stDone();
+}
+/* ===================================== Part 17: ECONOMY 2.0 (shared by the desktop and Android runs) ===================================== */
+async function stEconomy2() {
+  if (!S.p17) return { ok: false, detail: 'no Economy 2.0 state' };
+  const P = S.p17, hours = function (n) { for (let i = 0; i < n; i++) { S.clock.gameSec += 3600; S.clock.runSec += 3600 / TIME_SCALE; econTick(1); part17Tick(); } };
+  P.day = 0; E2.hourKey = -1; hours(24 * 3);
+  const goods = Object.keys(E2_GOODS), priced = goods.filter(function (g) { return e2GoodPrice(g) > 0; }).length, hist = P.goods.bread.h.length;
+  const maxDay = goods.reduce(function (a, g) { return Math.max(a, Math.abs(e2Change(g))); }, 0);
+  const reg = AI_DEFS.every(function (a) { const c = P.co[a.id]; return c && E2_STAGES.indexOf(c.stage) >= 0 && c.hq >= 1 && c.hq <= 5 && c.cr >= 300 && c.cr <= 850; });
+  // gradual bankruptcy: the first trigger restructures, a company still failing two days later goes bankrupt under a NEW, never reused name
+  const a = AI_DEFS.find(function (x) { return S.ai[x.id] && !S.ai[x.id].acquired; }), n0 = a.name;
+  bankruptCompany(a.id); const restr = P.co[a.id].stage === 'Restructuring' && a.name === n0;
+  hours(48); bankruptCompany(a.id); const renamed = a.name !== n0 && P.names.retired.indexOf(n0.replace(/ (GROUP|HOLDINGS|GLOBAL)$/, '')) >= 0 && P.names.retired.indexOf(a.name) < 0;
+  const r0 = S.p5.econ.rate; S.p5.econ.rate = 0.002; const floor = interestRate() >= 0.01; S.p5.econ.rate = r0;
+  P.shocks = P.shocks.filter(function (x) { return x.id !== 'food'; });            // a random food shock may already run
+  const sh = e2ShockStart('food', 2, true), resp = e2ShockRespond('food', 'imports').ok; P.shocks = P.shocks.filter(function (x) { return x.id !== 'food'; });
+  const o = buildSaveObject(), errs = validateImport(JSON.parse(JSON.stringify(o)));
+  const old = sanitizeP17(undefined), oldOk = Object.keys(old.goods).length === goods.length && old.tax === null;
+  let ui = 0; for (let i = 0; i < E2_TABS.length; i++) { openEconomy2(E2_TABS[i][0]); await stWait(20); if ((document.getElementById('e2Root') || {}).innerText.length > 80) ui++; } closeModal();
+  return { ok: priced === goods.length && hist >= 3 && maxDay < 0.6 && reg && restr && renamed && floor && !!sh && resp && !errs.length && !!o.p17 && oldOk && ui === E2_TABS.length,
+    detail: priced + '/' + goods.length + ' products priced · ' + hist + ' daily closes · biggest daily move ' + Math.round(maxDay * 100) + '% · ' + Object.keys(P.co).length + ' companies with lifecycle/HQ/credit ' + reg + ' · restructuring first ' + restr + ' → bankrupt as ' + a.name + ' (old name retired) ' + renamed + ' · interest floor 1 % ' + floor + ' · food shock ' + !!sh + ' + response ' + resp + ' · save p17 ' + (!!o.p17) + ', import errors ' + errs.length + ', old save defaults ' + oldOk + ' · ' + ui + '/' + E2_TABS.length + ' economy tabs' };
 }
 /* starts once the boot sequence has finished */
 (function () {

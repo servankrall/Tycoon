@@ -8,6 +8,7 @@
    twist, tap-to-place, START → DRAG → END → CONFIRM road drawing — all through CDP touch events.
    Part 14 adds: HUD modes, speed sheet, search, long press + smart selection, double tap, UNDO, critical alerts, quests,
    daily report, minimap 2.0, readable text (no tiny fonts), HUD overlap and a memory-leak loop over the panels.
+   Part 17 adds the ECONOMY CENTER (tabs by touch, cards inside the screen).
    Part 15 adds: Visual Engine night city / rain, Photo Mode 2.0 (HIDE UI) and the landscape → portrait → landscape
    regression (minimap controls, comment bubble, advisor button never stay at old coordinates).
    Usage:  node scripts/mobile-ui-test.js [--out=dist/mobile-ui] [--only=small-phone,tablet] [--shots]
@@ -170,6 +171,20 @@ async function runDevice(browser, base, dev) {
     const r = await ev(function () { const cv = $('mGraph'); const w = cv.parentNode.getBoundingClientRect(), c = cv.getBoundingClientRect(); return { n: document.querySelectorAll('#mPage .mStatCard').length, tabs: document.querySelectorAll('#mPage [data-metab]').length, fit: c.width <= w.width + 1 && c.right <= window.innerWidth }; });
     await tapSel('#mPage [data-mpx]'); await sleep(100);
     return { ok: r.n >= 6 && r.tabs >= 3 && r.fit, detail: r.n + ' cards · ' + r.tabs + ' economy tabs · graph fits the screen ' + r.fit };
+  });
+  await check('Economy center (Part 17)', async function () {
+    await ev(function () { closeMobilePage(); }); await tapSel('[data-mbar="economy"]'); await until(function () { return !!document.querySelector('#mPage [data-mpg="econ2"]'); });
+    await ev(function () { document.querySelector('#mPage [data-mpg="econ2"]').scrollIntoView({ block: 'center' }); }); await sleep(80);
+    await tapSel('#mPage [data-mpg="econ2"]'); await until(function () { return !!document.getElementById('e2Root'); });
+    const seen = [];
+    for (const t of ['overview', 'market', 'companies', 'housing', 'taxes']) {
+      await ev(function (k) { const b = document.querySelector('#e2Root [data-e2t="' + k + '"]'); if (b) b.scrollIntoView({ inline: 'center', block: 'nearest' }); }, t);
+      await tapSel('#e2Root [data-e2t="' + t + '"]'); await until(function (k) { const b = document.querySelector('#e2Root [data-e2t="' + k + '"]'); return !!b && b.classList.contains('gold'); }, t);
+      seen.push(await ev(function () { const r = document.getElementById('e2Root'); return r ? r.innerText.length : 0; }));
+    }
+    const fit = await ev(function () { return Array.from(document.querySelectorAll('#e2Root .e2Tile,#e2Root .e2Card')).every(function (e) { const q = e.getBoundingClientRect(); return q.left >= -1 && q.right <= innerWidth + 1; }); });
+    const a = await audit(); await ev(function () { closeModal(); });
+    return { ok: seen.length === 5 && seen.every(function (n) { return n > 80; }) && fit && !a.ui.length, detail: 'ECONOMY CENTER from the economy page · 5 tabs by touch (' + seen.join('/') + ' chars) · cards fit the screen ' + fit };
   });
   await check('Map', async function () { await tapSel('[data-mbar="map"]'); await sleep(300); const r = await ev(function () { return MMAP.open && document.querySelectorAll('#mMapLayers [data-mml]').length; }); const back = await ev(function () { return window.bctOnBack(); }); await sleep(100); const closed = await ev(function () { return !MMAP.open; }); return { ok: r === 6 && back === 'handled' && closed, detail: r + ' layers · back closes the map ' + closed }; });
   await check('HUD modes', async function () {

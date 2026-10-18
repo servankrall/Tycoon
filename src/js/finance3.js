@@ -281,7 +281,7 @@ const BUDGET_IN = [['taxes', '🧾', 'Taxes'], ['tourism', '🧳', 'Tourism'], [
 const BUDGET_OUT = [['roads', '🛣️', 'Roads'], ['education', '🎓', 'Education'], ['healthcare', '🏥', 'Healthcare'], ['emergency', '🚒', 'Emergency'], ['utilities', '⚡', 'Utilities'], ['transit', '🚇', 'Transit'], ['maintenance', '🛠️', 'Maintenance'], ['parks', '🌳', 'Parks'], ['other', '➖', 'Other']];
 function budget2() {
   const B = SIM.B || {}, BE = SIM.BE || {};
-  const inc = { taxes: B.incomeTax || 0, tourism: B.tourism || 0, utilities: (B.utilities || 0) + (B.energy || 0), transport: (B.fares || 0) + Math.max(0, SIM.p11RegionalNet || 0), companies: B.businessTax || 0, trade: SIM.p11TradeFees || 0, property: (B.propertyTax || 0) + (B.rent || 0), other: (B.space || 0) + (B.grant || 0) };
+  const inc = { taxes: (B.incomeTax || 0) + (B.salesTax || 0), tourism: B.tourism || 0, utilities: (B.utilities || 0) + (B.energy || 0), transport: (B.fares || 0) + Math.max(0, SIM.p11RegionalNet || 0), companies: B.businessTax || 0, trade: SIM.p11TradeFees || 0, property: (B.propertyTax || 0) + (B.rent || 0), other: (B.space || 0) + (B.grant || 0) };
   const out = { roads: BE.roads || 0, education: 0, healthcare: 0, emergency: 0, utilities: BE.fuel || 0, transit: Math.max(0, -(SIM.p11RegionalNet || 0)), maintenance: S.p9 ? clamp(S.p9.maint.budget, 0, 2) * 0.0015 * S.buildings.list.length : 0, parks: 0, other: 0 };
   S.buildings.list.forEach(function (b) {
     if (b.owner !== 'city' || !b.built) return; const d = bdef(b), c = (b._cost || 0) - (d.fuel ? (b._gen || 0) * d.fuel * ((SIM.mods && SIM.mods.electricity) || 1) : 0);

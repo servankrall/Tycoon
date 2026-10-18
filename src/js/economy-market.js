@@ -1,5 +1,7 @@
 'use strict';
 /* BLOCK CITY TYCOON — ECONOMY SYSTEM — production chains, storage, logistics, market, trade */
+/* Part 17: seeded normal noise for the simulation (the city's RNG stream is saved → same state, same economy) */
+function simGauss() { return (RNG.next() + RNG.next() + RNG.next() - 1.5) / 1.5; }
 /* ========================= 5b. ECONOMY SYSTEM (Part 4) =========================
    Money flows between three kinds of owners:
      PLAYER  → your companies' money (S.money)
@@ -194,8 +196,10 @@ function supplyChainTick(dt, mods, list) {
   PRODUCT_IDS.forEach(function (p) {
     const sup = R.prod[p] + R.imp[p] + 1, dem = R.dem[p] + R.del[p] * 0.5 + R.exp[p] + 1;
     const pl = priceLevel();
-    const target = PRODUCTS[p].base * pl * clamp(Math.sqrt(dem / sup), 0.6, 1.8) * (1 + gauss() * 0.01 * vol) * (S.p10 ? shockPriceMult(p) : 1);   // Part 10: supply shocks
-    price[p] = clamp(lerp(price[p], target, 0.04 * dt * (difficulty().dynamic ? 1.8 : 1)), PRODUCTS[p].base * 0.3 * pl, PRODUCTS[p].base * 4 * pl);
+    const noise = simGauss();          // Part 17: seeded market noise (same city → same prices)
+    const target = PRODUCTS[p].base * pl * clamp(Math.sqrt(dem / sup), 0.6, 1.8) * (1 + noise * 0.01 * vol) * (S.p10 ? shockPriceMult(p) : 1);   // Part 10: supply shocks
+    const step = price[p] * 0.0003 * dt * (difficulty().dynamic ? 1.8 : 1);       // Part 17: at most ≈ 1.8 % per game hour — prices move, never jump
+    price[p] = clamp(clamp(lerp(price[p], target, 0.04 * dt * (difficulty().dynamic ? 1.8 : 1)), price[p] - step, price[p] + step), PRODUCTS[p].base * 0.3 * pl, PRODUCTS[p].base * 4 * pl);
     if (!isFinite(inv[p]) || inv[p] < 0) inv[p] = 0;
   });
   used = 0; PRODUCT_IDS.forEach(function (p) { used += inv[p]; });
@@ -394,7 +398,7 @@ function econTick(dt) {
   }
   const noise = S.economy.noise;
   SECTORS.forEach(function (s) {
-    const v = (noise[s] || 1) + gauss() * 0.004 * (1 + 0.3 * S.meta.ngLevel) * diff.vol;
+    const v = (noise[s] || 1) + simGauss() * 0.004 * (1 + 0.3 * S.meta.ngLevel) * diff.vol;
     noise[s] = clamp(lerp(v, 1, 0.01), 0.8, 1.2);
   });
   const housingWish = pop * 1.04 + 8 + Math.max(0, (city.happiness - 50)) * pop * 0.004 + Math.max(0, city.reputation - 50) * pop * 0.002;
@@ -469,7 +473,7 @@ function econTick(dt) {
   const compStats = {};
   COMPANY_DEFS.forEach(function (c) { compStats[c.id] = { rev: 0, cost: 0, emp: 0, count: 0, assets: 0 }; });
   const tax = city.tax / 100;
-  const B = { incomeTax: 0, businessTax: 0, propertyTax: 0, utilities: 0, fares: 0, tourism: 0, rent: 0, energy: 0, space: 0, grant: 0 };
+  const B = { incomeTax: 0, businessTax: 0, propertyTax: 0, salesTax: 0, utilities: 0, fares: 0, tourism: 0, rent: 0, energy: 0, space: 0, grant: 0 };
   const BE = { salaries: 0, maintenance: 0, fuel: fuelCost * mods.electricity, roads: 0 };
   const P = { business: 0, products: 0, rent: 0, tourism: 0, transport: 0, fuel: 0 };
   const PE = { salaries: 0, maintenance: 0, bills: 0, taxes: 0, imports: 0, loans: 0, dividends: 0 };
@@ -508,8 +512,11 @@ function econTick(dt) {
     let cost = sal + mt + (d.fuel ? b._gen * d.fuel * mods.electricity : 0) + (b._inputCost || 0) + (b._impCost || 0);
     if (b.owner !== 'city') {
       // private owners pay taxes and utility bills to the city
-      const biz = r * tax * 0.6 * mods.taxHoliday;
-      const prop = Math.pow(buildingValue(b), 0.8) * 0.0004;
+      // Part 17: business / property / sales tax policy (defaults reproduce the classic single tax)
+      const biz = r * (mods.bizTax !== undefined ? mods.bizTax : tax) * 0.6 * mods.taxHoliday;
+      const prop = Math.pow(buildingValue(b), 0.8) * 0.0004 * (mods.propTax !== undefined ? mods.propTax : 1);
+      const sales = mods.salesTax && d.cat === 'Commercial' ? r * mods.salesTax * 0.5 : 0;
+      cost += sales; B.salesTax = (B.salesTax || 0) + sales; o.tax += sales; if (b.owner === 'player') PE.taxes += sales;
       const bills = (b._powered && b._pneed ? b._pneed * 0.02 : 0) + (d.water < 0 ? -d.water * lvlMult(b.level) * 0.01 : 0);
       cost += biz + prop + bills;
       B.businessTax += biz; B.propertyTax += prop; B.utilities += bills;
@@ -524,7 +531,7 @@ function econTick(dt) {
   }
   // City-wide budget items
   B.incomeTax = employed * WAGE_PER_WORKER * tax * mods.tax * mods.taxHoliday;
-  B.tourism += tourists * TOURIST_SPEND * 0.1;          // tourist tax
+  B.tourism += tourists * TOURIST_SPEND * 0.1 * (mods.tourTax !== undefined ? mods.tourTax : 1);          // tourist tax (Part 17: tourism tax policy)
   if (S.space.stage >= 3) B.space = 2000 * (1 + 0.1 * ppLevel('spacebonus'));
   if (S.space.stage >= 3) S.economy.inventory.rare += 4 * dt;
   BE.roads = MAP.roadCount * 0.004 * (1 - (SIM.evShare || 0) * 0.3) * diff.maint * (S.p10 ? 0.4 + 0.6 * S.p10.maint.roads : 1);

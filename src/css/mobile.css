@@ -515,3 +515,9 @@ body.mobileUI .veHistGrid{grid-template-columns:repeat(auto-fill,minmax(min(100%
 body.mobileUI .veHistTable{font-size:var(--fs-xs);display:block;overflow-x:auto;}
 body.mobileUI #veDebug{left:var(--L);bottom:calc(var(--above-bar) + 4px);font-size:10px;}
 body.mobileUI #photoBar .phDur input{width:calc(var(--u)*110);}
+/* Part 17 — Economy center on phones: bigger touch targets, scrolling tabs, two tiles per row */
+body.mobileUI #e2Root .btn{min-height:var(--touch);}
+body.mobileUI #e2Root .e2Grid{grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*140),1fr));}
+body.mobileUI #e2Root .e2Tbl td,body.mobileUI #e2Root .e2Tbl th{padding:8px 6px;font-size:max(12px,calc(var(--u)*12));}
+body.mobileUI #e2Root .e2Slider input[type=range]{height:var(--touch);}
+body.mobileUI #e2Root .e2Tabs{-webkit-overflow-scrolling:touch;}

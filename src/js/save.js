@@ -121,6 +121,7 @@ function defaultState(meta, settings, achievements, lifetime, opts) {
   st.p10 = newP10(st.city.seed);
   st.p11 = newP11(st.city.seed);
   st.p15 = { hist: [], lastMonth: -1 };                // Part 15: city history samples (one per game month)
+  st.p17 = typeof newP17 === 'function' ? newP17() : null;   // Part 17: Economy Engine 2.0 (markets, companies, housing, banking, trade, GDP …)
   NPC_STOCKS.forEach(function (s) { st.companies.stocks[s.id] = { price: s.base, hist: [s.base] }; });
   PRODUCT_IDS.forEach(function (p) { st.economy.inventory[p] = 0; st.economy.prices[p] = PRODUCTS[p].base; st.trade.mode[p] = 'auto'; });
   MARKET_SECTORS.forEach(function (m) { st.market.price[m] = 1; });
@@ -188,6 +189,7 @@ function buildSaveObject() {
     delete o.p9._acc5; delete o.p9._accV;
   }
   if (S.p10) o.p10 = JSON.parse(JSON.stringify(S.p10));
+  if (S.p17 && typeof p17SaveCopy === 'function') o.p17 = p17SaveCopy();        // Part 17: compact economy block
   if (S.p11) o.p11 = JSON.parse(JSON.stringify(S.p11));          // Part 11: transport engine, deep economy, smart city          // Part 10: living world, services, projects, graphs, time machine
   o.lastNet = Math.max(0, SIM.pNet || 0);
   o.lastBudgetNet = Math.max(0, SIM.bNet || 0);
@@ -208,7 +210,7 @@ function saveHeader() {
       worldSeed: ['city.seed', 'p8.world.seedLabel'], chunks: ['p9.chunks'], regions: ['p9.regions', 'p9.neighbors'], households: ['p9.households'], traffic: ['p9.traffic', 'vehicles'], utilityNetworks: ['p9.util', 'p9.water', 'p9.env'],
       disasters: ['p9.disasters', 'p9.disasterLog'], weather: ['p9.weather'], timeline: ['p9.timeline', 'p9.history', 'p9.branch'], transit: ['p9.transit'],
       livingWorld: ['p10.lw', 'p10.pop', 'p10.corp', 'p10.news', 'p10.rep', 'p10.rank'], services: ['p10.edu', 'p10.research', 'p10.health', 'p10.air', 'p10.port', 'p10.rail', 'p10.shocks'], projects: ['p10.projects', 'p10.maint', 'p10.infra', 'p10.incidents'], civic: ['p10.petitions', 'p10.objectives', 'p10.goalsDone'], graphs: ['p10.graphs'], timeMachine: ['p10.tm'],
-      worldData: ['city', 'buildings', 'p8.world', 'p9.chunks', 'p9.regions'], simulationData: ['clock', 'economy', 'citizens', 'vehicles', 'p9', 'p10', 'p11', 'p15'], origin: ['origin'],
+      worldData: ['city', 'buildings', 'p8.world', 'p9.chunks', 'p9.regions'], simulationData: ['clock', 'economy', 'citizens', 'vehicles', 'p9', 'p10', 'p11', 'p15', 'p17'], economy2: ['p17.goods', 'p17.co', 'p17.housing', 'p17.bank', 'p17.gdp', 'p17.infl', 'p17.shocks', 'p17.tax', 'p17.hist'], origin: ['origin'],
       transport: ['p11.works', 'p11.trains', 'p11.regional', 'p11.ped', 'p11.bike', 'p11.modal'], finance: ['p11.contracts', 'p11.loans', 'p11.banks', 'p11.mort'], smartCity: ['p11.sensors', 'p11.storage', 'p11.landfill', 'p11.flood', 'p11.fire'], snapshots: ['bct_snap_index (separate files)']
     }
   };
@@ -275,8 +277,11 @@ function saveGame(silent) {
     if (!back || back.version !== SAVE_VERSION || back.buildings.list.length !== obj.buildings.list.length) throw new Error('round-trip check failed');
     const slot = S.slot || 1;
     const prev = Store.getItem(slotKey(slot));
-    if (prev) Store.setItem(backupKey(slot), prev);  // 4. backup
-    Store.setItem(slotKey(slot), json);              // 5. main save
+    // 4. backup — Part 16/17: when the storage is full (browser quota) the stale backup is dropped instead of losing
+    //    the whole save; setItem is atomic, so the previous main save stays intact until the new one is written
+    if (prev) { try { Store.setItem(backupKey(slot), prev); } catch (e) { try { Store.removeItem(backupKey(slot)); } catch (e2) { /* blocked */ } logSaveError('Backup skipped (' + (e && e.message) + ')'); } }
+    try { Store.setItem(slotKey(slot), json); }      // 5. main save
+    catch (e) { try { Store.removeItem(backupKey(slot)); } catch (e2) { /* blocked */ } Store.setItem(slotKey(slot), json); logSaveError('Saved without a backup: storage almost full'); }
     setActiveSlot(slot);
     S.lastSaveTime = Date.now(); S._saveBytes = json.length; S.origin = obj.origin;
     if (!silent) toast('💾 Game saved', 'good');
@@ -646,6 +651,7 @@ function sanitizeState(d) {
   st.p10 = sanitizeP10(d.p10, st.city.seed);
   st.p11 = sanitizeP11(d.p11, st.city.seed);
   st.p15 = sanitizeP15(d.p15);
+  st.p17 = typeof sanitizeP17 === 'function' ? sanitizeP17(d.p17) : null;     // missing (v2.4.1 and older) → defaults
   st.city.mapType = MAP_TYPES[c.mapType] ? c.mapType : 'standard';
   st._rawCitizens = Array.isArray(d.citizens) ? d.citizens.slice(0, 400) : null;
   st._rawVehicles = Array.isArray(d.vehicles) && d.vehicles.length ? d.vehicles.slice(0, 300) : null;
@@ -809,7 +815,7 @@ function exportSaveJSON() { try { return JSON.stringify(buildSaveObject(), null,
 /* IMPORT VALIDATION: version, data types, negative values, unknown properties and maximum values */
 const SAVE_TOP_KEYS = ['version', 'meta', 'money', 'budget', 'city', 'buildings', 'workers', 'research', 'technology', 'companies', 'bank', 'transport', 'economy', 'market', 'ai', 'trade',
   'diplomacy', 'contracts', 'investors', 'space', 'events', 'statistics', 'achievements', 'quests', 'tutorial', 'settings', 'clock', 'p5', 'lastNet', 'lastBudgetNet', 'lastSaveTime', 'slot',
-  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'p8', 'p9', 'p10', 'p11', 'p15', 'origin', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
+  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'p8', 'p9', 'p10', 'p11', 'p15', 'p17', 'origin', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
 function validateImport(d) {
   const errs = [];
   if (!d || typeof d !== 'object' || Array.isArray(d)) return ['The save is not a JSON object.'];
