@@ -1,6 +1,6 @@
 # 🏙️ BLOCK CITY TYCOON — Windows EXE + Android APK
 
-**Build. Manage. Expand.** · Sürüm **2.5.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
+**Build. Manage. Expand.** · Sürüm **2.6.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
 `BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE — ve 2.0.0 ile bir **Android uygulaması** (APK). Windows ve Android **aynı oyun motorunu** kullanır; yalnızca girdi, arayüz, dosya sistemi ve performans katmanı platforma özeldir. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
@@ -39,8 +39,8 @@ Build sonrası:
 ```text
 dist/
 ├── windows/
-│   ├── BLOCK-CITY-TYCOON-Setup-2.5.0.exe       ← kurulum sihirbazı
-│   ├── BLOCK-CITY-TYCOON-Portable-2.5.0.exe    ← kurulumsuz, çift tıkla çalışır
+│   ├── BLOCK-CITY-TYCOON-Setup-2.6.0.exe       ← kurulum sihirbazı
+│   ├── BLOCK-CITY-TYCOON-Portable-2.6.0.exe    ← kurulumsuz, çift tıkla çalışır
 │   └── win-unpacked/BLOCK CITY TYCOON.exe      ← paketlenmiş uygulamanın kendisi
 └── android/
     ├── BLOCK-CITY-TYCOON-Android.apk           ← debug APK (geliştirme)
@@ -201,6 +201,7 @@ Tarayıcı kayıtları tarayıcının içinde (localStorage) durduğu için EXE 
 | ESC | Açık pencereyi kapatır; hiçbir şey açık değilse oyunu duraklatıp duraklatma menüsünü açar |
 | N | Heatmap seçici |
 | G | İstatistik merkezi |
+| K | City Management (bütçe, vergiler, hizmetler, politikalar, projeler) |
 | F3 | Debug paneli (FPS, frame time, entity/vatandaş/araç/bina sayıları, simülasyon tick'i, aktif olaylar, pathfinding) |
 | Ctrl+K | Komut paleti |
 | Ctrl+Shift+P | Command Palette 2.0 (Generate World, Repair World, Snapshot, Clone, Disaster, Clear Traffic, Unlock, Mega Project, Economy, Citizen Analytics) |
@@ -560,6 +561,23 @@ node scripts/qa-test.js [--profile=android|windows|both] [--only=save,weather,�
 | Arayüz | panel, arama, komut paleti, ısı haritaları, danışman, günlük rapor, mobil düzen |
 
 Testler: masaüstü self-test adım 54, Android self-test adım 31, `scripts/qa-test.js` ekonomi grubu (determinizm, piyasa, şirketler, bankacılık, konut, vergiler, 32 şok, kayıt / göç / çapraz platform, 10.000 şirket, ekonomik stres, arayüz, güvenlik) ve mobil UI testinde EKONOMİ MERKEZİ.
+
+## 6m. Government Engine 2.0 — bütçe, vergiler, kamu hizmetleri, politikalar, projeler (2.6.0)
+Yeni **🏛️ CITY MANAGEMENT** paneli (Windows: Şehir → Ekonomi → *CITY MANAGEMENT* veya **K** tuşu · Android: alt araç çubuğunda **🏛️ MANAGE** · komut paleti „Open City Management"). Modüler: `gov-core.js` (bütçe, vergiler, ekonomi bağlantıları, zamanlayıcı), `gov-services.js` (kamu hizmetleri, bakım, ilçeler, memnuniyet, onay), `gov-policy.js` (12 politika, 12 proje, 12 hükümet olayı), `gov-ui.js` (panel, rapor, danışman, ısı haritaları, admin). Durum `S.government` olarak kaydedilir (Save 3.1). API: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+| Alan | Ne yapar |
+|---|---|
+| Bütçe | gerçek ekonomi defterinden 11 gelir ve 15 gider kalemi; gelir, gider, denge, borç, faiz, acil durum rezervi, aylık / yıllık değişim; BUDGET DEFICIT uyarısı; şehir kredisi (kredi limiti = 4 günlük gelir) |
+| Vergiler | Residential / Commercial / Industrial / Corporate %0–30, Property %0–20; EconomyEngine 2.0 toplar; etkiler doğrusal değil (rahat seviyenin üstünde her puan daha çok mutluluk / büyüme kaybettirir); uygulamadan önce gelir tahmini |
+| Kamu hizmetleri | Healthcare, Education, Police, Fire, Public Transport, Waste, Water, Electricity, Road Maintenance, Parks — kapasite, kapsama, kalite, bütçe, çalışan, bakım, memnuniyet, %0–150 finansman |
+| Sağlık | Clinic · Hospital · Medical Center · Large Hospital · Research Hospital: yatak, doktor, hemşire, acil kapasite, tedavi kalitesi, bekleme süresi, ambulans süresi (Emergency AI) |
+| Polis / itfaiye | müdahale süresi = istasyon mesafesi × trafik × yol durumu × ekip × hava; ilçe tipine göre suç riski; hızlı itfaiye yangını daha çabuk söndürür |
+| Bakım | Roads, Bridges, Tunnels, Buildings, Power, Water, Sewage, Transport, Emergency — Excellent · Good · Warning · Critical · Failed; FAILED ağ gerçekten bozulur (elektrik kesintisi, su kaçağı, bina kapanması, köprü çökmesi) |
+| Memnuniyet ve onay | 12 bileşen + City Satisfaction; City Approval 0–100 (Excellent ≥ 90 … Collapse < 20); vatandaş yorumları evinin ilçesindeki gerçek veriden |
+| Politikalar ve projeler | 12 politika (maliyet, süre, fayda, yan etki, çakışma); 12 proje (maliyet, süre, işçi, malzeme, bakım, fayda; Low / Normal / High / Emergency öncelik) normal inşaat hattından geçer |
+| Olaylar, rapor, danışman | 12 hükümet olayı (seçenekli kararlar); günlük CITY GOVERNMENT REPORT; Smart Government Advisor; 10 ısı haritası (N) ve Government Service Map |
+
+Testler: masaüstü self-test adım 55, Android self-test adım 32, `scripts/qa-test.js` government grubu (küçük şehir, determinizm, 100K, 500K, yüksek / düşük vergi, bütçe açığı, hastane kapasitesi, okul açığı, polis kapsaması, kötü itfaiye erişimi, sıfır bakım bütçesi, büyük altyapı arızası, 100×, kaydet → yeniden başlat → yükle, v2.5.0 / bozuk kayıt, Windows ↔ Android, panel) + güvenlik. Sonuçlar: [docs/TEST_REPORT.md](docs/TEST_REPORT.md).
 
 ## 7. Pencere ve ayarlar
 

@@ -277,7 +277,7 @@ function econTick(dt) {
   }
   if (S.p10) jobs += p10ProjectJobs();                     // Part 10: megaproject construction crews
   const effJobs = jobs * mods.jobs;
-  const labor = Math.floor(pop * 0.55) + Math.round(SIM.p9InCommuters || 0);          // Part 9: commuters from neighbouring cities
+  const labor = Math.floor(pop * 0.55 * (mods.labor || 1)) + Math.round(SIM.p9InCommuters || 0);          // Part 9: commuters from neighbouring cities · Part 18: healthcare → workforce availability
   const staffRatio = jobs > 0 ? Math.min(1, labor / jobs) : 1;
   const employed = Math.min(labor, effJobs);
   const unemployment = Math.max(0, labor - employed - (SIM.p9OutCommuters || 0)) / Math.max(labor, 20);
@@ -376,7 +376,7 @@ function econTick(dt) {
     if (d.rev) commOp++;
     if (d.wasteCap) { const c = d.wasteCap * lvlMult(b.level) * b._eff * (hasTech('env_waste') ? 1.3 : 1); wasteCap += c; if (d.recycle) recycleCap += c; }
   }
-  const wasteGen = (pop * 0.015 + indProd * 0.015 + commOp * 0.02) * (1 - 0.08 * ppLevel('waste'));
+  const wasteGen = (pop * 0.015 + indProd * 0.015 + commOp * 0.02) * (1 - 0.08 * ppLevel('waste')) * (mods.waste || 1);
   const wAvail = wasteGen * dt + city.waste;
   const processed = Math.min(wAvail, wasteCap * dt);
   const natural = (pop < 100 ? 3 : 1.5) * dt;
@@ -507,13 +507,17 @@ function econTick(dt) {
       if (d.power > 0 && gen > 0 && b._gen) { const e = surplus * b._gen / gen; r += e; B.energy += e; }
     }
     // costs
-    const sal = b._actW * d.sal * pol.sal * mods.wage;
-    const mt = b.closed ? 0 : d.maint * lvlMult(b.level) * diff.maint * (S.p10 && b.owner === 'city' ? p10MaintCostMult(b) : 1);
+    const gf = b.owner === 'city' && mods.govFund ? mods.govFund(d) : 1;           // Part 18: service funding level of city-run buildings
+    const sal = b._actW * d.sal * pol.sal * mods.wage * gf;
+    const mt = b.closed ? 0 : d.maint * lvlMult(b.level) * diff.maint * (S.p10 && b.owner === 'city' ? p10MaintCostMult(b) : 1) * gf;
     let cost = sal + mt + (d.fuel ? b._gen * d.fuel * mods.electricity : 0) + (b._inputCost || 0) + (b._impCost || 0);
     if (b.owner !== 'city') {
       // private owners pay taxes and utility bills to the city
       // Part 17: business / property / sales tax policy (defaults reproduce the classic single tax)
-      const biz = r * (mods.bizTax !== undefined ? mods.bizTax : tax) * 0.6 * mods.taxHoliday;
+      const ind = d.cat === 'Industry' || d.cat === 'Resources';                       // Part 18: commercial / industrial tax rates
+      const bizRate = ind && mods.bizTaxInd !== undefined ? mods.bizTaxInd : !ind && d.cat === 'Commercial' && mods.bizTaxCom !== undefined ? mods.bizTaxCom : (mods.bizTax !== undefined ? mods.bizTax : tax);
+      const biz = r * bizRate * 0.6 * mods.taxHoliday;
+      if (ind) SIM._bizInd = (SIM._bizInd || 0) + biz; else if (d.cat === 'Commercial') SIM._bizCom = (SIM._bizCom || 0) + biz;
       const prop = Math.pow(buildingValue(b), 0.8) * 0.0004 * (mods.propTax !== undefined ? mods.propTax : 1);
       const sales = mods.salesTax && d.cat === 'Commercial' ? r * mods.salesTax * 0.5 : 0;
       cost += sales; B.salesTax = (B.salesTax || 0) + sales; o.tax += sales; if (b.owner === 'player') PE.taxes += sales;
@@ -545,6 +549,13 @@ function econTick(dt) {
   SIM.companies = compStats;
   S.bank.loans.forEach(function (l) { PE.loans += Math.min(l.perSec, l.remaining / dt); });
 
+  // Part 18: corporate tax on the profit of companies (player and AI), collected by the city
+  if (mods.corpTax > 0) for (const ow in OWN) {
+    if (ow === 'city') continue;
+    const q = OWN[ow], pr = q.rev - q.cost; if (pr <= 0) continue;
+    const t = pr * mods.corpTax; B.corporateTax = (B.corporateTax || 0) + t; q.cost += t; q.tax += t; if (ow === 'player') PE.taxes += t;
+  }
+  SIM.taxSplit = { commercial: SIM._bizCom || 0, industrial: SIM._bizInd || 0 }; SIM._bizCom = 0; SIM._bizInd = 0;
   // --- 11. Apply cash flows ---------------------------------------------------------
   const po = OWN.player || { rev: 0, cost: 0 };
   const pInc = po.rev + (SIM._orphanSales || 0);
@@ -609,6 +620,7 @@ function econTick(dt) {
   let crimeT = 3 + (unemployment * 110 + Math.max(0, 55 - city.happiness) * 0.5 + density) * small + (pop > 150 ? (1 - SIM.cov.police) * 30 : 0);
   if (hasTech('d_police')) crimeT *= 0.85;
   if (SIM.budgetUnpaid > 0) crimeT += 8;
+  crimeT += mods.crimeAdj || 0;                                                   // Part 18: police funding, response time, policies
   city.crime = clamp(lerp(city.crime, clamp(crimeT, 0, 100), 0.05 * dt), 0, 100);
 
   // --- 15. Education & worker skill -------------------------------------------------------

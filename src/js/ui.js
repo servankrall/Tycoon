@@ -205,6 +205,7 @@ function renderCityPanel() {
   } else if (t === 'mega') {
     h += renderMegaTab();
   } else if (t === 'economy') {
+    if (S.government) h += '<button class="btn blue" style="width:100%;margin-bottom:8px" data-act="gov">🏛️ CITY MANAGEMENT — budget · taxes · services · policies · projects · approval</button>';   // Part 18
     if (S.p17) h += '<button class="btn gold" style="width:100%;margin-bottom:8px" data-act="econ2">📊 OPEN ECONOMY CENTER — GDP · market · companies · housing · banking · trade · taxes</button>';   // Part 17
     h += renderEconCycleCard() + renderInflationCard();
     const line = function (l, v, neg) { return '<div class="between small" style="padding:2px 0"><span>' + l + '</span><b class="' + (neg ? 'neg' : 'pos') + '">' + (neg ? '-' : '+') + money((v || 0) * 60) + '</b></div>'; };

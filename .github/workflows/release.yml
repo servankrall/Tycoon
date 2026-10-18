@@ -132,7 +132,7 @@ jobs:
         env:
           PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
         run: node scripts/mobile-ui-test.js --out=dist/mobile-ui
-      - name: Deep QA (determinism · saves · weather · outages · camera · speed · events · memory · world sizes · governor · release security)
+      - name: Deep QA (determinism · save migration · weather · outages · camera · speed · events · memory · world sizes · governor · economy · government · performance · release security)
         if: always()
         env:
           PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright

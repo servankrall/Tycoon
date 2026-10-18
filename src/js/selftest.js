@@ -9,7 +9,7 @@
    freshly built EXE) or in a browser with  index.html?selftest . It plays through the 20 checks of the release test plan,
    restarts the EXE in the middle (save → restart → load) and writes a JSON report to logs/selftest.json (and <file>).
    The self-test uses its own temporary user-data folder, so it never touches real cities. */
-const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 54, running: false };
+const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 55, running: false };
 function stPhase() {
   if (DESKTOP && BCT.selftest && BCT.selftest.phase) return BCT.selftest.phase;
   if (IS_ANDROID_APP && ANDROID_INFO.selftest) return ANDROID_INFO.selftestPhase || 1;
@@ -271,6 +271,7 @@ async function runSelfTest() {
     return { ok: !!res && res.steps === 22 && !!sc && sc.overall >= 60 && STARTED, detail: res ? res.steps + '-step pipeline · ' + fmt(res.population) + ' citizens · ' + res.buildings + ' buildings · score ' + (sc ? sc.overall : '?') + '/100 · ' + res.seconds.toFixed(1) + ' s' : 'generation failed' };
   });
   await stStep(54, 'Economy 2.0 · Market · Companies · Housing · Banking', stEconomy2);
+  await stStep(55, 'Government 2.0 · Budget · Taxes · Services · Policies · Projects · Approval', stGovernment);
   stDone();
 }
 /* ===================================== Part 12 helpers ===================================== */
@@ -437,7 +438,7 @@ async function part12DesktopSteps() {
 
 /* ===================================== Part 12/13: Android APK self-test (24 steps) ===================================== */
 async function runAndroidSelfTest(phase) {
-  SELFTEST.total = 31;
+  SELFTEST.total = 32;
   const native = IS_ANDROID_APP;
   if (phase === 1) {
     SELFTEST.t0 = Date.now(); SELFTEST.steps = []; SELFTEST.data = {};
@@ -715,6 +716,7 @@ async function runAndroidSelfTest(phase) {
     return { ok: ctl && paused && cine && tour && stops > 0 && graphs === 6 && !!S.p15 && S.p15.hist.length > 0, detail: 'photo controls ' + ctl + ' · pause simulation ' + paused + ' · cinematic A→B ' + cine + ' · city tour ' + stops + ' stops · history graphs ' + graphs + ' (' + S.p15.hist.length + ' samples, saved with the city)' };
   });
   await stStep(31, 'Economy 2.0 · Market · Companies · Housing · Banking', stEconomy2);
+  await stStep(32, 'Government 2.0 · Budget · Taxes · Services · Policies · Projects · Approval', stGovernment);
   stDone();
 }
 /* ===================================== Part 17: ECONOMY 2.0 (shared by the desktop and Android runs) ===================================== */
@@ -737,6 +739,38 @@ async function stEconomy2() {
   let ui = 0; for (let i = 0; i < E2_TABS.length; i++) { openEconomy2(E2_TABS[i][0]); await stWait(20); if ((document.getElementById('e2Root') || {}).innerText.length > 80) ui++; } closeModal();
   return { ok: priced === goods.length && hist >= 3 && maxDay < 0.6 && reg && restr && renamed && floor && !!sh && resp && !errs.length && !!o.p17 && oldOk && ui === E2_TABS.length,
     detail: priced + '/' + goods.length + ' products priced · ' + hist + ' daily closes · biggest daily move ' + Math.round(maxDay * 100) + '% · ' + Object.keys(P.co).length + ' companies with lifecycle/HQ/credit ' + reg + ' · restructuring first ' + restr + ' → bankrupt as ' + a.name + ' (old name retired) ' + renamed + ' · interest floor 1 % ' + floor + ' · food shock ' + !!sh + ' + response ' + resp + ' · save p17 ' + (!!o.p17) + ', import errors ' + errs.length + ', old save defaults ' + oldOk + ' · ' + ui + '/' + E2_TABS.length + ' economy tabs' };
+}
+/* ===================================== Part 18: GOVERNMENT 2.0 (shared by the desktop and Android runs) ===================================== */
+async function stGovernment() {
+  if (!S.government) return { ok: false, detail: 'no government state' };
+  const G = S.government, hours = function (n) { for (let i = 0; i < n; i++) { S.clock.gameSec += 3600; S.clock.runSec += 3600 / TIME_SCALE; econTick(1); govTick(); } };
+  GOV.hourKey = -1; hours(26);
+  const svc = GOV_SERVICES.filter(function (s) { const v = G.services[s[0]]; return v && isFinite(v.quality) && v.quality >= 0 && v.quality <= 100 && v.coverage >= 0 && v.coverage <= 1; }).length;
+  const inc = Object.keys(G.budget.last.inc).length >= GOV_INCOME.length && Object.keys(G.budget.last.exp).length >= GOV_EXPENSE.length - 1, B = govBudgetSummary();
+  const maint = ['roads', 'bridges', 'tunnels', 'buildings', 'power', 'water', 'sewage', 'transport', 'emergency'].every(function (k) { return G.maint[k] && ['Excellent', 'Good', 'Warning', 'Critical', 'Failed'].indexOf(G.maint[k].level) >= 0; });
+  const lbl = govApprovalLabel(95) === 'Excellent' && govApprovalLabel(80) === 'Very Good' && govApprovalLabel(65) === 'Stable' && govApprovalLabel(45) === 'Warning' && govApprovalLabel(25) === 'Critical' && govApprovalLabel(10) === 'Collapse';
+  // taxes: non-linear pressure, the residential tax is the classic slider
+  const T = govTaxes(), t0 = Object.assign({}, T), hapAt = function (v) { govSetTax('commercial', v); const m = globalMods(); return { p: govTaxPressure(), hap: m.hap, growth: m.growth }; };
+  const a14 = hapAt(14), a22 = hapAt(22), a30 = hapAt(30), p14 = a14.p, p22 = a22.p, p30 = a30.p;
+  const nonlin = p22 > p14 && (a22.hap - a30.hap) > (a14.hap - a22.hap) && a30.growth < a22.growth && a22.growth < a14.growth;   // each extra point hurts more (EconomyEngine reads these modifiers) GOV_TAXES.forEach(function (t) { govSetTax(t[0], t0[t[0]]); });
+  const res = govSetTax('residential', 13) && S.city.tax === 13; govSetTax('residential', t0.residential);
+  // policies: conflicts are refused
+  const b0 = S.budget; S.budget += 1e6;
+  const pOn = govPolicyEnable('green').ok, pConf = !govPolicyEnable('industrial').ok, pOff = govPolicyDisable('green').ok;
+  // projects: a quote has cost / time / workers or an honest reason; one project starts through the construction pipeline
+  const quotes = Object.keys(GOV_PROJECTS).map(function (k) { return govProjectQuote(k, 'normal'); }), qok = quotes.every(function (q) { return q.reason || (q.cost > 0 && q.days > 0); });
+  const pr = ['park', 'firehq', 'policehq', 'power', 'flood'].reduce(function (a, k) { return a || (govProjectStart(k, 'emergency').ok ? k : null); }, null);
+  const rec = pr ? G.projects.find(function (p) { return p.type === pr; }) : null, site = rec ? MAP.byId.get(rec.b) : null, pipe = !!site && site.owner === 'city' && site.govProject === rec.id;
+  if (rec) govProjectCancel(rec.id);
+  S.budget = b0;
+  // save 3.1 round trip + an old save without a government block
+  const o = buildSaveObject(), errs = validateImport(JSON.parse(JSON.stringify(o))), oldG = sanitizeGov(undefined), bad = sanitizeGov({ budget: { funding: { health: 'x' }, loans: [null, 5] }, projects: [{ type: 'nope' }], approval: { value: 1e9 } });
+  const saveOk = !!o.government && !errs.length && oldG.approval.value === 60 && oldG.taxes === null && bad.budget.funding.health === 1 && bad.projects.length === 0 && bad.approval.value === 100;
+  let ui = 0; for (let i = 0; i < GOV_TABS.length; i++) { openGovernment(GOV_TABS[i][0]); await stWait(15); if ((document.getElementById('gvRoot') || {}).innerText.length > 60) ui++; } closeModal();
+  const heats = GOV_HEATS.filter(function (h) { const g = p9HeatGrid(h[0]); return g && g.length === MAP.W * MAP.H; }).length;
+  const chk = { services: svc === GOV_SERVICES.length, budget: inc, maintenance: maint, approvalLabels: lbl, taxEffects: nonlin, residentialTax: res, policyOn: pOn, policyConflict: pConf, policyOff: pOff, quotes: qok, project: !pr || pipe, save: saveOk, tabs: ui === GOV_TABS.length, heatmaps: heats === GOV_HEATS.length, noErrors: GOV.errors === 0 }, failed = Object.keys(chk).filter(function (k) { return !chk[k]; });
+  return { ok: !failed.length,
+    detail: (failed.length ? 'FAILED: ' + failed.join(', ') + ' · ' : '') + svc + '/' + GOV_SERVICES.length + ' services · budget ' + money(B.income) + ' in / ' + money(B.expenses) + ' out per day · maintenance ' + G.maint.avg + '% · approval ' + Math.round(G.approval.value) + ' ' + G.approval.label + ' · commercial tax 14→22→30 %: pressure ' + Math.round(p14) + '/' + Math.round(p22) + '/' + Math.round(p30) + ', happiness ' + (a14.hap - a22.hap).toFixed(2) + ' then ' + (a22.hap - a30.hap).toFixed(2) + ' lost (non-linear ' + nonlin + ')' + ' · policy conflict refused ' + pConf + ' · project ' + (pr || 'none (no free site)') + ' · save 3.1 ' + saveOk + ' · ' + ui + '/' + GOV_TABS.length + ' tabs · ' + heats + ' heatmaps · errors ' + GOV.errors };
 }
 /* starts once the boot sequence has finished */
 (function () {

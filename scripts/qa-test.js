@@ -13,6 +13,9 @@
    Part 17 adds the ECONOMY group: deterministic economy, markets, company lifecycle / gradual bankruptcy / unique names,
    banking (1 % floor, loan stages, credit, mortgages), housing crisis, tax policy, 8 shocks × 4 severities, Economy 2.0
    save / v2.4.1 migration / Windows ↔ Android, 10,000 companies, the economic stress scenario and the economy UI.
+   Part 18 adds the GOVERNMENT group: small city, determinism, 100K / 500K, high / low tax, budget deficit, hospital
+   capacity, school shortage, police coverage, bad fire access, zero maintenance, large infrastructure failure, 100×,
+   save → restart → load, v2.5.0 / corrupt saves, Windows ↔ Android, the City Management UI and admin security.
    Every wait is a wait-until with a deadline (no fixed sleeps that flake on a slow runner). A failure prints
    Test / Expected / Actual / Device / Resolution / Build / Commit.
    Usage:  node scripts/qa-test.js [--out=dist/qa] [--only=save,weather] [--profile=android|windows|both]
@@ -838,6 +841,236 @@ async function runProfile(browser, base, dev) {
       });
       const bad = r.out.filter(function (x) { return /outside/.test(x) || +x.split(':')[1].split(' ')[0] < 60; });
       return { ok: bad.length === 0 && r.oob.length === 0, actual: r.out.join(' · ') + (r.oob.length ? ' · OUT OF BOUNDS ' + r.oob.join(', ') : '') };
+    });
+
+  /* ===================== Part 18: GOVERNMENT 2.0 ===================== */
+  const gvInit = function () { return ev(function () {
+    window.__gvh = function (n) { for (let i = 0; i < n; i++) { S.clock.gameSec += 3600; S.clock.runSec += 3600 / TIME_SCALE; econTick(1); if (S.p17) part17Tick(); govTick(); } };
+    window.__gvSnap = function () { const G = S.government; return { tax: Object.assign({}, govTaxes()), fund: Object.assign({}, G.budget.funding), city: S.city.tax, pop: S.city.population, budget: S.budget, maint: S.p10 ? Object.assign({}, S.p10.maint) : null }; };
+    window.__gvRestore = function (s) { const G = S.government; Object.keys(s.tax).forEach(function (k) { govSetTax(k, s.tax[k]); }); Object.assign(G.budget.funding, s.fund); S.city.tax = s.city; S.city.population = s.pop; S.budget = s.budget; if (s.maint) Object.assign(S.p10.maint, s.maint); GOV.cache.maintSet = null; G.events.active = []; G.alerts = {}; SV.health = healthPass(0); SV.edu = educationPass(); govServicesHour(); govDistrictsHour(); govSatisfactionHour(); };
+  }); };
+  await gvInit();
+  await T('government', 'Government: small city — services, budget, districts, approval', 'a fresh small city computes all 10 public services, 11 income + 15 expense categories, district stats, maintenance levels and an approval label without errors',
+    async function () {
+      const r = await ev(async function () {
+        await __qa.world('SMALL', 181818, 3); setSpeed(0); GOV.errors = 0; GOV.hourKey = -1; __gvh(30);
+        const G = S.government, sv = GOV_SERVICES.filter(function (s) { const v = G.services[s[0]]; return v && isFinite(v.quality) && v.coverage >= 0 && v.coverage <= 1; }).length;
+        return { sv: sv, inc: Object.keys(G.budget.last.inc).length, exp: Object.keys(G.budget.last.exp).length, d: G.districts.length, lvl: Object.keys(G.maint).filter(function (k) { return G.maint[k].level; }).length, ap: G.approval.label, apv: Math.round(G.approval.value), err: GOV.errors, B: govBudgetSummary() };
+      });
+      return { ok: r.sv === 10 && r.inc === 11 && r.exp >= 15 && r.d > 0 && r.lvl === 9 && /^(Excellent|Very Good|Stable|Warning|Critical|Collapse)$/.test(r.ap) && r.err === 0, actual: r.sv + '/10 services · ' + r.inc + ' income / ' + r.exp + ' expense categories · ' + r.d + ' districts · 9 networks graded ' + (r.lvl === 9) + ' · approval ' + r.apv + ' ' + r.ap + ' · income ' + Math.round(r.B.income) + ' / expenses ' + Math.round(r.B.expenses) + ' per day · errors ' + r.err };
+    });
+  await T('government', 'Government: deterministic from the same state', 'loading the same save twice and simulating 2 game days gives the same approval, budget, services and districts',
+    async function () {
+      const r = await ev(function () {
+        saveGame(true);
+        const run = function () { loadGame(3); resetSim(); resetAgents(); E2.hourKey = -1; GOV.hourKey = -1; GOV.cache = {}; RNG.seed(S.p6.rng); __gvh(48); const G = S.government; return { a: [G.approval.value, G.sat.city], b: [S.budget, G.budget.reserve], s: Object.keys(G.services).map(function (k) { return G.services[k].quality; }), d: JSON.stringify(G.districts.map(function (d) { return [d.k, d.health, d.education, d.safety, d.maint]; })), e: JSON.stringify(G.events.log) }; };
+        // the city budget already carries ~1e-8 float noise without the government (render-sampled traffic); the reserve sums it over days → 1e-5
+        const A = run(), B = run(), near = function (x, y) { return x.length === y.length && x.every(function (v, i) { return Math.abs(v - y[i]) <= Math.abs(v) * 1e-5 + 1e-9; }); };
+        const diff = ['a', 'b', 's'].filter(function (k) { return !near(A[k], B[k]); }).concat(['d', 'e'].filter(function (k) { return A[k] !== B[k]; }));
+        return { same: !diff.length, diff: diff.join(', '), ap: A.a[0] };
+      });
+      return { ok: r.same, actual: (r.same ? 'identical' : 'DIFFERENT: ' + r.diff) + ' · approval ' + r.ap.toFixed(3) };
+    });
+  for (const P of [[100000, '100K'], [500000, '500K']]) {
+    await T('government', 'Government: ' + P[1] + ' citizens — hourly / daily pass stays light', 'with ' + P[1] + ' citizens the government hourly pass stays < 60 ms and the daily pass < 100 ms, all numbers stay finite',
+      async function () {
+        const r = await ev(function (pop) {
+          const s = __gvSnap(); S.city.population = pop; SV.health = healthPass(0); SV.edu = educationPass();
+          let worst = 0; for (let h = 0; h < 12; h++) { S.clock.gameSec += 3600; S.clock.runSec += 50; econTick(1); S.city.population = pop; const t = performance.now(); govTick(); worst = Math.max(worst, performance.now() - t); }
+          const t1 = performance.now(); govBudgetDay(); govEventsDay(); govReportDay(); const day = performance.now() - t1;
+          const G = S.government, fin = isFinite(G.approval.value) && isFinite(S.budget) && Object.keys(G.services).every(function (k) { return isFinite(G.services[k].quality); });
+          const load = G.services.health.load; __gvRestore(s); SV.health = healthPass(0); SV.edu = educationPass();
+          return { worst: worst, day: day, fin: fin, load: load };
+        }, P[0]);
+        return { ok: r.worst < 60 && r.day < 100 && r.fin, actual: 'hourly worst ' + r.worst.toFixed(1) + ' ms · daily ' + r.day.toFixed(1) + ' ms · finite ' + r.fin + ' · hospital load ' + Math.round(r.load * 100) + '%' };
+      });
+  }
+  await T('government', 'Government: high taxes — non-linear effects, protest, advisor', 'all taxes at the maximum: tax pressure ≈ 100, happiness and growth fall more for each extra point, a Tax Protest starts, the advisor warns about commercial growth',
+    async function () {
+      const r = await ev(function () {
+        const s = __gvSnap(), m0 = globalMods();
+        GOV_TAXES.forEach(function (t) { govSetTax(t[0], t[3]); });
+        const m1 = globalMods(), tp = govTaxPressure(); S.government.events.log = []; govEventsDay();
+        const protest = govEventActive('taxProtest'), adv = govAdvice().map(function (a) { return a.msg; }).filter(function (x) { return /commercial growth/.test(x); }).length;
+        __gvRestore(s); govSetTax('commercial', 22); const h22 = globalMods().hap; govSetTax('commercial', 30); const h30 = globalMods().hap; govSetTax('commercial', 14); const h14 = globalMods().hap; __gvRestore(s);
+        return { tp: tp, dh: m0.hap - m1.hap, dg: m1.growth / m0.growth, protest: protest, adv: adv, d1: h14 - h22, d2: h22 - h30 };
+      });
+      return { ok: r.tp >= 90 && r.dh > 3 && r.dg < 0.9 && r.protest && r.adv === 1 && r.d2 > r.d1, actual: 'pressure ' + Math.round(r.tp) + ' · happiness −' + r.dh.toFixed(1) + ' · growth ×' + r.dg.toFixed(2) + ' · commercial 14→22 −' + r.d1.toFixed(2) + ', 22→30 −' + r.d2.toFixed(2) + ' · Tax Protest ' + r.protest + ' · advisor ' + r.adv };
+    });
+  await T('government', 'Government: low taxes — no pressure, growth bonus, less revenue', 'all taxes at 0: tax pressure 0, growth higher than at the default rates, tax revenue drops',
+    async function () {
+      const r = await ev(function () {
+        const s = __gvSnap(); econTick(1); const g0 = globalMods().growth, inc0 = govIncomeNow();
+        GOV_TAXES.forEach(function (t) { govSetTax(t[0], 0); }); econTick(1);
+        const g1 = globalMods().growth, inc1 = govIncomeNow(), tp = govTaxPressure(); __gvRestore(s); econTick(1);
+        return { tp: tp, g: g1 / g0, r0: inc0.residential + inc0.commercial + inc0.industrial + inc0.property, r1: inc1.residential + inc1.commercial + inc1.industrial + inc1.property };
+      });
+      return { ok: r.tp === 0 && r.g > 1 && r.r1 < r.r0, actual: 'pressure ' + r.tp + ' · growth ×' + r.g.toFixed(3) + ' · tax revenue ' + r.r0.toFixed(1) + ' → ' + r.r1.toFixed(1) + ' $/s' };
+    });
+  await T('government', 'Government: budget deficit — warning, reserve, crisis, loan', 'funding at 150 % with no taxes runs a deficit: BUDGET DEFICIT warning, deficit days counted, Budget Crisis after 3 days, a city loan has a credit limit and interest',
+    async function () {
+      const r = await ev(function () {
+        const s = __gvSnap(), G = S.government; G.budget.deficitDays = 0; G.events.log = [];
+        GOV_SERVICES.forEach(function (x) { G.budget.funding[x[0]] = 1.5; }); GOV_TAXES.forEach(function (t) { govSetTax(t[0], 0); });
+        __gvh(24 * 4);
+        const dd = G.budget.deficitDays, warn = G.alerts.deficit > 0, crisis = G.events.log.some(function (e) { return e.id === 'budgetCrisis'; }), adv = govAdvice().some(function (a) { return /deficit/i.test(a.msg); });
+        const big = govBorrow(1e12), small = govBorrow(1000), loan = G.budget.loans[G.budget.loans.length - 1];
+        const fin = isFinite(S.budget) && S.budget >= -1e-6; __gvRestore(s); G.budget.loans = []; G.budget.deficitDays = 0;
+        return { dd: dd, warn: warn, crisis: crisis, adv: adv, big: big.ok, small: small.ok, rate: loan ? loan.rate : 0, fin: fin };
+      });
+      return { ok: r.dd >= 3 && r.warn && r.crisis && r.adv && !r.big && r.small && r.rate >= 0.025 && r.fin, actual: r.dd + ' deficit days · warning ' + r.warn + ' · Budget Crisis ' + r.crisis + ' · advisor ' + r.adv + ' · huge loan refused ' + !r.big + ' · small loan ' + r.small + ' at ' + (r.rate * 100).toFixed(2) + '% · budget finite ' + r.fin };
+    });
+  await T('government', 'Government: hospital capacity — overload, waiting time, event, advisor', 'the population outgrows the same hospitals: load > 100 %, waiting time up, Hospital Overload event and the advisor reports hospital capacity',
+    async function () {
+      const r = await ev(function () {
+        const s = __gvSnap(), G = S.government; G.events.log = []; govServicesHour(); const w0 = G.services.health.wait;
+        const l0 = Math.max(0.01, SV.health ? SV.health.load : 0.1); S.city.population = Math.round(s.pop * Math.max(6, 1.4 / l0)) + 2000; SV.health = healthPass(0); govServicesHour(); govEventsDay();   // the city outgrows its hospitals
+        const v = G.services.health, out = { load: v.load, wait: v.wait, w0: w0, ev: G.events.log.some(function (e) { return e.id === 'hospitalOverload'; }), adv: govAdvice().some(function (a) { return /Hospital capacity|no hospital/.test(a.msg); }) };
+        __gvRestore(s); SV.health = healthPass(0); govServicesHour(); return out;
+      });
+      return { ok: r.load > 1 && r.wait > r.w0 && r.ev && r.adv, actual: 'load ' + Math.round(r.load * 100) + '% · waiting ' + Math.round(r.w0) + ' → ' + Math.round(r.wait) + ' min · Hospital Overload ' + r.ev + ' · advisor ' + r.adv };
+    });
+  await T('government', 'Government: school shortage — coverage falls, event or advisor', 'six times the population on the same schools: education coverage falls; a School Shortage event or an education advisor message follows',
+    async function () {
+      const r = await ev(function () {
+        const s = __gvSnap(), G = S.government; G.events.log = []; govServicesHour(); const c0 = G.services.education.coverage;
+        S.city.population = s.pop * 6 + 2000; SV.edu = educationPass(); govServicesHour(); govDistrictsHour(); govEventsDay();
+        const c1 = G.services.education.coverage, ev1 = G.events.log.some(function (e) { return e.id === 'schoolShortage'; }), adv = govAdvice().some(function (a) { return /Education coverage/.test(a.msg); });
+        __gvRestore(s); SV.edu = educationPass(); govServicesHour(); return { c0: c0, c1: c1, ev: ev1, adv: adv };
+      });
+      return { ok: r.c1 < r.c0 && (r.ev || r.adv), actual: 'coverage ' + Math.round(r.c0 * 100) + '% → ' + Math.round(r.c1 * 100) + '% · School Shortage ' + r.ev + ' · advisor ' + r.adv };
+    });
+  await T('government', 'Government: police coverage — funding drives response time and crime', 'police funding 0 % makes response times longer and raises the crime modifier compared with 150 %',
+    async function () {
+      const r = await ev(function () {
+        const s = __gvSnap(), G = S.government, c = cityCentre(), x = Math.floor(c.x / TILE), y = Math.floor(c.y / TILE);
+        G.budget.funding.police = 1.5; govServicesHour(); const r1 = govResponse('police', x, y), q1 = G.services.police.quality, m1 = globalMods().crimeAdj;
+        G.budget.funding.police = 0; govServicesHour(); const r0 = govResponse('police', x, y), q0 = G.services.police.quality, m0 = globalMods().crimeAdj;
+        __gvRestore(s); govServicesHour(); return { r0: r0, r1: r1, q0: q0, q1: q1, m0: m0, m1: m1, st: govStations('police').length };
+      });
+      return { ok: r.st === 0 || (r.r0 > r.r1 && r.q0 < r.q1 && r.m0 > r.m1), actual: r.st + ' stations · response ' + r.r1.toFixed(1) + ' → ' + r.r0.toFixed(1) + ' min · quality ' + Math.round(r.q1) + ' → ' + Math.round(r.q0) + ' · crime modifier ' + r.m1.toFixed(1) + ' → ' + r.m0.toFixed(1) };
+    });
+  await T('government', 'Government: bad fire access — roads, traffic and weather slow the trucks', 'broken roads, heavy congestion and snow make the fire response slower and fires burn longer (the fire system reads it)',
+    async function () {
+      const r = await ev(function () {
+        const G = S.government, c = cityCentre(), x = Math.floor(c.x / TILE), y = Math.floor(c.y / TILE), k = govDistrictIndex(x, y), I = S.p10.infra, key = 'r' + k;
+        govServicesHour(); const good = govResponse('fire', x, y);
+        const had = I[key] ? I[key].cond : null; if (I[key]) I[key].cond = 5; else I[key] = { cond: 5 }; const cg = GOV.cache.congD[k]; GOV.cache.congD[k] = 0.9; const sn = VE.wx.snow; VE.wx.snow = 1;
+        const bad = govResponse('fire', x, y); GOV.cache.respD.fire[k] = bad; const rate = govFireRate({ x: x, y: y });
+        VE.wx.snow = sn; GOV.cache.congD[k] = cg; if (had === null) delete I[key]; else I[key].cond = had; govServicesHour();
+        return { good: good, bad: bad, rate: rate, st: govStations('fire').length };
+      });
+      return { ok: r.st === 0 || (r.bad > r.good * 1.5 && r.rate < 1), actual: r.st + ' stations · response ' + r.good.toFixed(1) + ' → ' + r.bad.toFixed(1) + ' min · fire put-out rate ×' + r.rate.toFixed(2) };
+    });
+  await T('government', 'Government: zero maintenance budget — networks degrade', 'all funding at 0 % for 2 days: the Part 10 maintenance networks follow, power / water / sewage levels fall and the advisor warns',
+    async function () {
+      const r = await ev(function () {
+        const s = __gvSnap(), G = S.government; __gvh(2); const v0 = G.maint.power.v + G.maint.water.v + G.maint.sewage.v;
+        GOV_SERVICES.forEach(function (x) { G.budget.funding[x[0]] = 0; }); __gvh(48);
+        const v1 = G.maint.power.v + G.maint.water.v + G.maint.sewage.v, lv = [G.maint.power.level, G.maint.water.level], m = S.p10.maint.roads, adv = govAdvice().length;
+        __gvRestore(s); __gvh(1); return { v0: v0, v1: v1, lv: lv, m: m, adv: adv };
+      });
+      return { ok: r.v1 < r.v0 && r.m === 0 && r.adv > 0, actual: 'power + water + sewage ' + r.v0 + ' → ' + r.v1 + ' (' + r.lv.join(' / ') + ') · road maintenance network ' + r.m + ' · advisor messages ' + r.adv };
+    });
+  await T('government', 'Government: large infrastructure failure — real failures, event, recovery', 'failed networks break for real (power failure, water leak, closure), an Infrastructure Failure event offers emergency repairs that restore the roads; nothing crashes',
+    async function () {
+      const r = await ev(function () {
+        if (!S.p10.infraInit || !Object.keys(S.p10.infra).length) agingScan();       // the Part 10 aging scan registers the road / bridge assets
+        const s = __gvSnap(), G = S.government, I = S.p10.infra, saved = {}; Object.keys(I).forEach(function (k) { saved[k] = I[k].cond; I[k].cond = 3; });
+        GOV_SERVICES.forEach(function (x) { G.budget.funding[x[0]] = 0; }); G.maint.power = { v: 0 }; G.maint.water = { v: 0 }; G.maint.sewage = { v: 0 }; G.events.log = [];
+        const f0 = S.p9.util.failures.length; let tries = 0; while (tries++ < 40 && S.p9.util.failures.length === f0) govMaintenanceHour();
+        const failed = S.p9.util.failures.length > f0, lvl = G.maint.roads.level; govEventsDay(); const ev1 = govEventActive('infraFailure');
+        govEventChoice('infraFailure', 'repair'); const rep = Object.keys(I).every(function (k) { return I[k].cond >= 23; });
+        Object.keys(saved).forEach(function (k) { I[k].cond = saved[k]; }); S.p9.util.failures = S.p9.util.failures.filter(function (f) { return f.cause !== 'maintenance'; });
+        __gvRestore(s); __gvh(1); return { failed: failed, lvl: lvl, ev: ev1, rep: rep, err: GOV.errors };
+      });
+      return { ok: r.failed && r.lvl === 'Failed' && r.ev && r.rep && r.err === 0, actual: 'roads ' + r.lvl + ' · power failure through the utility system ' + r.failed + ' · Infrastructure Failure ' + r.ev + ' · emergency repairs restore roads ' + r.rep + ' · errors ' + r.err };
+    });
+  await T('government', 'Government: 100× speed — light, no errors', '6 s at 100×: the government keeps up (hourly pass < 30 ms on this city), no errors, approval and budget finite',
+    async function () {
+      const r = await ev(async function () {
+        GOV.errors = 0; setSpeed(100); const g0 = S.clock.gameSec, t0 = performance.now();
+        await __qa.until(function () { return performance.now() - t0 > 6000; }, 9000); setSpeed(0);
+        return { hours: (S.clock.gameSec - g0) / 3600, hour: GOV.prof.hour, err: GOV.errors, fin: isFinite(S.government.approval.value) && isFinite(S.budget) };
+      });
+      return { ok: r.hours > 0 && r.hour < 30 && r.err === 0 && r.fin, actual: r.hours.toFixed(1) + ' game hours · hourly pass ' + r.hour.toFixed(2) + ' ms · errors ' + r.err + ' · finite ' + r.fin };
+    });
+  await T('government', 'Government: save → restart → load (save 3.1)', 'taxes, funding, loans, policies, projects, approval and reports survive a restart of the app',
+    async function () {
+      const a = await ev(function () {
+        const G = S.government; S.budget += 2e6; govSetTax('commercial', 17); govSetTax('property', 2.5); G.budget.funding.health = 1.2; govBorrow(5000); govPolicyEnable('recycling');
+        const pj = ['park', 'firehq', 'policehq', 'flood'].find(function (k) { return govProjectStart(k, 'high').ok; }) || '';
+        __gvh(1); saveGame(true);
+        return { t: JSON.stringify(govTaxes()), f: G.budget.funding.health, l: G.budget.loans.length, p: Object.keys(G.policies.active).join(), pj: pj, n: G.projects.length, ap: Math.round(G.approval.value * 100), rep: G.reports.length, schema: JSON.parse(Store.getItem(slotKey(3))).header.schema };
+      });
+      await page.reload();
+      await page.waitForFunction(function () { return document.getElementById('bootSplash').style.display === 'none' && typeof loadGame === 'function'; }, null, { timeout: 120000 });
+      await helpers(); await gvInit();
+      const b = await ev(function () {
+        if (PSH.dialogOpen) { const x = document.querySelector('#sysBtns button'); if (x) x.click(); }
+        const lr = loadGame(3); if (!STARTED && typeof startGame === 'function') { startGame(lr); closeModal(); clearDialogues(); setSpeed(0); } const G = S.government;
+        return { isNew: lr.isNew, t: JSON.stringify(govTaxes()), f: G.budget.funding.health, l: G.budget.loans.length, p: Object.keys(G.policies.active).join(), n: G.projects.length, ap: Math.round(G.approval.value * 100), rep: G.reports.length };
+      });
+      const same = !b.isNew && a.t === b.t && a.f === b.f && a.l === b.l && a.p === b.p && a.n === b.n && a.ap === b.ap && a.rep === b.rep;
+      return { ok: same && a.schema === '3.1' && a.l >= 1 && a.p === 'recycling', actual: 'save schema ' + a.schema + ' · taxes ' + (a.t === b.t) + ' · funding ' + (a.f === b.f) + ' · loans ' + b.l + ' · policies ' + b.p + ' · projects ' + b.n + ' (' + (a.pj || 'no free site') + ') · approval ' + (a.ap === b.ap) + ' · reports ' + b.rep };
+    });
+  await T('government', 'Government: old save (v2.5.0) and corrupt government data', 'a save without a government block loads with safe defaults; garbage in the block (bad numbers, unknown projects / policies / events, HTML) is sanitized; nothing crashes',
+    async function () {
+      const r = await ev(function () {
+        saveGame(true); const raw = JSON.parse(Store.getItem(slotKey(3)));
+        const old = JSON.parse(JSON.stringify(raw)); delete old.government; old.header.gameVersion = '2.5.0'; Store.setItem(slotKey(3), JSON.stringify(old)); const lo = loadGame(3);
+        const oldOk = !lo.isNew && !!S.government && S.government.approval.value === 60 && validateImport(old).length === 0; GOV.errors = 0; __gvh(3); const runs = GOV.errors === 0 && !!S.government.services.health;
+        const bad = JSON.parse(JSON.stringify(raw)); bad.government.budget.funding.health = 'x'; bad.government.budget.loans = [null, { remaining: 'NaN' }, 5]; bad.government.projects = [{ type: 'evil', note: '<script>' }, { type: 'park', status: '???', note: '<img onerror=1>' }];
+        bad.government.policies.active = { hack: { until: 9 }, green: { until: 'x' } }; bad.government.events.active = [{ id: 'nope' }]; bad.government.approval.value = -50; bad.government.taxes = { residential: 999, property: -3 };
+        Store.setItem(slotKey(3), JSON.stringify(bad)); const lb = loadGame(3), G = S.government; __gvh(2);
+        const san = !lb.isNew && G.budget.funding.health === 1 && G.budget.loans.length === 0 && G.projects.length === 1 && G.projects[0].status === 'planned' && G.projects[0].note.indexOf('<') < 0 && !G.policies.active.hack && G.events.active.length >= 0 && !G.events.active.some(function (e) { return e.id === 'nope'; }) && G.approval.value >= 0 && govTaxes().property >= 0 && govTaxes().property <= 20;
+        return { oldOk: oldOk, runs: runs, san: san, err: GOV.errors };
+      });
+      return { ok: r.oldOk && r.runs && r.san && r.err === 0, actual: 'v2.5.0 save → defaults ' + r.oldOk + ', keeps running ' + r.runs + ' · corrupt block sanitized ' + r.san + ' · errors ' + r.err };
+    });
+  for (const pp of [['windows', 'android'], ['android', 'windows']]) {
+    await T('government', 'Government: ' + (pp[0] === 'windows' ? 'Windows → Android' : 'Android → Windows') + ' save', 'a ' + pp[0] + ' save keeps the whole government block on ' + pp[1],
+      async function () {
+        const r = await ev(function (from) {
+          const G = S.government; govSetTax('industrial', 19); G.budget.funding.parks = 0.7; saveGame(true);
+          const raw = JSON.parse(Store.getItem(slotKey(3))); raw.header.platform = from; if (raw.origin) { raw.origin.platform = from; raw.origin.lastPlatform = from; }
+          const want = JSON.stringify([raw.government.taxes, raw.government.budget.funding, raw.government.policies, raw.government.projects.length, raw.government.approval.value]);
+          Store.setItem(slotKey(3), JSON.stringify(raw)); const lr = loadGame(3), H = S.government;
+          const got = JSON.stringify([H.taxes, H.budget.funding, H.policies, H.projects.length, H.approval.value]);
+          return { same: !lr.isNew && want === got, ind: govTaxes().industrial, parks: H.budget.funding.parks };
+        }, pp[0]);
+        return { ok: r.same && r.ind === 19 && r.parks === 0.7, actual: 'government block identical ' + r.same + ' · industrial tax ' + r.ind + '% · parks funding ' + r.parks };
+      });
+  }
+  await T('government', 'City Management UI: 13 tabs, heatmaps, Management button', 'the CITY MANAGEMENT panel renders every tab inside the screen, the 10 government heatmaps have data, the mobile toolbar has a Management button that opens it',
+    async function () {
+      const r = await ev(async function () {
+        __gvh(2); const out = []; let oob = [];
+        for (const t of GOV_TABS) {
+          openGovernment(t[0]); await __qa.frames(2);
+          const root = document.getElementById('gvRoot'), len = root ? root.innerText.length : 0;
+          if (typeof mobileUiAudit === 'function' && document.body.classList.contains('mobileUI')) oob = oob.concat(mobileUiAudit(false).filter(function (a) { return !a.ok; }).map(function (a) { return t[0] + ':' + a.id; }));
+          const wide = Array.from(root.querySelectorAll('.e2Tile, .e2Card')).filter(function (e) { const q = e.getBoundingClientRect(); return q.right > innerWidth + 1 || q.left < -1; }).length;
+          out.push(t[0] + ':' + len + (wide ? ' (' + wide + ' outside)' : ''));
+        }
+        closeModal(); await __qa.frames(2);
+        const heats = GOV_HEATS.filter(function (h) { const g = p9HeatGrid(h[0]); if (!g) return false; let mx = 0; for (let i = 0; i < g.length; i++) mx = Math.max(mx, g[i]); return mx > 0; }).length;
+        let btn = null; const mb = document.querySelector('#mBar [data-mbar="gov"]');
+        if (mb) { mb.click(); await __qa.frames(3); btn = !!document.getElementById('gvRoot'); closeModal(); }
+        return { out: out, oob: oob, heats: heats, btn: btn, mobile: document.body.classList.contains('mobileUI') };
+      });
+      const bad = r.out.filter(function (x) { return /outside/.test(x) || +x.split(':')[1].split(' ')[0] < 60; });
+      return { ok: bad.length === 0 && r.oob.length === 0 && r.heats === 10 && (!r.mobile || r.btn === true), actual: r.out.join(' · ') + (r.oob.length ? ' · OUT OF BOUNDS ' + r.oob.join(', ') : '') + ' · heatmaps with data ' + r.heats + '/10' + (r.mobile ? ' · Management button opens the panel ' + r.btn : '') };
+    });
+  await T('security', 'Government admin tools are OWNER / ADMIN / developer only', 'a normal player cannot reset the government, run its ticks, start government events or use the government.* console commands; the admin view is hidden',
+    async function () {
+      const r = await ev(function () {
+        const G = S.government, ap = G.approval.value, nEv = G.events.active.length, tax = JSON.stringify(govTaxes());
+        const a = adminGov('reset'), b = adminGov('event:taxProtest'), c = adminGov('tick');
+        let out = ''; try { out = String(runAdminCommand('government.reset') || '') + String(runAdminCommand('government.stats') || ''); } catch (e) { out = 'threw'; }
+        return { denied: a === undefined && b === undefined && c === undefined, same: S.government === G && G.approval.value === ap && G.events.active.length === nEv && JSON.stringify(govTaxes()) === tax, leak: /approval|funding/.test(out) };
+      });
+      return { ok: r.denied && r.same && !r.leak, actual: 'admin government actions denied ' + r.denied + ' · government unchanged ' + r.same + ' · console output leaked ' + r.leak };
     });
 
   await T('security', 'Economy admin tools are OWNER / ADMIN only', 'a normal player cannot start shocks, force the cycle or run ticks; the economy debug lines and admin view are hidden',

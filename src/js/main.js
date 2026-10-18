@@ -220,6 +220,7 @@ function bindInput() {
     else if (k === '-' || k === ',') stepSpeed(-1);
     else if (k === 'n') showHeatPicker();
     else if (k === 'g') openStatsCenter();
+    else if (k === 'k') { if (typeof openGovernment === 'function') openGovernment(); }   // Part 18: City Management
     else if (k >= '1' && k <= '9') setSpeed(SIM_SPEEDS[+k]);
   });
   // Keep panels from rebuilding while the user interacts with them
@@ -313,6 +314,7 @@ function bindUI() {
       case 'storyreplay': S.p5.story.phase = 'intro'; clearDialogues(); storyTick(); break;
       case 'cityhall': openCityHall(); break;
       case 'econ2': closeLeft(); openEconomy2('overview'); break;   // Part 17: Economy center
+      case 'gov': closeLeft(); if (typeof openGovernment === 'function') openGovernment('overview'); break;   // Part 18: City Management
       case 'transfer': transferToBudget(+v); if ($('modalTitle').textContent.indexOf('City Hall') >= 0 || $('modalTitle').textContent.indexOf(tr('City Hall')) >= 0) openCityHall(); else renderLeft(true); break;
       case 'acquire': confirmDialog('🦈 Acquire ' + aiDef(id).name + '?', 'Price: <b>' + money(aiValue(id)) + '</b>. All its buildings and cash become yours.', 'Acquire', function () { acquireAI(id); renderLeft(true); }); break;
       case 'mprice': setMarketPrice(id, +v); renderLeft(true); break;

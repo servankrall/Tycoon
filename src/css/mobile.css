@@ -522,3 +522,10 @@ body.mobileUI #e2Root .e2Grid{grid-template-columns:repeat(auto-fill,minmax(calc
 body.mobileUI #e2Root .e2Tbl td,body.mobileUI #e2Root .e2Tbl th{padding:8px 6px;font-size:max(12px,calc(var(--u)*12));}
 body.mobileUI #e2Root .e2Slider input[type=range]{height:var(--touch);}
 body.mobileUI #e2Root .e2Tabs{-webkit-overflow-scrolling:touch;}
+body.mobileUI #gvRoot .btn{min-height:var(--touch);}
+body.mobileUI #gvRoot .e2Grid{grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*140),1fr));}
+body.mobileUI #gvRoot .e2Tbl td,body.mobileUI #gvRoot .e2Tbl th{padding:8px 6px;font-size:max(12px,calc(var(--u)*12));}
+body.mobileUI #gvRoot .e2Slider input[type=range]{height:var(--touch);}
+body.mobileUI #gvRoot .e2Tabs{-webkit-overflow-scrolling:touch;}
+body.mobileUI #gvRoot .gvFund input,body.mobileUI #gvRoot .gvTax input{height:var(--touch);}
+body.mobileUI #gvRoot .gvCards{grid-template-columns:1fr;}

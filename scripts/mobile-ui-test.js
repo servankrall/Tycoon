@@ -97,7 +97,7 @@ async function runDevice(browser, base, dev) {
   });
   await check('Gameplay HUD', async function () {
     const r = await ev(function () { return { hud: !!document.querySelector('#mHud') && getComputedStyle($('mHud')).display !== 'none', bar: document.querySelectorAll('#mBar [data-mbar]').length, desk: getComputedStyle($('topbar')).display, fit: MOB.fitLevel }; });
-    return { ok: r.hud && r.bar === 7 && r.desk === 'none', detail: 'mobile HUD + 7-button toolbar, desktop top bar hidden · fit level ' + r.fit };
+    return { ok: r.hud && r.bar === 8 && r.desk === 'none', detail: 'mobile HUD + 8-button toolbar (incl. Management), desktop top bar hidden · fit level ' + r.fit };
   });
   await check('Touch Camera', async function () {
     const before = await ev(function () { return { x: CAM.x, y: CAM.y, z: CAM.zoom }; });

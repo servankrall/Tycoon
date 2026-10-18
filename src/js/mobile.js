@@ -146,8 +146,8 @@ function buildMobileHud() {
     '<button class="mFab" id="mSearchBtn" aria-label="Search">🔍</button><button class="mFab hidden" id="mRotReset" aria-label="North up">↺</button>';
   document.body.appendChild(side); MOB.side = side;
   const bar = document.createElement('nav'); bar.id = 'mBar';
-  bar.innerHTML = [['build', '🏗️', 'BUILD'], ['road', '🛣️', 'ROAD'], ['zone', '🟩', 'ZONE'], ['transport', '🚇', 'TRANSPORT'], ['city', '🏙️', 'CITY'], ['economy', '💰', 'ECONOMY'], ['map', '🗺️', 'MAP']]
-    .map(function (x) { return '<button class="mBtn" data-mbar="' + x[0] + '"><span>' + x[1] + '</span><b>' + x[2] + '</b></button>'; }).join('');
+  bar.innerHTML = [['build', '🏗️', 'BUILD'], ['road', '🛣️', 'ROAD'], ['zone', '🟩', 'ZONE'], ['transport', '🚇', 'TRANSPORT'], ['city', '🏙️', 'CITY'], ['economy', '💰', 'ECONOMY'], ['gov', '🏛️', 'MANAGE'], ['map', '🗺️', 'MAP']]
+    .map(function (x) { return '<button class="mBtn" data-mbar="' + x[0] + '" aria-label="' + (x[0] === 'gov' ? 'Management' : x[2]) + '"><span>' + x[1] + '</span><b>' + x[2] + '</b></button>'; }).join('');
   document.body.appendChild(bar); MOB.bar = bar;
   const handle = document.createElement('button'); handle.id = 'mBarHandle'; handle.setAttribute('aria-label', 'Show toolbar'); handle.innerHTML = '<span>🏗️</span> TOOLS ▲';
   handle.onclick = function () { document.body.classList.toggle('mBarPeek'); sfx('click'); if (typeof haptic === 'function') haptic('tap'); };
@@ -203,6 +203,7 @@ function mobileToolbar(k) {
   else if (k === 'transport') { if (was === 'transport') closeSheet(); else openTransportSheet(); }
   else if (k === 'city') openMobilePage('city');
   else if (k === 'economy') openMobilePage('economy');
+  else if (k === 'gov') { if (typeof openGovernment === 'function') openGovernment(); }
   else if (k === 'map') openCityMap();
   refreshMobileBar();
 }
