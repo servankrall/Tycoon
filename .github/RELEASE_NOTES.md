@@ -20,6 +20,26 @@
 ## Eski tarayıcı kayıtları
 Oyunu Chrome/Edge'de oynadıysanız: tarayıcıda Ayarlar → **📦 Export all saves** (veya **⬇️ Download .json**), sonra EXE'de **📦 Import old browser save** ile dosyayı seçin.
 
+## 2.7.0 — Part 19: Advanced Transportation & Mobility 3.0 + Admin World Builder 2.0
+Yeni **🚦 TRANSPORTATION** paneli (Windows: Transit sekmesinde **🚦 OPEN TRANSPORTATION** · Android: Ekonomi sayfasında **🚦 TRANSPORTATION** · komut paleti „Open Transportation"). Mevcut TrafficEngine (trafik 2.0, hatlar, kavşaklar, rota) korunur; TransportationEngine 3.0 onunla birlikte çalışır.
+- **Metro:** istasyon kapasitesi, yolcu, bekleyen, kapsama, gelir, bakım; metro deposu ek tren kapasitesi verir.
+- **Hat editörü:** hat oluştur, durak ekle / sil / taşı / yeniden sırala, renk, sefer sıklığı, tren veya otobüs sayısı, yeniden adlandır; oyuncunun durak sırası korunur.
+- **Otobüs:** otobüs deposu, sefer saatleri ve sıklık. **Tren:** yolcu ve yük trenleri; yük treni sanayi ürününü taşır, gelir ekonomiye yazılır.
+- **Havaalanı:** Small → Regional → International → Mega. **Liman:** Small → Cargo → Passenger → Industrial → Mega.
+- **Bisiklet, yaya, otopark:** bisiklet şeritleri ve park yerleri, kaldırımlar ve yaya geçitleri, sokak parkı ve otoparklar, park arama süresi.
+- **Traffic AI 3.0:** kavşak modları Fixed · Adaptive · Smart · Emergency Priority; toplu taşıma önceliği; tıkanıklık tahmini; dinamik rota (10 saniyede en fazla araçların %15'i, yalnızca ≥ %15 kazançta — herkes aynı yola kaçmaz); acil durum aracı 16 kare önden yeşil alır.
+- **Dashboard:** 14 sayı, 10 ulaşım ısı haritası; ulaşım ekonomiye bağlı (yolculuk süresi → iş gücü, kapsama → lojistik, yük geliri, istasyon yakınında kira primi).
+- **City Transport Generator:** 14 adım, Smart Metro ve Smart Bus; şehir boyutuna göre Small → otobüs + bisiklet + yaya · Medium → otobüs + metro adayı · Large → otobüs + metro + tren · Mega → hepsi.
+- **Transport Validator + Auto Fix:** kopuk istasyon, çıkmaz hat, imkânsız ray, eksik depo, yolsuz bina, elektriksiz istasyon, kırık hat, geçersiz araç bulunur ve onarılır.
+- **Admin World Builder 2.0** (yalnızca yetkili admin):
+  - pipeline: Seed Validation → … → Transportation → Environment / Traffic Balance → Service Coverage → World Validator → Auto Fix (≤ 5 tur) → Balance → Performance → Final Validator; her aşamanın sonucu kaydedilir;
+  - onarılamayan dünya **WORLD GENERATION FAILED** ile reddedilir ve önceki şehir geri yüklenir;
+  - World Quality Score (10 kategori), Clean World Balancer, endüstri tamponu, su koruması;
+  - 20 preset, 8 kalite profili, 16 testlik paket, WORLD HEALTH REPORT;
+  - CREATE OPTIMIZED WORLD: PLAY yalnızca WORLD READY olunca.
+- **175 admin aracı** (13 kategori), arama, favoriler, Ctrl+K (yalnızca admin), Ctrl+Z / Ctrl+Y geri al / yinele. Normal oyuncuda gizli ve reddedilir.
+- **Save 3.2:** `transportation` bloğu; v2.6.0 kayıtları güvenli varsayılanlarla açılır; Windows ↔ Android.
+
 ## 2.6.0 — Part 18: Advanced Government, Public Services & City Governance 2.0
 Yeni **🏛️ CITY MANAGEMENT** paneli (Windows: Şehir → Ekonomi veya **K** · Android: alt araç çubuğunda **🏛️ MANAGE** · komut paleti „Open City Management"). 13 sekme: Overview, Budget, Taxes, Healthcare, Education, Safety, Fire, Transport, Maintenance, Policies, Projects, Citizen Satisfaction, Reports. EconomyEngine 2.0, CitizenEngine, Emergency AI ve kayıt sistemi korunur; Government Engine bunlara bağlanır.
 - **Government Engine:** Budget, Tax, PublicService, Healthcare, Education, Police, FireDepartment, Maintenance, UtilityService, TransportService, Policy, Project, CitizenSatisfaction, CityApproval ve GovernmentReport sistemleri; hizmetler / memnuniyet / bakım saatlik, bütçe / rapor / olaylar günlük; her alt sistem korumalı (hata oyunu durdurmaz).

@@ -1,6 +1,6 @@
 # 🏙️ BLOCK CITY TYCOON — Windows EXE + Android APK
 
-**Build. Manage. Expand.** · Sürüm **2.6.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
+**Build. Manage. Expand.** · Sürüm **2.7.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
 `BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE — ve 2.0.0 ile bir **Android uygulaması** (APK). Windows ve Android **aynı oyun motorunu** kullanır; yalnızca girdi, arayüz, dosya sistemi ve performans katmanı platforma özeldir. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
@@ -39,8 +39,8 @@ Build sonrası:
 ```text
 dist/
 ├── windows/
-│   ├── BLOCK-CITY-TYCOON-Setup-2.6.0.exe       ← kurulum sihirbazı
-│   ├── BLOCK-CITY-TYCOON-Portable-2.6.0.exe    ← kurulumsuz, çift tıkla çalışır
+│   ├── BLOCK-CITY-TYCOON-Setup-2.7.0.exe       ← kurulum sihirbazı
+│   ├── BLOCK-CITY-TYCOON-Portable-2.7.0.exe    ← kurulumsuz, çift tıkla çalışır
 │   └── win-unpacked/BLOCK CITY TYCOON.exe      ← paketlenmiş uygulamanın kendisi
 └── android/
     ├── BLOCK-CITY-TYCOON-Android.apk           ← debug APK (geliştirme)
@@ -578,6 +578,34 @@ Yeni **🏛️ CITY MANAGEMENT** paneli (Windows: Şehir → Ekonomi → *CITY M
 | Olaylar, rapor, danışman | 12 hükümet olayı (seçenekli kararlar); günlük CITY GOVERNMENT REPORT; Smart Government Advisor; 10 ısı haritası (N) ve Government Service Map |
 
 Testler: masaüstü self-test adım 55, Android self-test adım 32, `scripts/qa-test.js` government grubu (küçük şehir, determinizm, 100K, 500K, yüksek / düşük vergi, bütçe açığı, hastane kapasitesi, okul açığı, polis kapsaması, kötü itfaiye erişimi, sıfır bakım bütçesi, büyük altyapı arızası, 100×, kaydet → yeniden başlat → yükle, v2.5.0 / bozuk kayıt, Windows ↔ Android, panel) + güvenlik. Sonuçlar: [docs/TEST_REPORT.md](docs/TEST_REPORT.md).
+
+## 6n. TransportationEngine 3.0 + Admin World Builder 2.0 (2.7.0)
+Yeni **🚦 TRANSPORTATION** paneli (Windows: toplu taşıma (Transit) sekmesindeki **🚦 OPEN TRANSPORTATION** düğmesi · Android: Ekonomi sayfasında **🚦 TRANSPORTATION** · komut paleti „Open Transportation"). Modüler: `transport-engine.js` (metro, otobüs, tren, havaalanı, liman, bisiklet, yaya, otopark, hat editörü, ekonomi bağlantısı), `transport-ai.js` (Traffic AI 3.0, kavşak modları, tahmin, dinamik rota, acil durum önceliği, City Transport Generator, Transport Validator + Auto Fix), `transport-ui.js` (panel, 10 ısı haritası). Mevcut TrafficEngine (trafik 2.0, hatlar, kavşaklar, A* rota) korunur; TransportationEngine 3.0 onun üstüne kurulur. Durum `S.transportation` olarak kaydedilir (Save 3.2). API: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+| Alan | Ne yapar |
+|---|---|
+| Metro | istasyon kapasitesi, yolcu, bekleyen, kapsama, gelir, bakım; metro deposu |
+| Hat editörü | hat oluştur, durak ekle / sil / taşı / sırala, renk, sefer sıklığı, tren / otobüs sayısı, ad; oyuncunun sırası korunur |
+| Otobüs | depo, sefer saatleri (başlangıç / bitiş) ve sıklık |
+| Tren | yolcu ve yük trenleri; yük treni sanayi ürününü taşır ve ekonomiye gelir yazar; tren deposu |
+| Havaalanı | Small (Airstrip) → Regional → International → Mega |
+| Liman | Small → Cargo → Passenger → Industrial → Mega |
+| Bisiklet / yaya / otopark | bisiklet şeritleri ve park yerleri, kaldırımlar ve yaya geçitleri, sokak parkı + otopark, park arama süresi |
+| Traffic AI 3.0 | kavşak modları Fixed · Adaptive · Smart · Emergency Priority; toplu taşıma önceliği; tıkanıklık tahmini; dinamik rota: 10 saniyede en fazla araçların %15'i, yalnızca ≥ %15 kazançta (herkes aynı yola kaçmaz); acil araçlar 16 kare önden yeşil alır |
+| Dashboard ve haritalar | 14 sayı (araç, otobüs, metro / tren / uçak yolcusu, liman yükü, bisiklet ve yürüyüş, yolculuk süresi, tıkanıklık, otopark, memnuniyet, gelir, gider); 10 ulaşım ısı haritası |
+| City Transport Generator | 14 adım (yol, nüfus, iş, ilçe, trafik analizi, Smart Metro, tren, havaalanı / liman bağlantısı, Smart Bus, bisiklet, yaya, otopark, acil durum); şehir boyutuna göre: Small → otobüs + bisiklet + yaya · Medium → otobüs + metro adayı · Large → otobüs + metro + tren · Mega → hepsi |
+| Validator + Auto Fix | kopuk istasyon, çıkmaz hat, imkânsız ray, eksik depo, yolsuz bina, elektriksiz istasyon, boş durak, aşırı yüklü istasyon, kırık hat, geçersiz araç → yeniden bağla, yeniden rota, yeniden kur, değiştir |
+
+**Admin World Builder 2.0** (yalnızca yetkili admin; Admin Center → WORLD → **🧬 WORLD BUILDER 2.0** ve **🧰 ADMIN TOOLS**):
+- **Pipeline:** Seed validation → arazi … → Transportation → Environment balance → Traffic balance → Service coverage → World validator → Auto fix (≤ 5 tur) → Balance pass → Performance pass → Final validator → PLAYABLE WORLD. Her aşamanın sonucu kaydedilir; onarılamayan dünya **WORLD GENERATION FAILED** ile reddedilir ve önceki şehir geri yüklenir.
+- **World Quality Score 0–100:** 10 kategori (Terrain, Roads, Water, Traffic, Pollution, Utilities, Services, Economy, Transportation, Performance); Excellent ≥ 95 · Very Good 85–94 · Good 75–84 · Needs Optimization 60–74 · Invalid < 60.
+- **Clean World Balancer:** yeni şehirde hava %70–100, su %80–100, atık 0–25, kirlilik 0–25, gürültü 0–30. Endüstri tamponu: Industrial → yeşil alan → yol → Residential. Su koruması: ağır sanayi, atık, petrol ve arıtılmamış kanalizasyon suya yakın kurulmaz (arıtma tesisi suyu temizlediği için kıyıda kalabilir).
+- **20 preset** (Balanced, Green, Industrial, Financial, Tourist, Smart, Mega City, Coastal, Mountain, River, Island, Desert, Winter, European, Asian, American, Dense, Low Density, Eco, Future) ve **8 kalite profili** (Balanced, Eco, Dense, Industrial, Tourism, Technology, Mega City, Custom — Custom kaydırıcıları güvenli sınırlar içinde).
+- **16 testlik dünya üretim paketi**, altın kural (NOT READY koşulları), WORLD HEALTH REPORT.
+- **CREATE OPTIMIZED WORLD:** dünya duraklatılmış açılır; PLAY düğmesi yalnızca WORLD READY olunca çıkar.
+- **175 admin aracı** (13 kategori): arama, ★ favoriler, Ctrl+K paleti (yalnızca admin girişliyken), Ctrl+Z / Ctrl+Y geri al / yinele (kayıt snapshot'larıyla, 10 adım). Liste: [docs/ADMIN_COMMANDS.md](docs/ADMIN_COMMANDS.md).
+
+Testler: masaüstü self-test adım 56, Android self-test adım 33, `scripts/qa-test.js` worldgen (20 preset, pipeline / temiz dünya / tampon / su koruması, bozuk dünya onarımı veya reddi, determinizm, şehir boyutuna göre ulaşım), transport (dashboard ve hat editörü, Traffic AI, validator + auto fix, Save 3.2 / v2.6.0 / Windows ↔ Android) ve stress19 (100K / 250K / 500K, 50K araç, mega metro, havaalanı ve liman, aşırı trafik, yağmur, kar, tıkanıklıkta acil durum, elektrik kesintisi, resesyon) grupları + güvenlik. Sonuçlar: [docs/TEST_REPORT.md](docs/TEST_REPORT.md).
 
 ## 7. Pencere ve ayarlar
 

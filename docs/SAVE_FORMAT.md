@@ -1,6 +1,6 @@
 # Save format
 
-Saves are JSON (`CITY_SAVE_V4`, `version` / `saveVersion` **12**). The header names the sections it carries; `header.schema` is **3.1** since v2.6.0.
+Saves are JSON (`CITY_SAVE_V4`, `version` / `saveVersion` **12**). The header names the sections it carries; `header.schema` is **3.2** since v2.7.0 (3.1 in v2.6.0).
 
 | Key | Since | Content |
 |---|---|---|
@@ -8,7 +8,41 @@ Saves are JSON (`CITY_SAVE_V4`, `version` / `saveVersion` **12**). The header na
 | `p9` / `p10` / `p11` | 1.3–1.4 | chunks, regions, utilities, services, transport, finance |
 | `p15` | 2.4.0 | Visual Engine history |
 | `p17` | 2.5.0 | Economy Engine 2.0 (compact) |
-| `government` | **2.6.0 (Save 3.1)** | Government Engine 2.0 |
+| `government` | 2.6.0 (Save 3.1) | Government Engine 2.0 |
+| `transportation` | **2.7.0 (Save 3.2)** | TransportationEngine 3.0 |
+| `worldbuilder` | 2.7.0 | World Builder 2.0 report of a generated world (null for other cities) |
+| `adminTools` | 2.7.0 | admin tool multipliers (power, water, wage, GDP; null when unused) |
+
+## `transportation` block (Save 3.2)
+
+```json
+{
+  "v": 1,
+  "metro": { "lines": { "L4": { "color": "#e63946", "headway": 4, "trains": 6, "order": true } }, "depots": 1, "stationHist": {} },
+  "bus": { "schedules": { "L7": { "start": 6, "end": 22, "headway": 6 } } },
+  "rail": { "cargoTons": 1840, "cargoValue": 92000, "hist": [] },
+  "airport": { "level": "regional", "paxDay": 3100, "cargoDay": 120 },
+  "ports": { "level": "cargo", "teuDay": 410, "imports": 0, "exports": 0 },
+  "bike": { "roads": {} },
+  "pedestrian": { "crosswalks": { "1234": 1 } },
+  "parking": { "street": true, "searchMin": 1.4 },
+  "traffic": { "defaultMode": "adaptive", "modes": { "2210": "smart" }, "ptPriority": { "2210": 1 }, "oneway": {}, "speedMult": 1,
+               "stats": { "reroutes": 51, "predicted": 640, "avoided": 12, "ptGreen": 33, "privDelay": 0.4, "emPreempt": 3 } },
+  "gen": { "tier": "large", "built": ["🚇 Metro 1 (7 stations)"], "at": 3 },
+  "validation": { "ok": true, "issues": 0, "fixed": 4, "at": 3 },
+  "hist": [{ "d": 2, "cars": 2100, "pt": 0.31, "commute": 21.5 }]
+}
+```
+
+Lines and stops stay in `p9.transit` (unchanged). The block holds only the TransportationEngine 3.0 settings for them: player order, colour, trains, frequency and schedule. It also holds the light modes, transit priority, one-way tiles, parking and statistics.
+
+### Migration and validation (Save 3.2)
+
+- **v2.6.0 and older** (no `transportation` block): `sanitizeTransportation(undefined)` returns defaults. Light mode is automatic, street parking is on, and there are no player overrides. Existing lines keep running.
+- **Corrupt data:** modes outside Fixed / Adaptive / Smart / Emergency are dropped, numbers are clamped (headway, trains, speed multiplier), and keys that are not tile indexes or line ids are removed.
+- `worldbuilder` is sanitized by `sanitizeWorldbuilder` (strings cleaned and cut, scores clamped 0–100, at most 40 pipeline entries).
+- `adminTools` multipliers are clamped (power / water 0.3–3, wage / GDP 0.5–2).
+- **Windows ↔ Android:** all three blocks are platform-independent.
 
 ## `government` block (Save 3.1)
 

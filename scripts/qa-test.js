@@ -1085,7 +1085,7 @@ async function runProfile(browser, base, dev) {
         await generateWorld('industrial', { seed: 4242, name: 'QA Buffer', slot: 3, size: 'LARGE', wbProfile: 'balanced' }); closeModal();
         const W = S.worldbuilder, P = wbProfileFor({ wbProfile: 'balanced' }), env = W.env;
         const near = S.buildings.list.filter(function (b) { const d = bdef(b); return b.built && wbPolluter(d) && !d.extract && wbHomesNear(b, d, WB_BUFFER).length; }).length;
-        const wet = S.buildings.list.filter(function (b) { const d = bdef(b); return b.built && wbHeavy(d) && !d.extract && !d.needsWater && wbWaterDist(b, d, WB_WATER) <= WB_WATER; }).length;
+        const wet = S.buildings.list.filter(function (b) { const d = bdef(b); return b.built && wbShoreBanned(d) && wbWaterDist(b, d, WB_WATER) <= WB_WATER; }).length;
         return { stages: W.pipeline.map(function (p) { return p.id; }).join(','), n: W.pipeline.length, env: env, P: { pol: P.pol, air: P.air, water: P.water, noise: P.noise, waste: P.waste }, near: near, wet: wet, ready: W.ready, q: W.quality };
       });
       const e = r.env, P = r.P, envOk = e.pollution <= P.pol + 2 && e.air >= P.air - 3 && e.water >= P.water - 3 && e.noise <= P.noise + 5 && e.waste <= P.waste + 5;
@@ -1121,7 +1121,9 @@ async function runProfile(browser, base, dev) {
       const r = await ev(async function () {
         const out = {};
         for (const sz of ['SMALL', 'MEDIUM', 'LARGE', 'MEGA']) {
-          await generateWorld(sz === 'MEGA' ? 'megacity' : 'balanced', { seed: 3131, name: 'QA ' + sz, slot: 3, size: sz }); closeModal();
+          const res = await generateWorld(sz === 'MEGA' ? 'megacity' : 'balanced', { seed: 3131, name: 'QA ' + sz, slot: 3, size: sz });
+          const dlg = (document.getElementById('sysDialog') || {}).innerText || ''; if (typeof closeSysDialog === 'function') closeSysDialog(); closeModal();
+          if (!res) { out[sz] = { tier: 'FAILED: ' + dlg.slice(0, 160), modes: {}, cand: 0, bike: 0, ped: 0 }; continue; }
           const modes = {}; S.p9.transit.lines.forEach(function (L) { modes[L.mode] = (modes[L.mode] || 0) + 1; });
           out[sz] = { tier: S.transportation.gen ? S.transportation.gen.tier : '', modes: modes, cand: (TPE.metroCandidates || []).length, bike: Object.keys(S.p11.bike).length, ped: Object.keys(S.p11.ped).length };
         }
@@ -1167,14 +1169,15 @@ async function runProfile(browser, base, dev) {
     async function () {
       const r = await ev(function () {
         const stops = S.buildings.list.filter(function (b) { return b.type === 'busstop'; }).slice(0, 3); if (stops.length < 3) return { skip: true };
-        const L = tpLineCreate('bus', stops.map(function (b) { return b.id; }), 'QA Broken').L; removeBuilding(stops[1]); onMapChanged();
-        const D = tpLineCreate('bus', [stops[0].id, stops[2].id], 'QA Dead').L; D.stops = [stops[0].id];
-        AG.vehicles.push(Object.assign({}, AG.vehicles[0] || {}, { id: 999999, line: 'L99999', path: null }));
-        const v0 = tp3Validate(), fx = tp3AutoFix(), v1 = fx.validation;
-        return { before: v0.issues.map(function (i) { return i.id; }).join(','), after: v1.issues.filter(function (i) { return TP_WARN.indexOf(i.id) < 0; }).length, actions: fx.actions.length, okAfter: v1.ok, lineKept: S.p9.transit.lines.indexOf(L) >= 0 && L.stops.length === 2, deadGone: S.p9.transit.lines.indexOf(D) < 0, vehGone: !AG.vehicles.some(function (v) { return v.id === 999999; }) };
+        S.p9.transit.lines = S.p9.transit.lines.filter(function (x) { return !/^QA /.test(x.name); }); tpMakeRoom(2);
+        const L = tpLineCreate('bus', stops.map(function (b) { return b.id; }), 'QA Broken').L, D = tpLineCreate('bus', [stops[0].id, stops[2].id], 'QA Dead').L;
+        L.stops.splice(1, 0, 9999999); D.stops = [stops[0].id];   // after both lines exist (creating a line rebuilds transit, which already drops missing stations)
+        if (AG.vehicles[0]) AG.vehicles.push(Object.assign({}, AG.vehicles[0], { id: 999999, line: 'L99999' }));   // a copy of a real vehicle on a line that does not exist
+        const hadVeh = !!AG.vehicles[0], v0 = tp3Validate(), fx = tp3AutoFix(), v1 = fx.validation;
+        return { hadVeh: hadVeh, before: v0.issues.map(function (i) { return i.id; }).join(','), after: v1.issues.filter(function (i) { return TP_WARN.indexOf(i.id) < 0; }).length, actions: fx.actions.length, okAfter: v1.ok, lineKept: S.p9.transit.lines.indexOf(L) >= 0 && L.stops.length === 3 && L.stops.indexOf(9999999) < 0, deadGone: S.p9.transit.lines.indexOf(D) < 0, vehGone: !AG.vehicles.some(function (v) { return v.id === 999999; }) };
       });
       if (r.skip) return { ok: true, actual: 'city has fewer than 3 bus stops — nothing to break' };
-      return { ok: /broken/.test(r.before) && /deadend/.test(r.before) && /vehicle/.test(r.before) && r.okAfter && r.lineKept && r.deadGone && r.vehGone, actual: 'found ' + r.before + ' · ' + r.actions + ' fix(es) · remaining critical issues ' + r.after + ' · broken line rerouted ' + r.lineKept + ' · dead-end removed ' + r.deadGone + ' · invalid vehicle removed ' + r.vehGone };
+      return { ok: /broken/.test(r.before) && /deadend/.test(r.before) && (/vehicle/.test(r.before) || !r.hadVeh) && r.okAfter && r.lineKept && r.deadGone && r.vehGone, actual: 'found ' + r.before + ' · ' + r.actions + ' fix(es) · remaining critical issues ' + r.after + ' · broken line rerouted ' + r.lineKept + ' · dead-end removed ' + r.deadGone + ' · invalid vehicle removed ' + r.vehGone };
     });
   await T('transport', 'Save 3.2: transportation block · v2.6.0 save · Windows ↔ Android (TEST O · P · Q)', 'transportation (metro, bus, rail, airport, ports, bike, pedestrian, parking, traffic) survives save → restart → load; a v2.6.0 save without it gets defaults; Windows / Android saves keep it',
     async function () {
@@ -1211,20 +1214,22 @@ async function runProfile(browser, base, dev) {
         S.city.population = 20000; return out;
       });
       const ok = r.every(function (x) { return x.fin && x.statsMs < 300 && x.hours > 0; });
-      return { ok: ok, actual: r.map(function (x) { return fmt(x.pop) + ': ' + fmt(x.cars) + ' cars, stats ' + x.statsMs.toFixed(0) + ' ms, longest frame ' + Math.round(x.worst) + ' ms, ' + x.hours.toFixed(1) + ' game h'; }).join(' · ') };
+      return { ok: ok, actual: r.map(function (x) { return x.pop.toLocaleString('en-US') + ': ' + x.cars.toLocaleString('en-US') + ' cars, stats ' + x.statsMs.toFixed(0) + ' ms, longest frame ' + Math.round(x.worst) + ' ms, ' + x.hours.toFixed(1) + ' game h'; }).join(' · ') };
     });
   await T('stress19', 'Stress D: 50K vehicles (statistical + agent LOD)', 'at 500K citizens the city has ≥ 50K cars statistically while the simulated agents stay within the quality cap (near → full AI, far → statistics)',
     async function () {
       const r = await ev(function () { S.city.population = 500000; TPE.cache = null; const s = tpStats(true); const cap = perf().veh * 3 + 60; const n = AG.vehicles.length; S.city.population = 20000; return { cars: s.cars, agents: n, cap: cap }; });
-      return { ok: r.cars >= 50000 && r.agents <= r.cap, actual: fmt(r.cars) + ' cars in the statistical traffic model · ' + r.agents + ' vehicle agents (cap ' + r.cap + ')' };
+      return { ok: r.cars >= 50000 && r.agents <= r.cap, actual: r.cars.toLocaleString('en-US') + ' cars in the statistical traffic model · ' + r.agents + ' vehicle agents (cap ' + r.cap + ')' };
     });
   await T('stress19', 'Stress E–G: mega metro network · large airport · large port', 'a 6-line metro network (up to 10 stations each), a Regional Airport and a Small + Cargo port run 4 s at 100× without errors; the validator finds no critical issue',
     async function () {
       const r = await ev(async function () {
+        await __qa.world('LARGE', 1919, 3); setSpeed(0);                                   // a fresh large city: the earlier tests leave a full map
         if (typeof wgUnlockTech === 'function') { wgUnlockTech('metro'); wgUnlockTech('rail'); }
+        S.p9.transit.lines = S.p9.transit.lines.filter(function (L) { return !/^QA /.test(L.name); }); tpMakeRoom(6);
         const before = tpLines('metro').length; let built = 0;
         for (let k = 0; k < 6 && tpLines().length < 16; k++) { const sites = []; for (let s = 0; s < 8; s++) sites.push({ x: 4 + ((k * 7 + s * 6) % (MAP.W - 8)), y: 4 + ((k * 11 + s * 5) % (MAP.H - 8)) }); if (tpBuildLine('metro', sites, 'QA Metro ' + k)) built++; }
-        const ap = tpPlaceNear('regionalairport', MAP.W >> 1, MAP.H >> 1, MAP.W), pt = tpPlaceNear('smallport', 2, 2, MAP.W), pc = tpPlaceNear('port', 2, MAP.H - 4, MAP.W); onMapChanged();
+        const ap = tpPlaceNear('regionalairport', MAP.W >> 1, MAP.H >> 1, MAP.W) || wgPlaceAnywhere(null, 'regionalairport', { clearLocal: true }), pt = tpPlaceNear('smallport', 2, 2, MAP.W), pc = tpPlaceNear('port', 2, MAP.H - 4, MAP.W); onMapChanged();
         setSpeed(100); const t0 = performance.now(); await __qa.until(function () { return performance.now() - t0 > 4000; }, 6000); setSpeed(0);
         const v = tp3Validate(), crit = v.issues.filter(function (i) { return TP_WARN.indexOf(i.id) < 0; });
         return { lines: tpLines('metro').length - before, built: built, air: tpAirport().level, port: tpPort().level, crit: crit.map(function (i) { return i.what; }).slice(0, 3), err: TPE.errors };

@@ -57,6 +57,8 @@ function wbCustomCfg(c) {
 
 /* ---------- classification ---------- */
 function wbHeavy(d) { return d.pol >= 8 || d.cat === 'Waste' && d.id !== 'recycling' || /oil|refinery|sewage|landfill|smelter/.test(d.id) || (d.smoke && d.pol > 0); }
+// water protection applies to heavy industry, waste, oil and untreated sewage; a sewage treatment plant cleans the water and may stand on the shore
+function wbShoreBanned(d) { return wbHeavy(d) && !d.needsWater && !d.extract && d.id !== 'sewageplant'; }
 function wbPolluter(d) { return d.pol >= 4 && (d.cat === 'Industry' || d.cat === 'Resources' || d.cat === 'Waste' || d.cat === 'Utilities' || d.smoke); }
 function wbGap(a, da, b, db) { return Math.max(0, Math.max(a.x - (b.x + db.w - 1), b.x - (a.x + da.w - 1)), Math.max(a.y - (b.y + db.h - 1), b.y - (a.y + da.h - 1))); }   // tiles between footprints
 function wbWaterDist(b, d, R) { for (let r = 1; r <= R; r++) for (let y = b.y - r; y < b.y + d.h + r; y++) for (let x = b.x - r; x < b.x + d.w + r; x++) { if (!inMap(x, y)) continue; if ((x < b.x - r + 1 || x > b.x + d.w + r - 2 || y < b.y - r + 1 || y > b.y + d.h + r - 2) && MAP.nature[idx(x, y)] === 2) return r; } return R + 1; }
@@ -67,7 +69,7 @@ function wbSiteOk(d, x, y, heavy) {
   if (!wbPlaceOk(d, x, y)) return false;
   const fake = { x: x, y: y };
   if (S.buildings.list.some(function (o) { const od = bdef(o); return od.housing && wbGap(fake, d, o, od) <= WB_BUFFER; })) return false;
-  if (heavy && !d.needsWater && wbWaterDist(fake, d, WB_WATER) <= WB_WATER) return false;
+  if (wbShoreBanned(d) && wbWaterDist(fake, d, WB_WATER) <= WB_WATER) return false;
   return true;
 }
 function wbFindSite(d, heavy, ctx) {
@@ -92,7 +94,7 @@ function wbPlantBuffer(b, d) {
 /* violations of the industrial buffer / water protection (mines on their deposits and shore-bound buildings exempt) */
 function wbViolations() {
   let buffer = 0, water = 0;
-  S.buildings.list.forEach(function (b) { const d = bdef(b); if (!b.built || !wbPolluter(d) || d.extract) return; if (wbHomesNear(b, d, WB_BUFFER).length) buffer++; if (wbHeavy(d) && !d.needsWater && wbWaterDist(b, d, WB_WATER) <= WB_WATER) water++; });
+  S.buildings.list.forEach(function (b) { const d = bdef(b); if (!b.built || d.extract || !(wbPolluter(d) || wbHeavy(d))) return; if (wbPolluter(d) && wbHomesNear(b, d, WB_BUFFER).length) buffer++; if (wbShoreBanned(d) && wbWaterDist(b, d, WB_WATER) <= WB_WATER) water++; });
   return { buffer: buffer, water: water };
 }
 /* while the World Builder runs, the generator's own placement keeps the buffer (fixWorld cannot undo the balance) */
@@ -102,7 +104,8 @@ function wbViolations() {
   window.wgCanPlace = function (d, x, y) {
     const ok = cp.apply(this, arguments); if (!ok || !WBLD.enforce || !d) return ok;
     const fake = { x: x, y: y };
-    if (wbPolluter(d) && !d.extract) { if (S.buildings.list.some(function (o) { const od = bdef(o); return od.housing && wbGap(fake, d, o, od) <= WB_BUFFER; })) return false; if (wbHeavy(d) && !d.needsWater && wbWaterDist(fake, d, WB_WATER) <= WB_WATER) return false; }
+    if (wbPolluter(d) && !d.extract && S.buildings.list.some(function (o) { const od = bdef(o); return od.housing && wbGap(fake, d, o, od) <= WB_BUFFER; })) return false;
+    if (wbShoreBanned(d) && wbWaterDist(fake, d, WB_WATER) <= WB_WATER) return false;     // waste / oil stay off the shore too
     if (d.housing && S.buildings.list.some(function (o) { const od = bdef(o); return wbPolluter(od) && !od.extract && wbGap(fake, d, o, od) <= WB_BUFFER; })) return false;
     return true;
   };
@@ -127,8 +130,8 @@ function wbBalanceEnvironment(ctx, P) {
   const log = { moved: 0, homesMoved: 0, trees: 0, parks: 0, removed: 0, waste: 0, waterMoved: 0 };
   const L = S.buildings.list;
   // 1. industrial buffer + 2. water protection
-  L.filter(function (b) { return b.built && wbPolluter(bdef(b)); }).forEach(function (b) {
-    const d = bdef(b), heavy = wbHeavy(d), homes = wbHomesNear(b, d, WB_BUFFER), wet = heavy && !d.needsWater && !d.extract && wbWaterDist(b, d, WB_WATER) <= WB_WATER;
+  L.filter(function (b) { const d = bdef(b); return b.built && (wbPolluter(d) || wbHeavy(d)); }).forEach(function (b) {
+    const d = bdef(b), heavy = wbHeavy(d), homes = wbPolluter(d) ? wbHomesNear(b, d, WB_BUFFER) : [], wet = wbShoreBanned(d) && wbWaterDist(b, d, WB_WATER) <= WB_WATER;
     if (!homes.length && !wet) return;
     if (!d.extract) {
       const s = wbFindSite(d, heavy, ctx); if (s) { const n = wbMove(b, s); log.moved++; if (wet) log.waterMoved++; log.trees += wbPlantBuffer(n, bdef(n)); return; }
@@ -136,8 +139,8 @@ function wbBalanceEnvironment(ctx, P) {
       if (typeof wgPlaceAnywhere === 'function') { const keep = { type: b.type, level: b.level, owner: b.owner, recipe: b.recipe }; const was = WBLD.enforce; WBLD.enforce = true; removeBuilding(b); const n = wgPlaceAnywhere(ctx, keep.type, { districts: ctx && ctx.lots ? ['INDUSTRIAL', 'SUBURBS'] : null, clearSmall: true }) || wgPlaceAnywhere(null, keep.type, { clearSmall: true }); WBLD.enforce = was; if (n) { n.level = keep.level; n.owner = keep.owner; n.recipe = keep.recipe; log.moved++; if (wet) log.waterMoved++; log.trees += wbPlantBuffer(n, bdef(n)); return; } addBuildingToMap(b); }
       // a coal plant becomes a wind farm on the same lot (no smoke, no buffer needed)
       if (b.type === 'powerplant' && BUILDINGS.wind) { const x = b.x, y = b.y; removeBuilding(b); if (typeof wgUnlockTech === 'function') wgUnlockTech('wind'); const n = makeBuilding('wind', x, y); n.owner = 'city'; n.built = true; n.progress = 1; addBuildingToMap(n); log.swapped = (log.swapped || 0) + 1; return; }
-      // a waste / sewage facility on the shore that cannot move is closed; capacity is rebuilt below (wgAddWaste honours the protection)
-      if (wet && d.cat === 'Waste') { removeBuilding(b); log.removed++; log.wasteRebuild = true; return; }
+      // a waste / sewage facility on the shore or next to homes that cannot move is closed; capacity is rebuilt below (wgAddWaste honours the protection)
+      if (d.cat === 'Waste') { removeBuilding(b); log.removed++; log.wasteRebuild = true; return; }
       // heavy industry with nowhere to go is downgraded to a light workshop on the same lot (keeps some jobs)
       if (d.cat === 'Industry' && BUILDINGS.workshop) { const x = b.x, y = b.y, owner = b.owner; removeBuilding(b); const n = makeBuilding('workshop', x, y); n.owner = owner; n.built = true; n.progress = 1; addBuildingToMap(n); log.downgraded = (log.downgraded || 0) + 1; return; }
     }

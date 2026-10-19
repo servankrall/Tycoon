@@ -122,9 +122,9 @@ function defaultState(meta, settings, achievements, lifetime, opts) {
   st.p11 = newP11(st.city.seed);
   st.p15 = { hist: [], lastMonth: -1 };                // Part 15: city history samples (one per game month)
   st.p17 = typeof newP17 === 'function' ? newP17() : null;   // Part 17: Economy Engine 2.0 (markets, companies, housing, banking, trade, GDP …)
-  st.government = typeof newGov === 'function' ? newGov() : null;
+  st.government = typeof newGov === 'function' ? newGov() : null;   // Part 18: Government Engine 2.0 (budget, taxes, services, policies, projects, approval)
   st.transportation = typeof newTransportation === 'function' ? newTransportation() : null;   // Part 19: TransportationEngine 3.0 (save 3.2)
-  st.worldbuilder = null; st.adminTools = null;   // Part 18: Government Engine 2.0 (budget, taxes, services, policies, projects, approval)
+  st.worldbuilder = null; st.adminTools = null;   // Part 19: World Builder 2.0 report (generated worlds only) · admin tool multipliers
   NPC_STOCKS.forEach(function (s) { st.companies.stocks[s.id] = { price: s.base, hist: [s.base] }; });
   PRODUCT_IDS.forEach(function (p) { st.economy.inventory[p] = 0; st.economy.prices[p] = PRODUCTS[p].base; st.trade.mode[p] = 'auto'; });
   MARKET_SECTORS.forEach(function (m) { st.market.price[m] = 1; });
@@ -671,7 +671,7 @@ function sanitizeState(d) {
   st.government = typeof sanitizeGov === 'function' ? sanitizeGov(d.government) : null;
   st.transportation = typeof sanitizeTransportation === 'function' ? sanitizeTransportation(d.transportation) : null;   // save 3.2 · missing (v2.6.0 and older) → defaults
   st.worldbuilder = typeof sanitizeWorldbuilder === 'function' ? sanitizeWorldbuilder(d.worldbuilder) : null;
-  st.adminTools = d.adminTools && typeof d.adminTools === 'object' ? { power: clamp(+d.adminTools.power || 1, 0.3, 3), water: clamp(+d.adminTools.water || 1, 0.3, 3), wage: clamp(+d.adminTools.wage || 1, 0.5, 2), gdp: clamp(+d.adminTools.gdp || 1, 0.5, 2) } : null;   // save 3.1 · missing (v2.5.0 and older) → safe defaults
+  st.adminTools = d.adminTools && typeof d.adminTools === 'object' ? { power: clamp(+d.adminTools.power || 1, 0.3, 3), water: clamp(+d.adminTools.water || 1, 0.3, 3), wage: clamp(+d.adminTools.wage || 1, 0.5, 2), gdp: clamp(+d.adminTools.gdp || 1, 0.5, 2) } : null;   // save 3.2 · missing → no multipliers
   st.city.mapType = MAP_TYPES[c.mapType] ? c.mapType : 'standard';
   st._rawCitizens = Array.isArray(d.citizens) ? d.citizens.slice(0, 400) : null;
   st._rawVehicles = Array.isArray(d.vehicles) && d.vehicles.length ? d.vehicles.slice(0, 300) : null;
