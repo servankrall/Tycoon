@@ -684,6 +684,7 @@ function roadPath(a, b, allowBlocked, mode) {
       if (k === 0) { if (x + 1 >= W) continue; n = c + 1; } else if (k === 1) { if (x <= 0) continue; n = c - 1; }
       else if (k === 2) { if (y + 1 >= MAP.H) continue; n = c + W; } else { if (y <= 0) continue; n = c - W; }
       if (!MAP.roads[n]) continue;
+      if (MAP.oneway && MAP.oneway[n] && MAP.oneway[n] !== k + 1) continue;      // Part 19: one-way road (enter only in its direction)
       const blk = bl[n] && !(allowBlocked && n === b) ? (bl[n] === 3 ? (allowBlocked ? 8 : 400) : bl[n] === 4 ? 3 : 40) : 0;
       const cg = MAP.cong && !allowBlocked ? MAP.cong[n] : 0, rt = ROAD_TYPES[MAP.roads[n]];
       const cost = mk === 1 ? 1 + blk : mk === 2 ? 1 / rt.speed + blk + (MAP.inter[n] ? 0.3 : 0) + cg * 5 : mk === 3 ? 1 + blk + (MAP.inter[n] ? 0.05 : 0) + (rt.id === 4 ? 0.8 : 0) + cg * 0.5

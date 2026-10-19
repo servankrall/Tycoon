@@ -612,6 +612,7 @@ function econTick(dt) {
   raw += SIM.wastePenalty * 25;
   const netPol = Math.max(0, raw - absorb) * (hasTech('env_recycle') ? 0.85 : 1) * (hasTech('env_carbon') ? 0.6 : 1) * (1 - 0.05 * ppLevel('clean')) * mods.pollution;
   const polT = 100 * netPol / (netPol + 30 + builtTiles * 0.6);
+  SIM.polTarget = polT;                                                     // Part 19: World Builder balances the starting pollution against this
   city.pollution = clamp(lerp(city.pollution, polT, 0.06 * dt), 0, 100);
 
   // --- 14. Crime ------------------------------------------------------------------------

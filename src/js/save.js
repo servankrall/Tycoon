@@ -122,7 +122,9 @@ function defaultState(meta, settings, achievements, lifetime, opts) {
   st.p11 = newP11(st.city.seed);
   st.p15 = { hist: [], lastMonth: -1 };                // Part 15: city history samples (one per game month)
   st.p17 = typeof newP17 === 'function' ? newP17() : null;   // Part 17: Economy Engine 2.0 (markets, companies, housing, banking, trade, GDP …)
-  st.government = typeof newGov === 'function' ? newGov() : null;   // Part 18: Government Engine 2.0 (budget, taxes, services, policies, projects, approval)
+  st.government = typeof newGov === 'function' ? newGov() : null;
+  st.transportation = typeof newTransportation === 'function' ? newTransportation() : null;   // Part 19: TransportationEngine 3.0 (save 3.2)
+  st.worldbuilder = null; st.adminTools = null;   // Part 18: Government Engine 2.0 (budget, taxes, services, policies, projects, approval)
   NPC_STOCKS.forEach(function (s) { st.companies.stocks[s.id] = { price: s.base, hist: [s.base] }; });
   PRODUCT_IDS.forEach(function (p) { st.economy.inventory[p] = 0; st.economy.prices[p] = PRODUCTS[p].base; st.trade.mode[p] = 'auto'; });
   MARKET_SECTORS.forEach(function (m) { st.market.price[m] = 1; });
@@ -200,7 +202,7 @@ function buildSaveObject() {
 /* Save 2.0 header (v7): what the file contains and where each section lives in the JSON. */
 function saveHeader() {
   return {
-    format: SAVE_FORMAT, formatVersion: 4, schema: '3.1', version: SAVE_VERSION, saveVersion: SAVE_VERSION, gameVersion: typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '1.0.0',
+    format: SAVE_FORMAT, formatVersion: 4, schema: '3.2', version: SAVE_VERSION, saveVersion: SAVE_VERSION, gameVersion: typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '1.0.0',
     platform: PLATFORM_ID, createdOn: S.origin ? S.origin.platform : PLATFORM_ID, cityId: S.origin ? S.origin.id : '', revision: S.origin ? (S.origin.revision | 0) + 1 : 1, worldSeed: seedLabel(), checksum: CHECKSUM_PLACEHOLDER,
     timestamp: new Date().toISOString(), seed: seedLabel(), citySeed: seedLabel(), city: S.city.name, cityName: S.city.name,
     slot: S.slot || 1, playSec: Math.floor(S.statistics.totals.playSec), population: Math.floor(S.city.population),
@@ -211,7 +213,7 @@ function saveHeader() {
       worldSeed: ['city.seed', 'p8.world.seedLabel'], chunks: ['p9.chunks'], regions: ['p9.regions', 'p9.neighbors'], households: ['p9.households'], traffic: ['p9.traffic', 'vehicles'], utilityNetworks: ['p9.util', 'p9.water', 'p9.env'],
       disasters: ['p9.disasters', 'p9.disasterLog'], weather: ['p9.weather'], timeline: ['p9.timeline', 'p9.history', 'p9.branch'], transit: ['p9.transit'],
       livingWorld: ['p10.lw', 'p10.pop', 'p10.corp', 'p10.news', 'p10.rep', 'p10.rank'], services: ['p10.edu', 'p10.research', 'p10.health', 'p10.air', 'p10.port', 'p10.rail', 'p10.shocks'], projects: ['p10.projects', 'p10.maint', 'p10.infra', 'p10.incidents'], civic: ['p10.petitions', 'p10.objectives', 'p10.goalsDone'], graphs: ['p10.graphs'], timeMachine: ['p10.tm'],
-      worldData: ['city', 'buildings', 'p8.world', 'p9.chunks', 'p9.regions'], simulationData: ['clock', 'economy', 'citizens', 'vehicles', 'p9', 'p10', 'p11', 'p15', 'p17', 'government'], government: ['government.budget', 'government.taxes', 'government.services', 'government.policies', 'government.projects', 'government.approval', 'government.districts', 'government.reports'], economy2: ['p17.goods', 'p17.co', 'p17.housing', 'p17.bank', 'p17.gdp', 'p17.infl', 'p17.shocks', 'p17.tax', 'p17.hist'], origin: ['origin'],
+      worldData: ['city', 'buildings', 'p8.world', 'p9.chunks', 'p9.regions'], simulationData: ['clock', 'economy', 'citizens', 'vehicles', 'p9', 'p10', 'p11', 'p15', 'p17', 'government', 'transportation'], transportation: ['transportation.metro', 'transportation.bus', 'transportation.rail', 'transportation.airport', 'transportation.ports', 'transportation.bike', 'transportation.pedestrian', 'transportation.parking', 'transportation.traffic'], government: ['government.budget', 'government.taxes', 'government.services', 'government.policies', 'government.projects', 'government.approval', 'government.districts', 'government.reports'], economy2: ['p17.goods', 'p17.co', 'p17.housing', 'p17.bank', 'p17.gdp', 'p17.infl', 'p17.shocks', 'p17.tax', 'p17.hist'], origin: ['origin'],
       transport: ['p11.works', 'p11.trains', 'p11.regional', 'p11.ped', 'p11.bike', 'p11.modal'], finance: ['p11.contracts', 'p11.loans', 'p11.banks', 'p11.mort'], smartCity: ['p11.sensors', 'p11.storage', 'p11.landfill', 'p11.flood', 'p11.fire'], snapshots: ['bct_snap_index (separate files)']
     }
   };
@@ -666,7 +668,10 @@ function sanitizeState(d) {
   st.p11 = sanitizeP11(d.p11, st.city.seed);
   st.p15 = sanitizeP15(d.p15);
   st.p17 = typeof sanitizeP17 === 'function' ? sanitizeP17(d.p17) : null;     // missing (v2.4.1 and older) → defaults
-  st.government = typeof sanitizeGov === 'function' ? sanitizeGov(d.government) : null;   // save 3.1 · missing (v2.5.0 and older) → safe defaults
+  st.government = typeof sanitizeGov === 'function' ? sanitizeGov(d.government) : null;
+  st.transportation = typeof sanitizeTransportation === 'function' ? sanitizeTransportation(d.transportation) : null;   // save 3.2 · missing (v2.6.0 and older) → defaults
+  st.worldbuilder = typeof sanitizeWorldbuilder === 'function' ? sanitizeWorldbuilder(d.worldbuilder) : null;
+  st.adminTools = d.adminTools && typeof d.adminTools === 'object' ? { power: clamp(+d.adminTools.power || 1, 0.3, 3), water: clamp(+d.adminTools.water || 1, 0.3, 3), wage: clamp(+d.adminTools.wage || 1, 0.5, 2), gdp: clamp(+d.adminTools.gdp || 1, 0.5, 2) } : null;   // save 3.1 · missing (v2.5.0 and older) → safe defaults
   st.city.mapType = MAP_TYPES[c.mapType] ? c.mapType : 'standard';
   st._rawCitizens = Array.isArray(d.citizens) ? d.citizens.slice(0, 400) : null;
   st._rawVehicles = Array.isArray(d.vehicles) && d.vehicles.length ? d.vehicles.slice(0, 300) : null;
@@ -830,7 +835,7 @@ function exportSaveJSON() { try { return JSON.stringify(buildSaveObject(), null,
 /* IMPORT VALIDATION: version, data types, negative values, unknown properties and maximum values */
 const SAVE_TOP_KEYS = ['version', 'meta', 'money', 'budget', 'city', 'buildings', 'workers', 'research', 'technology', 'companies', 'bank', 'transport', 'economy', 'market', 'ai', 'trade',
   'diplomacy', 'contracts', 'investors', 'space', 'events', 'statistics', 'achievements', 'quests', 'tutorial', 'settings', 'clock', 'p5', 'lastNet', 'lastBudgetNet', 'lastSaveTime', 'slot',
-  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'p8', 'p9', 'p10', 'p11', 'p15', 'p17', 'government', 'origin', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
+  'migratedFrom', '_part4Gen', 'header', 'citizens', 'vehicles', 'p6', 'p8', 'p9', 'p10', 'p11', 'p15', 'p17', 'government', 'transportation', 'worldbuilder', 'adminTools', 'origin', 'population', 'prestigePoints', 'achievementsLegacy', 'legacy', 'tax', 'tech', 'totalEarned', 'prestigeCount', '_saveBytes'];
 function validateImport(d) {
   const errs = [];
   if (!d || typeof d !== 'object' || Array.isArray(d)) return ['The save is not a JSON object.'];

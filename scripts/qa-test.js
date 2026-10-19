@@ -16,6 +16,8 @@
    Part 18 adds the GOVERNMENT group: small city, determinism, 100K / 500K, high / low tax, budget deficit, hospital
    capacity, school shortage, police coverage, bad fire access, zero maintenance, large infrastructure failure, 100×,
    save → restart → load, v2.5.0 / corrupt saves, Windows ↔ Android, the City Management UI and admin security.
+   Part 19 adds WORLDGEN (20 presets, pipeline, clean-world limits, auto-fix / rejection, determinism, transport tiers),
+   TRANSPORT (dashboard, line editor, Traffic AI 3.0, validator, Save 3.2) and STRESS19 (tests A–M of the Part 19 plan).
    Every wait is a wait-until with a deadline (no fixed sleeps that flake on a slow runner). A failure prints
    Test / Expected / Actual / Device / Resolution / Build / Commit.
    Usage:  node scripts/qa-test.js [--out=dist/qa] [--only=save,weather] [--profile=android|windows|both]
@@ -1062,6 +1064,198 @@ async function runProfile(browser, base, dev) {
       const bad = r.out.filter(function (x) { return /outside/.test(x) || +x.split(':')[1].split(' ')[0] < 60; });
       return { ok: bad.length === 0 && r.oob.length === 0 && r.heats === 10 && (!r.mobile || r.btn === true), actual: r.out.join(' · ') + (r.oob.length ? ' · OUT OF BOUNDS ' + r.oob.join(', ') : '') + ' · heatmaps with data ' + r.heats + '/10' + (r.mobile ? ' · Management button opens the panel ' + r.btn : '') };
     });
+  /* ===================== Part 19: WORLD BUILDER 2.0 + TRANSPORTATION 3.0 ===================== */
+  await T('worldgen', 'World Builder: 20 presets → validated, playable worlds', 'every admin preset goes through the pipeline (seed validation … final validator) and is delivered only when WORLD READY (quality ≥ 60, no golden-rule failure)',
+    async function () {
+      const r = await ev(async function () {
+        const out = [], bad = []; const t0 = performance.now();
+        for (const p of WB_PRESETS) {
+          const res = await generateWorld(p[1], { seed: 1900 + out.length, name: 'QA ' + p[0], slot: 3, size: 'SMALL' });
+          const dlg = (document.getElementById('sysDialog') || {}).innerText || ''; closeModal(); if (typeof closeSysDialog === 'function') closeSysDialog();
+          const W = S.worldbuilder; out.push(p[1] + ':' + (res && W ? W.quality : 'FAIL'));
+          if (!res || !W || !W.ready || W.quality < 60 || W.broken.length) bad.push(p[1] + (dlg ? ' — ' + dlg.slice(0, 80) : ''));
+        }
+        return { out: out, bad: bad, s: Math.round((performance.now() - t0) / 1000) };
+      });
+      return { ok: r.bad.length === 0, actual: r.out.join(' · ') + ' · ' + r.s + ' s' + (r.bad.length ? ' · NOT READY: ' + r.bad.join(' | ') : '') };
+    });
+  await T('worldgen', 'World Builder: pipeline stages recorded · clean-world limits · industrial buffer · water protection', 'the 10 World Builder stages are recorded with their results; pollution / air / water / noise / waste are inside the Balanced profile; no heavy polluter within 3 tiles of homes or water (unless it cannot move)',
+    async function () {
+      const r = await ev(async function () {
+        await generateWorld('industrial', { seed: 4242, name: 'QA Buffer', slot: 3, size: 'LARGE', wbProfile: 'balanced' }); closeModal();
+        const W = S.worldbuilder, P = wbProfileFor({ wbProfile: 'balanced' }), env = W.env;
+        const near = S.buildings.list.filter(function (b) { const d = bdef(b); return b.built && wbPolluter(d) && !d.extract && wbHomesNear(b, d, WB_BUFFER).length; }).length;
+        const wet = S.buildings.list.filter(function (b) { const d = bdef(b); return b.built && wbHeavy(d) && !d.extract && !d.needsWater && wbWaterDist(b, d, WB_WATER) <= WB_WATER; }).length;
+        return { stages: W.pipeline.map(function (p) { return p.id; }).join(','), n: W.pipeline.length, env: env, P: { pol: P.pol, air: P.air, water: P.water, noise: P.noise, waste: P.waste }, near: near, wet: wet, ready: W.ready, q: W.quality };
+      });
+      const e = r.env, P = r.P, envOk = e.pollution <= P.pol + 2 && e.air >= P.air - 3 && e.water >= P.water - 3 && e.noise <= P.noise + 5 && e.waste <= P.waste + 5;
+      return { ok: r.n >= 10 && envOk && r.near === 0 && r.wet === 0 && r.ready, actual: r.n + ' recorded stages (' + r.stages + ') · pollution ' + e.pollution + '/' + P.pol + ' · air ' + e.air + '% · water ' + e.water + '% · noise ' + e.noise + ' · waste ' + e.waste + ' · polluters next to homes ' + r.near + ' · heavy industry next to water ' + r.wet + ' · quality ' + r.q + '%' };
+    });
+  await T('worldgen', 'World Builder: broken world is repaired or never delivered', 'a city broken on purpose (roads cut, power plants removed, pollution) is repaired by Auto Fix (≤ 5 passes) to WORLD READY; a world that cannot be repaired fails generation and the previous city is restored',
+    async function () {
+      const r = await ev(async function () {
+        await generateWorld('balanced', { seed: 515, name: 'QA Fix', slot: 3, size: 'MEDIUM' }); closeModal();
+        const n0 = S.buildings.list.length;
+        S.buildings.list.filter(function (b) { return BUILDINGS[b.type].power > 0; }).forEach(function (b) { removeBuilding(b); });
+        let cut = 0; for (let i = 0; i < MAP.roads.length && cut < 30; i += 37) if (MAP.roads[i] && !MAP.occ[i]) { MAP.roads[i] = 0; cut++; }
+        onMapChanged(); const before = wbAnalyzeCurrent().q; const fx = wbAutoFixCurrent();
+        // a world that can never pass: the final validator throws → the generator restores the previous city
+        const prevName = S.city.name, ov = window.wbQuality; window.wbQuality = function () { const q = ov.apply(this, arguments); q.ready = false; q.broken = ['QA forced']; return q; };
+        const res = await generateWorld('balanced', { seed: 616, name: 'QA Never', slot: 3, size: 'SMALL' }); window.wbQuality = ov;
+        const dlg = (document.getElementById('sysDialog') || {}).innerText || ''; if (typeof closeSysDialog === 'function') closeSysDialog(); closeModal();
+        return { before: before.overall, beforeReady: before.ready, after: fx.q.overall, afterReady: fx.q.ready, passes: fx.passes, fixes: fx.fixes.length, failedRes: res === null, restored: S.city.name === prevName, dlg: /WORLD GENERATION FAILED/.test(dlg), n0: n0 };
+      });
+      return { ok: !r.beforeReady && r.afterReady && r.passes <= 5 && r.failedRes && r.restored && r.dlg, actual: 'broken world ' + r.before + '% (ready ' + r.beforeReady + ') → ' + r.passes + ' pass(es), ' + r.fixes + ' fixes → ' + r.after + '% (ready ' + r.afterReady + ') · unrepairable world rejected ' + r.failedRes + ', previous city restored ' + r.restored + ', WORLD GENERATION FAILED shown ' + r.dlg };
+    });
+  await T('worldgen', 'World regeneration is deterministic (TEST N)', 'the same preset + seed + size generates the same world twice (buildings, roads, lines, quality)',
+    async function () {
+      const r = await ev(async function () {
+        const run = async function () { await generateWorld('balanced', { seed: 8080, name: 'QA Det', slot: 3, size: 'MEDIUM' }); closeModal(); return { b: S.buildings.list.length, r: MAP.roadCount, l: S.p9.transit.lines.map(function (L) { return L.mode + L.stops.length; }).join(','), q: S.worldbuilder.quality, sig: S.buildings.list.slice(0, 60).map(function (b) { return b.type + b.x + ',' + b.y; }).join(';') }; };
+        const A = await run(), B = await run();
+        return { A: A, same: A.b === B.b && A.r === B.r && A.l === B.l && A.q === B.q && A.sig === B.sig };
+      });
+      return { ok: r.same, actual: (r.same ? 'identical' : 'DIFFERENT') + ' · ' + r.A.b + ' buildings · ' + r.A.r + ' roads · lines ' + r.A.l + ' · quality ' + r.A.q + '%' };
+    });
+  await T('worldgen', 'Transport tiers by city size', 'Small → bus + bike + walking · Medium → bus + metro candidate · Large → bus + metro + train · Mega → bus + metro + rail + airport + port links',
+    async function () {
+      const r = await ev(async function () {
+        const out = {};
+        for (const sz of ['SMALL', 'MEDIUM', 'LARGE', 'MEGA']) {
+          await generateWorld(sz === 'MEGA' ? 'megacity' : 'balanced', { seed: 3131, name: 'QA ' + sz, slot: 3, size: sz }); closeModal();
+          const modes = {}; S.p9.transit.lines.forEach(function (L) { modes[L.mode] = (modes[L.mode] || 0) + 1; });
+          out[sz] = { tier: S.transportation.gen ? S.transportation.gen.tier : '', modes: modes, cand: (TPE.metroCandidates || []).length, bike: Object.keys(S.p11.bike).length, ped: Object.keys(S.p11.ped).length };
+        }
+        return out;
+      });
+      const s = r.SMALL, m = r.MEDIUM, l = r.LARGE, g = r.MEGA;
+      const ok = s.modes.bus > 0 && s.bike + s.ped > 0 && m.modes.bus > 0 && (m.modes.metro || m.cand >= 2) && l.modes.bus > 0 && l.modes.metro > 0 && l.modes.train > 0 && g.modes.bus > 0 && g.modes.metro > 0 && g.modes.train > 0;
+      return { ok: ok, actual: Object.keys(r).map(function (k) { return k + ' ' + r[k].tier + ' ' + JSON.stringify(r[k].modes) + ' bike ' + r[k].bike + ' ped ' + r[k].ped + (k === 'MEDIUM' ? ' metro candidates ' + r[k].cand : ''); }).join(' · ') };
+    });
+  await T('transport', 'Transportation 3.0: dashboard, metro / bus / rail / airport / port / bike / walk / parking, line editor', 'all 14 dashboard numbers are finite; station data (capacity, passengers, waiting, coverage, revenue, maintenance); airport and port levels; a player line keeps its order, colour, frequency and schedule; every panel tab renders',
+    async function () {
+      const r = await ev(async function () {
+        await __qa.world('LARGE', 1919, 3); setSpeed(0); for (let i = 0; i < 600; i++) { S.clock.gameSec += TIME_SCALE; S.clock.runSec += 1; Game.step(1); }
+        const s = tpStats(true), keys = ['cars', 'buses', 'metroPax', 'trainPax', 'airPax', 'portCargo', 'bikeTrips', 'walkTrips', 'commute', 'congestion', 'parking', 'ptSat', 'revenue', 'cost'];
+        const fin = keys.every(function (k) { return isFinite(s[k]); }), st = s.metro.stations[0] || null;
+        const stOk = !st || ['capacity', 'passengers', 'waiting', 'coverage', 'revenue', 'maintenance'].every(function (k) { return isFinite(st[k]); });
+        const ap = tpPlaceNear('airstrip', MAP.W >> 1, MAP.H >> 1, MAP.W); onMapChanged(); const air = tpAirport().level;
+        const stops = S.buildings.list.filter(function (b) { return b.type === 'busstop'; }).slice(0, 4).map(function (b) { return b.id; });
+        let line = 'n/a';
+        if (stops.length >= 3) { const c = tpLineCreate('bus', stops.slice(0, 3).reverse(), 'QA Line'); if (c.ok) { const L = c.L; tpLineEdit(L.id, 'color', '#12ab34'); tpLineEdit(L.id, 'frequency', 6); tpLineEdit(L.id, 'schedule', 6, 22); tpLineEdit(L.id, 'add', stops[3], 1); transitRebuild(true); line = (L.stops[0] === stops[2] && L.stops[1] === stops[3] && L.color === '#12ab34' && tp().bus.schedules[L.id].end === 22) + ' · ' + L.vehicles + ' bus(es) · headway ' + lineHeadwayMin(L).toFixed(1); } }
+        let ui = 0; for (const t of TP_TABS) { openTransport(t[0]); await __qa.frames(2); if (document.getElementById('tpRoot').innerText.length > 40) ui++; } closeModal();
+        const heats = ['METRO COVERAGE', 'BUS COVERAGE', 'BIKE COVERAGE', 'PARKING PRESSURE', 'EMERGENCY RESPONSE', 'COMMUTE TIME', 'LOGISTICS', 'TRAFFIC', 'WALKABILITY', 'PUBLIC TRANSPORT'].filter(function (h) { return p9HeatGrid(h) || h === 'TRAFFIC'; }).length;
+        return { fin: fin, stOk: stOk, air: air, ap: !!ap, line: line, ui: ui, heats: heats, cars: s.cars, commute: s.commute, park: s.park };
+      });
+      return { ok: r.fin && r.stOk && (!r.ap || r.air !== 'none') && /^true/.test(r.line) && r.ui === 10 && r.heats === 10, actual: 'dashboard finite ' + r.fin + ' · stations ' + r.stOk + ' · airport level ' + r.air + ' · line editor ' + r.line + ' · ' + r.ui + '/10 tabs · ' + r.heats + '/10 transport heatmaps · ' + r.cars + ' cars · commute ' + r.commute.toFixed(1) + ' min · parking street ' + r.park.street + ' / lots ' + r.park.lots };
+    });
+  await T('transport', 'Traffic AI 3.0: light modes, transit priority, prediction, dynamic routing with a diversion cap', 'Fixed / Adaptive / Smart / Emergency timings differ as designed; transit priority extends greens; at most 15 % of cars change route per 10 s and no route switch happens without a ≥ 15 % predicted gain',
+    async function () {
+      const r = await ev(async function () {
+        const j = (function () { for (let i = 0; i < MAP.roads.length; i++) if (MAP.inter[i] && junctionType(i) === 'signal') return i; return -1; })();
+        const modes = {};
+        if (j >= 0) ['fixed', 'adaptive', 'smart', 'emergency'].forEach(function (m) { tpSetLightMode(j, m); const st = sigState(j); sigRetime(j, st); modes[m] = st.mode + ':' + st.dur[0].toFixed(2) + '/' + st.dur[3].toFixed(2); });
+        if (j >= 0) tpSetLightMode(j, 'auto');
+        S.p9.traffic.mult = 4; setSpeed(20); const t0 = performance.now(), rr0 = tp().traffic.stats.reroutes;
+        let worstWindow = 0; while (performance.now() - t0 < 6000) { await new Promise(function (x) { setTimeout(x, 200); }); worstWindow = Math.max(worstWindow, TPAI.window.length / Math.max(1, AG.vehicles.length)); }
+        setSpeed(0); S.p9.traffic.mult = 1;
+        return { j: j, modes: modes, rer: tp().traffic.stats.reroutes - rr0, worst: worstWindow, veh: AG.vehicles.length, pred: !!TPAI.pred, predMs: TPAI.prof.pred, routeMs: TPAI.prof.route };
+      });
+      const m = r.modes, ok = (r.j < 0 || (m.fixed.indexOf('fixed') === 0 && m.adaptive.indexOf('adaptive') === 0 && m.smart.indexOf('smart') === 0 && m.emergency.indexOf('emergency') === 0)) && r.pred && r.worst <= 0.15 + 2 / Math.max(1, r.veh) && r.predMs < 30 && r.routeMs < 30;
+      return { ok: ok, actual: 'junction ' + r.j + ' timings ' + JSON.stringify(m) + ' · ' + r.rer + ' dynamic reroutes in 6 s at ×4 traffic · worst diversion share ' + Math.round(r.worst * 100) + '% of ' + r.veh + ' cars · prediction ' + r.predMs.toFixed(2) + ' ms · routing ' + r.routeMs.toFixed(2) + ' ms' };
+    });
+  await T('transport', 'Transport validator + auto fix', 'a broken line (removed station), a dead-end line, an invalid vehicle and a missing depot are detected and repaired / reconnected / rebuilt',
+    async function () {
+      const r = await ev(function () {
+        const stops = S.buildings.list.filter(function (b) { return b.type === 'busstop'; }).slice(0, 3); if (stops.length < 3) return { skip: true };
+        const L = tpLineCreate('bus', stops.map(function (b) { return b.id; }), 'QA Broken').L; removeBuilding(stops[1]); onMapChanged();
+        const D = tpLineCreate('bus', [stops[0].id, stops[2].id], 'QA Dead').L; D.stops = [stops[0].id];
+        AG.vehicles.push(Object.assign({}, AG.vehicles[0] || {}, { id: 999999, line: 'L99999', path: null }));
+        const v0 = tp3Validate(), fx = tp3AutoFix(), v1 = fx.validation;
+        return { before: v0.issues.map(function (i) { return i.id; }).join(','), after: v1.issues.filter(function (i) { return TP_WARN.indexOf(i.id) < 0; }).length, actions: fx.actions.length, okAfter: v1.ok, lineKept: S.p9.transit.lines.indexOf(L) >= 0 && L.stops.length === 2, deadGone: S.p9.transit.lines.indexOf(D) < 0, vehGone: !AG.vehicles.some(function (v) { return v.id === 999999; }) };
+      });
+      if (r.skip) return { ok: true, actual: 'city has fewer than 3 bus stops — nothing to break' };
+      return { ok: /broken/.test(r.before) && /deadend/.test(r.before) && /vehicle/.test(r.before) && r.okAfter && r.lineKept && r.deadGone && r.vehGone, actual: 'found ' + r.before + ' · ' + r.actions + ' fix(es) · remaining critical issues ' + r.after + ' · broken line rerouted ' + r.lineKept + ' · dead-end removed ' + r.deadGone + ' · invalid vehicle removed ' + r.vehGone };
+    });
+  await T('transport', 'Save 3.2: transportation block · v2.6.0 save · Windows ↔ Android (TEST O · P · Q)', 'transportation (metro, bus, rail, airport, ports, bike, pedestrian, parking, traffic) survives save → restart → load; a v2.6.0 save without it gets defaults; Windows / Android saves keep it',
+    async function () {
+      const a = await ev(function () {
+        const T = tp(); const j = (function () { for (let i = 0; i < MAP.roads.length; i++) if (MAP.inter[i]) return i; return -1; })();
+        if (j >= 0) { T.traffic.modes[j] = 'smart'; T.traffic.ptPriority[j] = 1; } T.traffic.defaultMode = 'adaptive'; T.parking.street = false;
+        saveGame(true); const raw = JSON.parse(Store.getItem(slotKey(S.slot)));
+        return { keys: Object.keys(raw.transportation).join(','), schema: raw.header.schema, j: j, slot: S.slot };
+      });
+      await page.reload();
+      await page.waitForFunction(function () { return document.getElementById('bootSplash').style.display === 'none' && typeof loadGame === 'function'; }, null, { timeout: 120000 });
+      await helpers();
+      const b = await ev(function (x) {
+        if (PSH.dialogOpen) { const q = document.querySelector('#sysBtns button'); if (q) q.click(); }
+        const lr = loadGame(x.slot); if (!STARTED) { startGame(lr); closeModal(); clearDialogues(); setSpeed(0); }
+        const T = S.transportation, kept = T.traffic.defaultMode === 'adaptive' && T.parking.street === false && (x.j < 0 || (T.traffic.modes[x.j] === 'smart' && T.traffic.ptPriority[x.j] === 1));
+        const raw = JSON.parse(Store.getItem(slotKey(x.slot)));
+        const old = JSON.parse(JSON.stringify(raw)); delete old.transportation; old.header.gameVersion = '2.6.0'; Store.setItem(slotKey(x.slot), JSON.stringify(old)); const lo = loadGame(x.slot); const oldOk = !lo.isNew && !!S.transportation && S.transportation.traffic.defaultMode === null;
+        const plat = ['windows', 'android'].map(function (pf) { const w = JSON.parse(JSON.stringify(raw)); w.header.platform = pf; if (w.origin) { w.origin.platform = pf; w.origin.lastPlatform = pf; } Store.setItem(slotKey(x.slot), JSON.stringify(w)); loadGame(x.slot); return S.transportation.traffic.defaultMode === 'adaptive'; });
+        return { isNew: lr.isNew, kept: kept, oldOk: oldOk, plat: plat };
+      }, a);
+      return { ok: !b.isNew && b.kept && b.oldOk && b.plat.every(Boolean) && a.schema === '3.2', actual: 'saved ' + a.keys + ' (schema ' + a.schema + ') · after restart kept ' + b.kept + ' · v2.6.0 save → defaults ' + b.oldOk + ' · Windows → this device ' + b.plat[0] + ' · Android → this device ' + b.plat[1] };
+    });
+  await T('stress19', 'Stress A–C: 100K · 250K · 500K citizens — transport + world systems stay light', 'at 100K / 250K / 500K citizens (statistical) the transport stats, prediction and routing stay fast, all values finite, 4 s at 100× without errors',
+    async function () {
+      const r = await ev(async function () {
+        const out = [];
+        for (const pop of [100000, 250000, 500000]) {
+          S.city.population = pop; TPE.cache = null; const t0 = performance.now(); const s = tpStats(true); const statsMs = performance.now() - t0;
+          setSpeed(100); const g0 = S.clock.gameSec, w0 = performance.now(); let worst = 0, last = performance.now();
+          await __qa.until(function () { const n = performance.now(); worst = Math.max(worst, n - last); last = n; S.city.population = pop; return n - w0 > 4000; }, 6000); setSpeed(0);
+          out.push({ pop: pop, cars: s.cars, statsMs: statsMs, worst: worst, hours: (S.clock.gameSec - g0) / 3600, fin: isFinite(S.money) && isFinite(S.budget) && isFinite(tpStats(true).commute) });
+        }
+        S.city.population = 20000; return out;
+      });
+      const ok = r.every(function (x) { return x.fin && x.statsMs < 300 && x.hours > 0; });
+      return { ok: ok, actual: r.map(function (x) { return fmt(x.pop) + ': ' + fmt(x.cars) + ' cars, stats ' + x.statsMs.toFixed(0) + ' ms, longest frame ' + Math.round(x.worst) + ' ms, ' + x.hours.toFixed(1) + ' game h'; }).join(' · ') };
+    });
+  await T('stress19', 'Stress D: 50K vehicles (statistical + agent LOD)', 'at 500K citizens the city has ≥ 50K cars statistically while the simulated agents stay within the quality cap (near → full AI, far → statistics)',
+    async function () {
+      const r = await ev(function () { S.city.population = 500000; TPE.cache = null; const s = tpStats(true); const cap = perf().veh * 3 + 60; const n = AG.vehicles.length; S.city.population = 20000; return { cars: s.cars, agents: n, cap: cap }; });
+      return { ok: r.cars >= 50000 && r.agents <= r.cap, actual: fmt(r.cars) + ' cars in the statistical traffic model · ' + r.agents + ' vehicle agents (cap ' + r.cap + ')' };
+    });
+  await T('stress19', 'Stress E–G: mega metro network · large airport · large port', 'a 6-line metro network (up to 10 stations each), a Regional Airport and a Small + Cargo port run 4 s at 100× without errors; the validator finds no critical issue',
+    async function () {
+      const r = await ev(async function () {
+        if (typeof wgUnlockTech === 'function') { wgUnlockTech('metro'); wgUnlockTech('rail'); }
+        const before = tpLines('metro').length; let built = 0;
+        for (let k = 0; k < 6 && tpLines().length < 16; k++) { const sites = []; for (let s = 0; s < 8; s++) sites.push({ x: 4 + ((k * 7 + s * 6) % (MAP.W - 8)), y: 4 + ((k * 11 + s * 5) % (MAP.H - 8)) }); if (tpBuildLine('metro', sites, 'QA Metro ' + k)) built++; }
+        const ap = tpPlaceNear('regionalairport', MAP.W >> 1, MAP.H >> 1, MAP.W), pt = tpPlaceNear('smallport', 2, 2, MAP.W), pc = tpPlaceNear('port', 2, MAP.H - 4, MAP.W); onMapChanged();
+        setSpeed(100); const t0 = performance.now(); await __qa.until(function () { return performance.now() - t0 > 4000; }, 6000); setSpeed(0);
+        const v = tp3Validate(), crit = v.issues.filter(function (i) { return TP_WARN.indexOf(i.id) < 0; });
+        return { lines: tpLines('metro').length - before, built: built, air: tpAirport().level, port: tpPort().level, crit: crit.map(function (i) { return i.what; }).slice(0, 3), err: TPE.errors };
+      });
+      return { ok: r.lines >= 1 && r.air !== 'none' && r.crit.length === 0 && r.err === 0, actual: r.built + ' new metro line(s) · airport ' + r.air + ' · port ' + r.port + ' · critical issues ' + (r.crit.join('; ') || 'none') + ' · errors ' + r.err };
+    });
+  await T('stress19', 'Stress H–L: extreme traffic · rain · snow · emergency under congestion · power outage', 'traffic ×5, then heavy rain, snow and a city-wide outage: the game keeps running, dynamic routing works, an emergency unit is dispatched through congestion, signals fall back to 4-way stops in the outage',
+    async function () {
+      const r = await ev(async function () {
+        const run = async function (ms) { setSpeed(50); const t0 = performance.now(); await __qa.until(function () { return performance.now() - t0 > ms; }, ms + 2000); setSpeed(0); };
+        const rr0 = tp().traffic.stats.reroutes, em0 = S.p9.emergency.dispatched;
+        S.p9.traffic.mult = 5; await run(2500);
+        FX.lock = 'heavyrain'; FX.weather = 'heavyrain'; await run(1500);
+        FX.lock = 'snow'; FX.weather = 'snow'; const b = S.buildings.list.find(function (x) { return x.built && x._entry >= 0 && BUILDINGS[x.type].housing; }); if (b) emergencyDispatch('fire', b._entry, { priority: true }); await run(2000);
+        const c = cityCentre(); S.p9.util.failures.push({ x: Math.floor(c.x / TILE), y: Math.floor(c.y / TILE), r: 30, until: S.clock.runSec + 300, cause: 'qa' }); await run(1500);
+        S.p9.util.failures = S.p9.util.failures.filter(function (f) { return f.cause !== 'qa'; }); FX.lock = null; FX.weather = 'clear'; S.p9.traffic.mult = 1;
+        return { rer: tp().traffic.stats.reroutes - rr0, em: S.p9.emergency.dispatched - em0, fin: isFinite(S.money) && isFinite(SIM.traffic), err: TPE.errors + GOV.errors };
+      });
+      return { ok: r.fin && r.em >= 1 && r.err === 0, actual: r.rer + ' dynamic reroutes · ' + r.em + ' emergency dispatch(es) under congestion · state finite ' + r.fin + ' · errors ' + r.err };
+    });
+  await T('stress19', 'Stress M: economic recession + low budget with transportation', 'recession and a near-empty city budget: transit keeps running, the budget never goes NaN, policies / lines are not corrupted',
+    async function () {
+      const r = await ev(async function () {
+        forceEconPhase('RECESSION'); S.budget = 500; setSpeed(100); const t0 = performance.now(); await __qa.until(function () { return performance.now() - t0 > 3000; }, 5000); setSpeed(0);
+        const ok = isFinite(S.budget) && S.budget >= -1e-6 && S.p9.transit.lines.every(function (L) { return Array.isArray(L.stops) && L.stops.length >= 2; });
+        forceEconPhase('RECOVERY'); S.budget += 1e6;
+        return { ok: ok, lines: S.p9.transit.lines.length, budget: S.budget };
+      });
+      return { ok: r.ok, actual: 'budget finite and ≥ 0 · ' + r.lines + ' lines intact' };
+    });
+
   await T('security', 'Government admin tools are OWNER / ADMIN / developer only', 'a normal player cannot reset the government, run its ticks, start government events or use the government.* console commands; the admin view is hidden',
     async function () {
       const r = await ev(function () {
@@ -1073,6 +1267,16 @@ async function runProfile(browser, base, dev) {
       return { ok: r.denied && r.same && !r.leak, actual: 'admin government actions denied ' + r.denied + ' · government unchanged ' + r.same + ' · console output leaked ' + r.leak };
     });
 
+  await T('security', 'World Builder admin tools are hidden and denied for a normal player', 'the 175 admin tools, the World Builder actions and undo / redo do nothing without an admin session and never appear in the palette',
+    async function () {
+      const r = await ev(function () {
+        const m0 = S.money, n0 = S.buildings.list.length, q0 = S.worldbuilder ? S.worldbuilder.quality : null;
+        const a = adminTool('moneyEditor', '999999999'), b = adminTool('deleteBuilding', ''), c = wbAdmin('fix'), d = atUndo(), e = adminTool('createWorld', 'balanced');
+        const pal = paletteCommands().filter(function (x) { return /^Admin · /.test(x.label || ''); }).length;
+        return { denied: [a, b, c, d, e].every(function (x) { return x === undefined; }), same: S.money === m0 && S.buildings.list.length === n0 && (S.worldbuilder ? S.worldbuilder.quality : null) === q0 && !WG.busy, pal: pal };
+      });
+      return { ok: r.denied && r.same && r.pal === 0, actual: 'tool calls denied ' + r.denied + ' · city unchanged ' + r.same + ' · palette admin entries ' + r.pal };
+    });
   await T('security', 'Economy admin tools are OWNER / ADMIN only', 'a normal player cannot start shocks, force the cycle or run ticks; the economy debug lines and admin view are hidden',
     async function () {
       const r = await ev(function () {

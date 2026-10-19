@@ -113,7 +113,7 @@ async function generateWorld(presetId, overrides) {
     STARTED = wasStarted && !!backup;
     sysDialog('❌ WORLD GENERATION FAILED', '<p class="small">' + esc(e && e.message || String(e)) + '</p><p class="small">The previous city was restored. Details are in logs/latest.log.</p>', [['OK', '', null]]);
     return null;
-  } finally { WG.busy = false; WG.rnd = null; }
+  } finally { WG.busy = false; WG.rnd = null; if (typeof WBLD !== 'undefined') WBLD.enforce = false; }
 }
 
 const WG_RUN = {
@@ -886,6 +886,8 @@ function wgSpurRoad(x, y, d) {
   const W = MAP.W, H = MAP.H, start = [];
   for (let yy = y - 1; yy <= y + d.h; yy++) for (let xx = x - 1; xx <= x + d.w; xx++) {
     if (!inMap(xx, yy) || (xx >= x && xx < x + d.w && yy >= y && yy < y + d.h)) continue;
+    // corner tiles never count as an entrance (findEntry), so the spur must start beside an edge
+    if ((xx < x || xx >= x + d.w) && (yy < y || yy >= y + d.h)) continue;
     const i = idx(xx, yy); if (!MAP.occ[i] && MAP.nature[i] !== 2) start.push(i);
   }
   const path = wgBfsToRoad(start, function (i) { const xx = i % W, yy = (i / W) | 0; return !(xx >= x && xx < x + d.w && yy >= y && yy < y + d.h); }, null);

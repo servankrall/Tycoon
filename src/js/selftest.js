@@ -9,7 +9,7 @@
    freshly built EXE) or in a browser with  index.html?selftest . It plays through the 20 checks of the release test plan,
    restarts the EXE in the middle (save → restart → load) and writes a JSON report to logs/selftest.json (and <file>).
    The self-test uses its own temporary user-data folder, so it never touches real cities. */
-const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 55, running: false };
+const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 56, running: false };
 function stPhase() {
   if (DESKTOP && BCT.selftest && BCT.selftest.phase) return BCT.selftest.phase;
   if (IS_ANDROID_APP && ANDROID_INFO.selftest) return ANDROID_INFO.selftestPhase || 1;
@@ -268,10 +268,11 @@ async function runSelfTest() {
     const res = await generateMegaWorld('tinyisland', { seed: 31337, name: 'SELFTEST ISLAND', slot: 3 });
     closeModal(); clearDialogues();
     const sc = S.p10 && S.p10.genScore;
-    return { ok: !!res && res.steps === 22 && !!sc && sc.overall >= 60 && STARTED, detail: res ? res.steps + '-step pipeline · ' + fmt(res.population) + ' citizens · ' + res.buildings + ' buildings · score ' + (sc ? sc.overall : '?') + '/100 · ' + res.seconds.toFixed(1) + ' s' : 'generation failed' };
+    return { ok: !!res && res.steps === MEGA_STAGES.length && MEGA_STAGES.length === 32 && !!sc && sc.overall >= 60 && STARTED, detail: res ? res.steps + '-step pipeline · ' + fmt(res.population) + ' citizens · ' + res.buildings + ' buildings · score ' + (sc ? sc.overall : '?') + '/100 · ' + res.seconds.toFixed(1) + ' s' : 'generation failed' };
   });
   await stStep(54, 'Economy 2.0 · Market · Companies · Housing · Banking', stEconomy2);
   await stStep(55, 'Government 2.0 · Budget · Taxes · Services · Policies · Projects · Approval', stGovernment);
+  await stStep(56, 'Transportation 3.0 · World Builder 2.0 · Admin Tools', stTransport3);
   stDone();
 }
 /* ===================================== Part 12 helpers ===================================== */
@@ -438,7 +439,7 @@ async function part12DesktopSteps() {
 
 /* ===================================== Part 12/13: Android APK self-test (24 steps) ===================================== */
 async function runAndroidSelfTest(phase) {
-  SELFTEST.total = 32;
+  SELFTEST.total = 33;
   const native = IS_ANDROID_APP;
   if (phase === 1) {
     SELFTEST.t0 = Date.now(); SELFTEST.steps = []; SELFTEST.data = {};
@@ -717,6 +718,7 @@ async function runAndroidSelfTest(phase) {
   });
   await stStep(31, 'Economy 2.0 · Market · Companies · Housing · Banking', stEconomy2);
   await stStep(32, 'Government 2.0 · Budget · Taxes · Services · Policies · Projects · Approval', stGovernment);
+  await stStep(33, 'Transportation 3.0 · World Builder 2.0 · Admin Tools', stTransport3);
   stDone();
 }
 /* ===================================== Part 17: ECONOMY 2.0 (shared by the desktop and Android runs) ===================================== */
@@ -771,6 +773,46 @@ async function stGovernment() {
   const chk = { services: svc === GOV_SERVICES.length, budget: inc, maintenance: maint, approvalLabels: lbl, taxEffects: nonlin, residentialTax: res, policyOn: pOn, policyConflict: pConf, policyOff: pOff, quotes: qok, project: !pr || pipe, save: saveOk, tabs: ui === GOV_TABS.length, heatmaps: heats === GOV_HEATS.length, noErrors: GOV.errors === 0 }, failed = Object.keys(chk).filter(function (k) { return !chk[k]; });
   return { ok: !failed.length,
     detail: (failed.length ? 'FAILED: ' + failed.join(', ') + ' · ' : '') + svc + '/' + GOV_SERVICES.length + ' services · budget ' + money(B.income) + ' in / ' + money(B.expenses) + ' out per day · maintenance ' + G.maint.avg + '% · approval ' + Math.round(G.approval.value) + ' ' + G.approval.label + ' · commercial tax 14→22→30 %: pressure ' + Math.round(p14) + '/' + Math.round(p22) + '/' + Math.round(p30) + ', happiness ' + (a14.hap - a22.hap).toFixed(2) + ' then ' + (a22.hap - a30.hap).toFixed(2) + ' lost (non-linear ' + nonlin + ')' + ' · policy conflict refused ' + pConf + ' · project ' + (pr || 'none (no free site)') + ' · save 3.1 ' + saveOk + ' · ' + ui + '/' + GOV_TABS.length + ' tabs · ' + heats + ' heatmaps · errors ' + GOV.errors };
+}
+/* ===================================== Part 19: TRANSPORTATION 3.0 + WORLD BUILDER 2.0 (desktop and Android) ===================================== */
+async function stTransport3() {
+  if (!S.transportation) return { ok: false, detail: 'no transportation state' };
+  const chk = {};
+  // dashboard + subsystems
+  const st = tpStats(true); chk.dashboard = ['cars', 'buses', 'metroPax', 'trainPax', 'airPax', 'portCargo', 'bikeTrips', 'walkTrips', 'commute', 'congestion', 'parking', 'ptSat', 'revenue', 'cost'].every(function (k) { return isFinite(st[k]); });
+  // line editor: create a bus line in the chosen order, reorder, colour, frequency, remove a stop
+  const stops = S.buildings.list.filter(function (b) { return b.type === 'busstop' && b.built; }).slice(0, 4);
+  let editor = stops.length < 3;                                             // a city without 3 stops: nothing to edit (reported)
+  if (stops.length >= 3) {
+    const ids = [stops[2].id, stops[0].id, stops[1].id], r = tpLineCreate('bus', ids, 'Selftest Line');
+    if (r.ok) {
+      const L = r.L, o1 = L.stops.join() === ids.join(); tpLineEdit(L.id, 'order', ids[0], 1); const o2 = L.stops[1] === ids[0];
+      tpLineEdit(L.id, 'color', '#ff00aa'); tpLineEdit(L.id, 'frequency', 30); const rm = tpLineEdit(L.id, 'remove', ids[1]).ok && L.stops.length === 2;
+      transitRebuild(true); const kept = L.stops.length === 2 && L.color === '#ff00aa';
+      editor = o1 && o2 && rm && kept; removeTransitLine(L.id);
+    }
+  }
+  chk.lineEditor = editor;
+  // traffic light modes + prediction + validator
+  const j = (function () { for (let i = 0; i < MAP.roads.length; i++) if (MAP.inter[i] && junctionType(i) === 'signal') return i; return -1; })();
+  chk.lights = j < 0 || (tpSetLightMode(j, 'smart').ok && tpLightMode(j) === 'smart' && tpSetLightMode(j, 'auto').ok);
+  tpPredictTick(); chk.predict = !!TPAI.pred && TPAI.pred.length === MAP.roads.length;
+  const v = tp3Validate(); chk.validator = Array.isArray(v.issues) && typeof v.ok === 'boolean';
+  // world builder: quality score, golden rule, safe custom limits
+  const a = wbAnalyzeCurrent(); chk.quality = a.q.overall >= 0 && a.q.overall <= 100 && Object.keys(a.q.cats).length === 10 && WB_TESTS.length === 16;
+  const P = wbProfileFor({ wbProfile: 'custom', wbCustom: { pollution: 100, industry: 100, density: 100 } }); chk.limits = P.pol <= 45 && P.ind <= 0.35;
+  // admin tools: 170+, all guarded for a normal player, none in the palette
+  const admin = typeof AdminAuth !== 'undefined' && AdminAuth.active();
+  chk.tools = AT_TOOLS.length >= 170 && AT_CATS.length === 13;
+  chk.guard = admin || (adminTool('moneyEditor', '1') === undefined && paletteCommands().every(function (c) { return !/^Admin · /.test(c.label || ''); }));
+  // save 3.2: transportation block round trip + old save defaults
+  const o = buildSaveObject(), errs = validateImport(JSON.parse(JSON.stringify(o))), old = sanitizeTransportation(undefined), bad = sanitizeTransportation({ traffic: { modes: { 5: 'evil', 7: 'smart' }, oneway: { 3: 9 } }, metro: { lines: { L1: { color: '<x>' } } } });
+  chk.save = !!o.transportation && !errs.length && o.header.schema === '3.2' && old.traffic.defaultMode === null && !bad.traffic.modes[5] && bad.traffic.modes[7] === 'smart' && !bad.traffic.oneway[3] && bad.metro.lines.L1.color === null;
+  // UI: every tab renders
+  let ui = 0; for (let i = 0; i < TP_TABS.length; i++) { openTransport(TP_TABS[i][0]); await stWait(15); if ((document.getElementById('tpRoot') || {}).innerText.length > 40) ui++; } closeModal();
+  chk.ui = ui === TP_TABS.length;
+  const failed = Object.keys(chk).filter(function (k) { return !chk[k]; });
+  return { ok: !failed.length, detail: (failed.length ? 'FAILED: ' + failed.join(', ') + ' · ' : '') + 'cars ' + fmt(st.cars) + ' · commute ' + st.commute.toFixed(1) + ' min · ' + tpLines().length + ' lines · line editor ' + (stops.length >= 3 ? editor : 'n/a (<3 stops)') + ' · world quality ' + a.q.overall + '% ' + a.q.label + ' · ' + AT_TOOLS.length + ' admin tools (guarded ' + chk.guard + ') · save 3.2 ' + chk.save + ' · ' + ui + '/' + TP_TABS.length + ' tabs · errors ' + TPE.errors };
 }
 /* starts once the boot sequence has finished */
 (function () {

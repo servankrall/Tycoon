@@ -479,7 +479,7 @@ function trafficStep(dtStep) {
     if (!v.siren && AG.sirens) for (let k = 0; k < AG.sirens.length; k++) { const e = AG.sirens[k], ex = v.x - e.x, ey = v.y - e.y; if (ex * ex + ey * ey < 4900 && ex * e.hx + ey * e.hy > 0) { pull = 1; break; } }
     v.pull = lerp(v.pull || 0, pull, 0.2);
     const rt = ROAD_TYPES[MAP.roads[v.path[v.seg]]] || ROAD_TYPES[1];
-    const target = v.maxSpeed * rt.speed * (v.siren || v.type === 'race' ? 1.15 : cong) * (v.pull > 0.5 ? 0.35 : 1) * (1 + 0.04 * (v.lane || 0)) * (MAP.blocked[v.path[v.seg]] === 4 ? 0.45 : 1);
+    const target = v.maxSpeed * rt.speed * (v.siren || v.type === 'race' ? 1.15 : cong) * (v.pull > 0.5 ? 0.35 : 1) * (1 + 0.04 * (v.lane || 0)) * (MAP.blocked[v.path[v.seg]] === 4 ? 0.45 : 1) * (S.transportation && S.transportation.traffic.speedMult && !v.siren ? S.transportation.traffic.speedMult : 1);   // Part 19: speed limit editor
     v.speed = Math.min(target, v.speed + 80 * dt);
     v.t += v.speed * dt;
     let A2 = A, B2 = B, L2 = segLen;

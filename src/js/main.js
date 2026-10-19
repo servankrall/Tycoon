@@ -314,6 +314,7 @@ function bindUI() {
       case 'storyreplay': S.p5.story.phase = 'intro'; clearDialogues(); storyTick(); break;
       case 'cityhall': openCityHall(); break;
       case 'econ2': closeLeft(); openEconomy2('overview'); break;   // Part 17: Economy center
+      case 'tp3': closeLeft(); if (typeof openTransport === 'function') openTransport('overview'); break;   // Part 19: Transportation
       case 'gov': closeLeft(); if (typeof openGovernment === 'function') openGovernment('overview'); break;   // Part 18: City Management
       case 'transfer': transferToBudget(+v); if ($('modalTitle').textContent.indexOf('City Hall') >= 0 || $('modalTitle').textContent.indexOf(tr('City Hall')) >= 0) openCityHall(); else renderLeft(true); break;
       case 'acquire': confirmDialog('🦈 Acquire ' + aiDef(id).name + '?', 'Price: <b>' + money(aiValue(id)) + '</b>. All its buildings and cash become yours.', 'Acquire', function () { acquireAI(id); renderLeft(true); }); break;

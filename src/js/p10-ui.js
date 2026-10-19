@@ -301,7 +301,7 @@ function factoryDo(a, v) {
   }
   if (a === 'facGen' || a === 'megaGen') {
     const cfg = Object.assign({}, F); delete cfg.preset; if (!cfg.seed) delete cfg.seed;
-    confirmDialog('🌐 GENERATE MEGA WORLD?', 'A new ' + esc(F.size) + ' world "' + esc(F.name) + '" is generated in the 22-step pipeline and replaces the current city in its slot (a backup snapshot is taken first).', 'Generate', function () { createSnapshot('Before GENERATE MEGA WORLD', true); closeAdminCenter(); generateMegaWorld(F.preset || 'custom', cfg); });
+    confirmDialog('🌐 GENERATE MEGA WORLD?', 'A new ' + esc(F.size) + ' world "' + esc(F.name) + '" is generated in the 32-step pipeline (22 MEGA steps + World Builder 2.0 validation) and replaces the current city in its slot (a backup snapshot is taken first).', 'Generate', function () { createSnapshot('Before GENERATE MEGA WORLD', true); closeAdminCenter(); generateMegaWorld(F.preset || 'custom', cfg); });
     return;
   }
   if (a === 'scoreNow') { S.p10.genScore = generationScore(); toast('🏆 World generation score ' + S.p10.genScore.overall + '/100', 'good'); }
