@@ -558,11 +558,13 @@ const WG_RUN = {
   /* --- 14. Traffic: citizens and vehicles start their routines (home → work → shop → home), buses on routes --- */
   traffic: async function (ctx) {
     resetAgents();
-    const q = perf(), n = Math.min(Math.floor(q.npc * PERF.scale), Math.floor(S.city.population));
+    // fixed counts (not the device's quality / PERF.scale): the same seed builds the same world on every machine; the runtime
+    // population sampler then grows or trims the agents to the device's cap
+    const q = { npc: 60, veh: 40 }, n = Math.min(q.npc, Math.floor(S.city.population));
     for (let k = 0; k < n; k++) spawnCitizen(false);
-    AG.citizens.forEach(function (c) { if (c.inside && Math.random() < 0.35) c.insideUntil = S.clock.gameSec + rand(30, 600); });
+    AG.citizens.forEach(function (c) { if (c.inside && wgR() < 0.35) c.insideUntil = S.clock.gameSec + 30 + wgR() * 570; });
     await ctx.tick('traffic', 0.5);
-    const veh = Math.floor(q.veh * PERF.scale * 0.5);
+    const veh = Math.floor(q.veh * 0.5);
     for (let k = 0; k < veh; k++) spawnAmbientVehicle(k % 5 === 0 ? 'truck' : (k % 9 === 0 ? 'garbage' : 'car'));
     const stops = busRouteStops();
     for (let k = 0; k < Math.min(8, Math.ceil(stops.length / 2)); k++) spawnBus(k);

@@ -295,8 +295,11 @@ function econTick(dt) {
     const b = list[i], d = bdef(b);
     if (d.power > 0 && b._op) {
       let out = d.power * lvlMult(b.level) * b._weff * (b.damaged ? 0.5 : 1) * Wx.powerProd * mods.powerProd;
-      if (d.id === 'solar') out *= renew * (hour > 6 && hour < 19 ? 1.15 : 0.6) * (FX.weather === 'rain' || FX.weather === 'storm' ? 0.7 : 1);
-      if (d.id === 'wind') out *= renew * (FX.weather === 'storm' ? 1.2 : 1);
+      if (typeof infraGenMult === 'function') out *= infraGenMult(b, d, hour, renew);   // Part 21: sun, clouds, wind speed, river flow, season, condition
+      else {
+        if (d.id === 'solar') out *= renew * (hour > 6 && hour < 19 ? 1.15 : 0.6) * (FX.weather === 'rain' || FX.weather === 'storm' ? 0.7 : 1);
+        if (d.id === 'wind') out *= renew * (FX.weather === 'storm' ? 1.2 : 1);
+      }
       b._gen = out; gen += out; fuelCost += out * (d.fuel || 0);
     } else b._gen = 0;
   }
@@ -310,7 +313,7 @@ function econTick(dt) {
     if (d.power < 0 && b._op) consumers.push(b);
   }
   const prio = { SERVICE: 0, CIVIC: 0, WATER: 1, HOUSING: 2, EDUCATION: 3, TRANSPORT: 3, WASTE: 3, SCIENCE: 4, LANDMARK: 5 };
-  const pv = function (b) { const p = prio[bdef(b).sector]; return p === undefined ? 6 : p; };
+  const pv = typeof infraPowerPrio === 'function' ? infraPowerPrio : function (b) { const p = prio[bdef(b).sector]; return p === undefined ? 6 : p; };   // Part 21: the player's outage priority order
   consumers.sort(function (a, b) { return pv(a) - pv(b) || a.id - b.id; });
   let powerDemand = (SIM.evDemand || 0) * useMult;
   const imported = S.events.active.some(function (a) { return a.id === 'energyshortage' && a.choice === 'import'; });
@@ -521,7 +524,7 @@ function econTick(dt) {
       const prop = Math.pow(buildingValue(b), 0.8) * 0.0004 * (mods.propTax !== undefined ? mods.propTax : 1);
       const sales = mods.salesTax && d.cat === 'Commercial' ? r * mods.salesTax * 0.5 : 0;
       cost += sales; B.salesTax = (B.salesTax || 0) + sales; o.tax += sales; if (b.owner === 'player') PE.taxes += sales;
-      const bills = (b._powered && b._pneed ? b._pneed * 0.02 : 0) + (d.water < 0 ? -d.water * lvlMult(b.level) * 0.01 : 0);
+      const bills = (b._powered && b._pneed ? b._pneed * 0.02 * (mods.elecPrice || 1) : 0) + (d.water < 0 ? -d.water * lvlMult(b.level) * 0.01 * (mods.waterPrice || 1) : 0);   // Part 21: utility prices
       cost += biz + prop + bills;
       B.businessTax += biz; B.propertyTax += prop; B.utilities += bills;
       o.tax += biz + prop; o.bills += bills; o.imp += (b._impCost || 0) + (b._inputCost || 0);
