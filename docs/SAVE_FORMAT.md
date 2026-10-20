@@ -1,6 +1,6 @@
 # Save format
 
-Saves are JSON (`CITY_SAVE_V4`, `version` / `saveVersion` **12**). The header names the sections it carries; `header.schema` is **3.2** since v2.7.0 (3.1 in v2.6.0).
+Saves are JSON (`CITY_SAVE_V4`, `version` / `saveVersion` **12**). The header names the sections it carries; `header.schema` is **3.3** since v2.8.0 (3.2 in v2.7.0, 3.1 in v2.6.0).
 
 | Key | Since | Content |
 |---|---|---|
@@ -9,9 +9,34 @@ Saves are JSON (`CITY_SAVE_V4`, `version` / `saveVersion` **12**). The header na
 | `p15` | 2.4.0 | Visual Engine history |
 | `p17` | 2.5.0 | Economy Engine 2.0 (compact) |
 | `government` | 2.6.0 (Save 3.1) | Government Engine 2.0 |
-| `transportation` | **2.7.0 (Save 3.2)** | TransportationEngine 3.0 |
+| `transportation` | 2.7.0 (Save 3.2) | TransportationEngine 3.0 |
+| `citizenAI` | **2.8.0 (Save 3.3)** | CitizenAIEngine: citizen profiles, households, opinions, life score, history |
 | `worldbuilder` | 2.7.0 | World Builder 2.0 report of a generated world (null for other cities) |
 | `adminTools` | 2.7.0 | admin tool multipliers (power, water, wage, GDP; null when unused) |
+
+## `citizenAI` block (Save 3.3)
+
+```json
+{
+  "v": 1, "on": true, "nextCid": 58, "nextHh": 41,
+  "people": { "12": { "id": 12, "fn": "Selin", "ln": "Kaya", "sx": "F", "by": -301.4, "hh": 7, "edu": 3, "pers": "FAMILY", "rt": "standard", "car": 1,
+                      "cr": [3, 140, 2], "job": 412, "home": 388, "wage": 2950, "sav": 6400, "nd": [80, 66, 90, 88, 72, 54, 61, 70, 65, 100, 66], "hap": 71, "hl": 92, "sk": 0,
+                      "cm": ["transit", 21.4], "mem": [[3, "📈", "Promoted to Senior"]], "op": [-12, -30, 18, 5, 22, 40, 33, 51, 10, 8], "fr": [14, 31], "sh": [233, 0, 241] } },
+  "households": { "7": { "id": 7, "ln": "Kaya", "home": 388, "adults": [12, 14], "kids": [{ "fn": "Mei", "by": -78.2, "sx": "F" }], "income": 5200, "rent": 1300, "spend": 210, "sav": 9100, "sat": 68, "car": 1, "unhappy": 0 } },
+  "opinions": { "taxes": -12, "traffic": -25, "transit": 14, "housing": 3, "jobs": 20, "health": 37, "education": 30, "safety": 48, "environment": 9, "fun": 6 },
+  "life": { "score": 74.2, "label": "Very Good", "hist": [70, 72, 74] },
+  "hist": [{ "d": 3, "life": 74, "hap": 66, "emp": 93, "commute": 19, "pop": 12480, "approval": 86 }],
+  "events": { "attended": 12, "crowd": 0, "last": "" }, "migration": { "moved": 2, "left": 1, "arrived": 0 },
+  "comments": [[3, "Selin K.", "Only 12 minutes to work by transit. Love it.", 0]]
+}
+```
+
+- **Profiles:** only the profiles of the saved citizens (the 400-agent sample, `citizens[i].cid`) are kept; dirty flags mean only changed profiles are re-packed on each save. Needs (`nd`) and opinions (`op`) are arrays in the fixed order of `CAI_NEEDS` / `CAI_TOPICS`. `by` is the birth day (game day; 1 game year = 8 days).
+- **Statistical population:** life stages, households and education of the whole population (up to 500K) are derived from the sample plus the statistical population model; they are not stored per person.
+- **Migration:**
+  - v2.7.0 and older saves (no `citizenAI`, citizens without `cid`) load with an empty block, and profiles are created for the citizens as they appear;
+  - corrupt data is sanitized: numbers are clamped, `<` / `>` are stripped from strings, at most 1200 profiles and 800 households are kept, and unknown keys are dropped;
+  - the block is platform-independent (Windows ↔ Android).
 
 ## `transportation` block (Save 3.2)
 

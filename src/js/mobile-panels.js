@@ -366,7 +366,7 @@ function renderMobilePage(first) {
       statCard('🏭', 'Production', fmt(Math.round((SIM.goodsProd || 0) * 60)) + '/min', 'goods produced') + statCard('🛒', 'Consumption', fmt(Math.round((SIM.goodsUse || 0) * 60)) + '/min', 'goods used by the city',
         null, (SIM.goodsUse || 0) > (SIM.goodsProd || 0) * 1.3 ? 'warn' : '');
     h = tabsH + '<div class="mStatGrid">' + cards + '</div>' + graphBlockHtml() +
-      '<div class="mActs"><button class="btn gold" data-mpg="econ2">📊 ECONOMY CENTER</button><button class="btn blue" data-mpg="gov">🏛️ CITY MANAGEMENT</button><button class="btn" data-mpg="tp3">🚦 TRANSPORTATION</button><button class="btn blue" data-mpg="taxes">🏛 Taxes & budget</button><button class="btn" data-mpg="companies">🏢 Companies & stocks</button><button class="btn" data-mpg="bank">🏦 Bank</button><button class="btn" data-mpg="trade">🚢 Trade</button></div>';
+      '<div class="mActs"><button class="btn gold" data-mpg="econ2">📊 ECONOMY CENTER</button><button class="btn blue" data-mpg="gov">🏛️ CITY MANAGEMENT</button><button class="btn" data-mpg="tp3">🚦 TRANSPORTATION</button><button class="btn" data-mpg="citylife">🌆 CITY LIFE</button><button class="btn blue" data-mpg="taxes">🏛 Taxes & budget</button><button class="btn" data-mpg="companies">🏢 Companies & stocks</button><button class="btn" data-mpg="bank">🏦 Bank</button><button class="btn" data-mpg="trade">🚢 Trade</button></div>';
   }
   el.querySelector('.mPageTitle').innerHTML = title;
   el.querySelector('.mPageTools').innerHTML = tools;
@@ -384,6 +384,7 @@ function pageClick(e) {
   const deskp = { stats: ['city', 'overview'], services: ['city', 'services'], housing: ['city', 'housing'], research: ['research'], companies: ['companies'], world: ['world'], taxes: ['city', 'economy'], bank: ['companies', 'bank'], trade: ['world', 'trade'] }[k];
   if (k === 'econ2') { if (typeof openEconomy2 === 'function') openEconomy2('overview'); return; }
   if (k === 'tp3') { if (typeof openTransport === 'function') openTransport('overview'); return; }
+  if (k === 'citylife') { if (typeof openCityLife === 'function') openCityLife('overview'); return; }
   if (k === 'gov') { if (typeof openGovernment === 'function') openGovernment('overview'); return; }
   if (k === 'hall') { openCityHall(); return; }
   if (k === 'quests') { if (typeof openQuestPage === 'function') openQuestPage(); else { closeMobilePage(); openQuestsPanel(); } return; }

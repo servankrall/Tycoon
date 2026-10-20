@@ -1,6 +1,6 @@
 # 🏙️ BLOCK CITY TYCOON — Windows EXE + Android APK
 
-**Build. Manage. Expand.** · Sürüm **2.7.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
+**Build. Manage. Expand.** · Sürüm **2.8.0** · Kayıt formatı **v12 (CITY_SAVE_V4)**
 
 Tarayıcıda çalışan BLOCK CITY TYCOON (Part 1–6'daki tüm sistemleriyle) artık bir **Windows masaüstü uygulaması**:
 `BLOCK CITY TYCOON.exe`, kurulum sihirbazı (installer) ve kurulum gerektirmeyen portable EXE — ve 2.0.0 ile bir **Android uygulaması** (APK). Windows ve Android **aynı oyun motorunu** kullanır; yalnızca girdi, arayüz, dosya sistemi ve performans katmanı platforma özeldir. Oyun tamamen **çevrimdışı** çalışır: sunucu, harici API veya internet bağlantısı gerekmez.
@@ -39,8 +39,8 @@ Build sonrası:
 ```text
 dist/
 ├── windows/
-│   ├── BLOCK-CITY-TYCOON-Setup-2.7.0.exe       ← kurulum sihirbazı
-│   ├── BLOCK-CITY-TYCOON-Portable-2.7.0.exe    ← kurulumsuz, çift tıkla çalışır
+│   ├── BLOCK-CITY-TYCOON-Setup-2.8.0.exe       ← kurulum sihirbazı
+│   ├── BLOCK-CITY-TYCOON-Portable-2.8.0.exe    ← kurulumsuz, çift tıkla çalışır
 │   └── win-unpacked/BLOCK CITY TYCOON.exe      ← paketlenmiş uygulamanın kendisi
 └── android/
     ├── BLOCK-CITY-TYCOON-Android.apk           ← debug APK (geliştirme)
@@ -606,6 +606,32 @@ Yeni **🚦 TRANSPORTATION** paneli (Windows: toplu taşıma (Transit) sekmesind
 - **175 admin aracı** (13 kategori): arama, ★ favoriler, Ctrl+K paleti (yalnızca admin girişliyken), Ctrl+Z / Ctrl+Y geri al / yinele (kayıt snapshot'larıyla, 10 adım). Liste: [docs/ADMIN_COMMANDS.md](docs/ADMIN_COMMANDS.md).
 
 Testler: masaüstü self-test adım 56, Android self-test adım 33, `scripts/qa-test.js` worldgen (20 preset, pipeline / temiz dünya / tampon / su koruması, bozuk dünya onarımı veya reddi, determinizm, şehir boyutuna göre ulaşım), transport (dashboard ve hat editörü, Traffic AI, validator + auto fix, Save 3.2 / v2.6.0 / Windows ↔ Android) ve stress19 (100K / 250K / 500K, 50K araç, mega metro, havaalanı ve liman, aşırı trafik, yağmur, kar, tıkanıklıkta acil durum, elektrik kesintisi, resesyon) grupları + güvenlik. Sonuçlar: [docs/TEST_REPORT.md](docs/TEST_REPORT.md).
+
+## 6o. CitizenAIEngine + Living City 3.0 (2.8.0)
+Yeni **🌆 CITY LIFE** paneli (Windows: Transit sekmesindeki **🌆 OPEN CITY LIFE** düğmesi veya komut paleti „Open City Life" · Android: Ekonomi sayfasında **🌆 CITY LIFE**). Vatandaşa dokunmak / tıklamak **Citizen Inspector**'ı açar. Modüler: `citizen-ai.js` (CitizenAIEngine) ve `citizen-ui.js` (panel, inspector, ısı haritaları, admin). Mevcut CitizenEngine (`citizens.js` ajanları, `citylife.js` haneleri, `living-world.js` nüfusu) silinmedi; CitizenAIEngine onun üstüne kurulur. Durum `S.citizenAI` olarak kaydedilir (Save 3.3). API: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+| Alan | Ne yapar |
+|---|---|
+| Kimlik | her simüle vatandaşa kalıcı kimlik (`cid`) ve şehir tohumundan üretilen ad-soyad; kayıt → yükleme sonrasında aynı kişi |
+| Yaşam evreleri | Child · Teen · Young Adult · Adult · Middle Age · Senior; vatandaşlar yaşlanır (1 oyun yılı = 8 gün), emekli olur, okulu bitirir |
+| Household 2.0 | yetişkinler + çocuklar / gençler tek bütçede: gelir, kira (ortalama maaşa göre), harcama, birikim, araba, memnuniyet |
+| Karar AI | ihtiyaç × kişilik × rutin × saat × hava × mevsim × para × sosyal × etkinlik fayda puanları; saf rastgelelik yok (şehir tohumundan küçük, deterministik eşitlik bozucu) |
+| Rutinler | Early bird, Standard, Late starter, Night shift, Student, Retired, Part-time |
+| İhtiyaçlar (11) | Food, Rest, Hygiene, Health, Safety, Social, Fun, Shopping, Comfort, Purpose, Education |
+| Happiness 3.0 (13) | Housing, Job, Income, Commute, Health, Education, Safety, Environment, Entertainment, Social, Services, Taxes, Weather |
+| Smart Commute | TransportationEngine 3.0 rota seçeneklerine kişisel ağırlık: zamanın değeri (gelir), çevreci tercih, yaş, sağlık, alışkanlık, kış, etkinlik günü; yoğun günlerde arabalılar erken çıkar |
+| Shopping / Entertainment / Health AI | fiyat, mesafe, kalite, marka ve gelire göre mağaza; ilçe karakterine göre eğlence; mesafe, bekleme ve kaliteye göre hastane; ziyaretler binanın puanını (yorumlarını) değiştirir |
+| İş, eğitim, kariyer | açık işlerde maaş × eğitim uyumu × mesafe; öğrenci mezuniyeti; Intern → Junior → Associate → Senior → Lead → Manager → Executive |
+| Sosyal, anı, görüş | iş ve komşuluktan arkadaşlık; son 8 anı; 10 konuda görüş → City Approval (en fazla ±4 puan); Comments 2.0 gerçek sayılarla („My ride to work takes 34 minutes.") |
+| Konut AI + göç | mutsuz hane daha iyi ve karşılanabilir eve taşınır ya da şehri terk eder; City Life Score şehrin çekiciliğini (istatistiksel göç) değiştirir |
+| City Life · analitik | CITY LIFE SCORE, District Life Score, Population Statistics 3.0, Smart City Analytics (günlük geçmiş), Population Forecast (1 · 5 · 10 · 25 · 50 yıl), AI City Planner (yalnızca öneri) |
+| Etkinlikler | Event Crowd AI: festival / konserde vatandaşlar mekâna gider; etkinlik günü rota seçimi toplu taşımaya kayar |
+| Araçlar | Citizen Inspector (7 sekme) + Household Inspector, FOLLOW CITIZEN, rota görünümü, 10 vatandaş ısı haritası; mobil akış: Dokun → Inspector → TRACK / PROFILE → ROUTE → HOUSEHOLD |
+| LOD ve performans | kameraya yakın tam AI 5–10 Hz, orta 1–2 Hz, uzak istatistiksel (ilçe verisi); saatlik / günlük geçişler 500K nüfusta birkaç ms; aday listeleri saatlik önbellekte |
+| Doğrulama | Citizen Life Health: evsiz vatandaş, kayıp iş, bozuk hane, geçersiz ihtiyaç bulunur ve her oyun saati otomatik onarılır; World Builder raporunda gösterilir |
+| Admin | CITIZEN AI debug sekmesi (gerçek karar puanları, LOD hızları, süreler) ve 20 korumalı vatandaş aracı; normal oyuncuda gizli ve reddedilir |
+
+Testler: masaüstü self-test adım 57, Android self-test adım 34, `scripts/qa-test.js` citizens grubu (kimlik / hane / ihtiyaç / Happiness 3.0, kararlar, ulaşım + alışveriş + sağlık + iş AI, görüş → onay, konut + göç + tahmin + planlayıcı, LOD hızları, 10K–500K, resesyon + festival, Save 3.3, doğrulama, arayüz ve mobil akış) + güvenlik. Sonuçlar: [docs/TEST_REPORT.md](docs/TEST_REPORT.md).
 
 ## 7. Pencere ve ayarlar
 

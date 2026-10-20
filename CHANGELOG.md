@@ -2,6 +2,32 @@
 
 Full release notes (Turkish) for every version: [.github/RELEASE_NOTES.md](.github/RELEASE_NOTES.md).
 
+## 2.8.0 — Part 20: Advanced Citizen AI & Living City 3.0
+- CitizenAIEngine (`citizen-ai.js`), built on the existing CitizenEngine. Its subsystems are Decision, Routine, Need, Household, Job, Education, Housing, Shopping, Entertainment, Social, Mobility, Health, Memory, Opinion and Migration.
+  - Stable identities and procedural names. Six life stages, with aging, retirement and graduation.
+  - Household 2.0: adults plus children / teens sharing one budget.
+  - 11 needs, Happiness 3.0 with 13 factors, and 7 daily routines.
+  - Utility-scored decisions with a deterministic tie-break (no pure randomness).
+  - Smart Commute on top of TransportationEngine 3.0.
+  - Shopping AI by price, distance, quality, brand and income. Visits feed building ratings.
+  - Entertainment AI by district character; hospital choice; job search; education; career from Intern to Executive.
+  - Social ties, memory, and opinions per topic; opinions move City Approval by at most ±4 points.
+  - Comments 2.0 built from real numbers; Housing AI and migration.
+- LOD: near the camera full AI at 5–10 Hz, mid distance at 1–2 Hz, far away statistical. Candidate lists are cached per game hour.
+- CITY LIFE panel with 8 tabs:
+  - City Life Score, District Life Score, Population Statistics 3.0;
+  - Smart City Analytics, Population Forecast (1 / 5 / 10 / 25 / 50 years), AI City Planner (suggestions only);
+  - opinions and comments, events with Event Crowd AI, a citizen list.
+- Citizen Inspector (7 tabs) and Household Inspector, FOLLOW CITIZEN, route view, 10 citizen heatmaps. Mobile flow: Tap → Inspector → Follow → Route → Household.
+- Citizen validator with hourly auto-fix (Citizen Life Health); it is also shown in the World Builder report.
+- Admin: CITIZEN AI debug tab showing real decision scores, plus 20 guarded citizen tools (195 admin tools in total).
+- Save 3.3: `citizenAI` block (profiles of the saved citizens, households, opinions, history). Citizens keep their id across save and load; v2.7.0 saves create profiles.
+- Fix: every new world starts with clear, steady weather. The previous session's weather changed generated worlds, so the same seed could give different results.
+- Tests:
+  - desktop self-test step 57 and Android self-test step 34;
+  - QA group `citizens` (11 scenarios) and a Citizen AI admin security check;
+  - a CI step for the citizens group.
+
 ## 2.7.0 — Part 19: Advanced Transportation & Mobility 3.0 + Admin World Builder 2.0
 - TransportationEngine 3.0 (`transport-engine.js`, `transport-ai.js`, `transport-ui.js`), built on the existing TrafficEngine:
   - Metro (station capacity, passengers, waiting, coverage, revenue, maintenance), Bus (depot, schedules), Train (cargo trains with freight revenue), Airport (Small → Regional → International → Mega), Port (Small → Cargo → Passenger → Industrial → Mega), Bike, Pedestrian, Parking;

@@ -20,6 +20,22 @@
 ## Eski tarayıcı kayıtları
 Oyunu Chrome/Edge'de oynadıysanız: tarayıcıda Ayarlar → **📦 Export all saves** (veya **⬇️ Download .json**), sonra EXE'de **📦 Import old browser save** ile dosyayı seçin.
 
+## 2.8.0 — Part 20: Advanced Citizen AI & Living City 3.0
+Yeni **🌆 CITY LIFE** paneli (Windows: Transit sekmesinde **🌆 OPEN CITY LIFE** · Android: Ekonomi sayfasında **🌆 CITY LIFE** · komut paleti „Open City Life"). Vatandaşa dokunmak **Citizen Inspector**'ı açar. Mevcut CitizenEngine korunur; CitizenAIEngine onun üstüne kurulur.
+- **Kimlik ve yaşam:** kalıcı vatandaş kimliği ve adı; Child → Teen → Young Adult → Adult → Middle Age → Senior; yaşlanma, emeklilik, mezuniyet.
+- **Household 2.0:** yetişkinler ve çocuklar tek bütçede (gelir, kira, harcama, birikim); kira ortalama maaşa göre.
+- **Karar AI:** 11 ihtiyaç, 7 rutin, saat, hava, mevsim, para, sosyal yaşam ve etkinliklerden fayda puanı; aynı durum aynı kararı verir.
+- **Happiness 3.0:** 13 faktör (konut, iş, gelir, yolculuk, sağlık, eğitim, güvenlik, çevre, eğlence, sosyal yaşam, kamu hizmetleri, vergiler, hava).
+- **Smart Commute, alışveriş, eğlence, sağlık:** kişisel ulaşım seçimi; fiyat / kalite / marka / gelire göre mağaza; ilçe karakterine göre eğlence; hastane seçimi; ziyaretler işletme puanını etkiler.
+- **İş ve kariyer:** iş arama, eğitim, Intern → Executive.
+- **Sosyal, anılar, görüşler:** arkadaşlıklar, son anılar, 10 konuda görüş → City Approval; gerçek sayılarla vatandaş yorumları.
+- **Konut AI ve göç:** mutsuz hane taşınır veya şehri terk eder; City Life Score göçü etkiler.
+- **City Life:** CITY LIFE SCORE, ilçe yaşam puanları, Population Statistics 3.0, Smart City Analytics, Population Forecast (1–50 yıl), AI City Planner (yalnızca öneri), Event Crowd AI, 10 ısı haritası.
+- **Araçlar:** Citizen / Household Inspector, FOLLOW CITIZEN, rota görünümü; mobil akış Dokun → Inspector → Takip → Rota → Hane.
+- **Performans:** yakın tam AI 5–10 Hz, orta 1–2 Hz, uzak istatistiksel; 500K nüfusta birkaç ms.
+- **Save 3.3:** `citizenAI` bloğu; vatandaşlar kayıt sonrası aynı kimlikle döner; v2.7.0 kayıtları açılır; Windows ↔ Android.
+- **Admin:** CITIZEN AI debug sekmesi (gerçek karar puanları) ve 20 korumalı vatandaş aracı; normal oyuncuda gizli.
+
 ## 2.7.0 — Part 19: Advanced Transportation & Mobility 3.0 + Admin World Builder 2.0
 Yeni **🚦 TRANSPORTATION** paneli (Windows: Transit sekmesinde **🚦 OPEN TRANSPORTATION** · Android: Ekonomi sayfasında **🚦 TRANSPORTATION** · komut paleti „Open Transportation"). Mevcut TrafficEngine (trafik 2.0, hatlar, kavşaklar, rota) korunur; TransportationEngine 3.0 onunla birlikte çalışır.
 - **Metro:** istasyon kapasitesi, yolcu, bekleyen, kapsama, gelir, bakım; metro deposu ek tren kapasitesi verir.

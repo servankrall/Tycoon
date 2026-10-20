@@ -9,6 +9,7 @@ boot/loader.js → config / data → world → simulation (econTick …) → cit
   → Government Engine 2.0 (Part 18: gov-core.js, gov-services.js, gov-policy.js, gov-ui.js)
   → TransportationEngine 3.0 (Part 19: transport-engine.js, transport-ai.js, transport-ui.js)
   → World Builder 2.0 + admin tools (Part 19: worldbuilder.js, admin-tools.js, worldbuilder-ui.js)
+  → CitizenAIEngine + Living City 3.0 (Part 20: citizen-ai.js, citizen-ui.js)
   → main.js → platform-ui.js → selftest.js
 ```
 
@@ -18,6 +19,45 @@ Rules every module follows:
 - **Determinism.** Random choices use the city's saved, seeded `RNG` stream (`RNG.next()`); no module adds its own random source.
 - **Fault isolation.** A failing subsystem is caught and logged, and the rest of the game keeps running.
 - **Saves.** Each part owns one top-level save key with a `new…()` default and a `sanitize…()` that turns missing or corrupt data into safe defaults.
+
+## CitizenAIEngine (Part 20)
+
+The city has two layers:
+- the **statistical population** `S.city.population`, driven by births, deaths and migration in `living-world.js`;
+- a **sample of simulated agents** `AG.citizens`, capped by the quality preset (`perf().npc`).
+
+CitizenAIEngine gives every agent a stable identity `c.cid` and a profile. The far, statistical part of the city is described by district statistics, so there is no per-citizen work for 500K people. The old CitizenEngine (`citizens.js`, `citylife.js`) keeps running; CitizenAIEngine wraps it.
+
+| Hook | What it adds |
+|---|---|
+| `decide(c)` | utility-scored decisions with score parts (need, time, personality, weather, money, social, stage, event …) and a deterministic jitter < 3 from the city seed; tourists keep the classic logic |
+| `arrive(c)` | hospital and event states, social need, household spending, building reviews (`b.rating` / `b.nrev`, the business effect) |
+| `mmOptions(c, target)` | Smart Commute: personal weights on the multi-modal router (value of time, eco preference, age, health, habit, winter, event day) |
+| `serializeCitizens` / `restoreCitizens` | the stable `cid` travels with the saved citizens |
+| `buildSaveObject` | `caiFlush()`: only dirty profiles are re-packed into `S.citizenAI.people` |
+| `p10PopulationStep` | City Life Score → attractiveness for migration (bounded ±0.04) |
+| `govSatisfactionHour` | opinions → City Approval (eased like the approval itself; settles at most 4 points off) |
+| `drawSelection` (renderer) | route view of the followed citizen |
+
+**Scheduling:**
+- `CitizenAI` (sim system, every 0.05 s) updates near agents every 0.14 s (≈ 6.7 Hz) and mid agents every 0.6 s (≈ 1.6 Hz). Far agents are not updated individually. The budget is 50 (25) updates per tick.
+- Every game hour: wages, careers, sickness, household budgets, pruning, self-healing (`caiAutoFix`), city statistics, life scores.
+- Every game day: aging, graduation, retirement, social ties, opinions, housing AI and migration, Comments 2.0, history.
+
+Candidate lists (shops, jobs, schools, venues) and per-home context are cached per game hour and map version.
+
+```js
+cai()                          // S.citizenAI (created with defaults if missing)
+caiProfile(c)                  // the agent's profile {id, fn, ln, by, hh, edu, pers, rt, career, job, home, wage, sav, needs{11}, hap, f{13}, commute, mem, op{10}, friends, fav, dec}
+caiDecide(c)                   // one utility decision; P.dec = [{s: state, u: utility, p: {part: score}}]
+caiHour() / caiDay()           // hourly / daily passes
+caiValidate() / caiAutoFix()   // Citizen Life Health {ok, issues, health, label} · {actions, before, after}
+caiForecast()                  // [{years: 1|5|10|25|50, pop, low, high, seniors}]
+caiPlanner()                   // [{prio, icon, text, why, at}] — suggestions only
+caiRates()                     // measured update rate per agent: {near, mid, counts}
+openCityLife(tab) · caiInspect(c, tab) · caiHouseholdInspect(id) · caiFollow(c)
+adminCitizenAI(action, value)  // guarded (guard id cai:<action>)
+```
 
 ## TransportationEngine 3.0 (Part 19)
 

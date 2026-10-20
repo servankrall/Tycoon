@@ -537,3 +537,18 @@ body.mobileUI #tpRoot .e2Tabs{-webkit-overflow-scrolling:touch;}
 body.mobileUI #tpRoot .gvFund input,body.mobileUI #tpRoot .gvTax input{height:var(--touch);}
 body.mobileUI #tpRoot .gvCards{grid-template-columns:1fr;}
 body.mobileUI .atBtn .btn{min-height:var(--touch);}
+/* Part 20: City Life panel + Citizen Inspector (same layout as the government / transport panels) */
+body.mobileUI #clRoot .btn{min-height:var(--touch);}
+body.mobileUI #caiIns .btn{min-height:var(--touch);}
+body.mobileUI #clRoot .e2Grid{grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*140),1fr));}
+body.mobileUI #caiIns .e2Grid{grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*140),1fr));}
+body.mobileUI #clRoot .e2Tbl td,body.mobileUI #clRoot .e2Tbl th{padding:8px 6px;font-size:max(12px,calc(var(--u)*12));}
+body.mobileUI #caiIns .e2Tbl td,body.mobileUI #caiIns .e2Tbl th{padding:8px 6px;font-size:max(12px,calc(var(--u)*12));}
+body.mobileUI #clRoot .e2Slider input[type=range]{height:var(--touch);}
+body.mobileUI #caiIns .e2Slider input[type=range]{height:var(--touch);}
+body.mobileUI #clRoot .e2Tabs{-webkit-overflow-scrolling:touch;}
+body.mobileUI #caiIns .e2Tabs{-webkit-overflow-scrolling:touch;}
+body.mobileUI #clRoot .gvFund input,body.mobileUI #clRoot .gvTax input{height:var(--touch);}
+body.mobileUI #caiIns .gvFund input,body.mobileUI #caiIns .gvTax input{height:var(--touch);}
+body.mobileUI #clRoot .gvCards{grid-template-columns:1fr;}
+body.mobileUI #caiIns .gvCards{grid-template-columns:1fr;}

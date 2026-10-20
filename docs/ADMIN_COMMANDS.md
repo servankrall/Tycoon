@@ -2,6 +2,45 @@
 
 Admin tools are invisible to normal players. Every action passes `AdminAuth.guard`: it needs a signed-in OWNER / ADMIN — or a DEVELOPER / DEBUG role where the category allows it (read-only government inspection: all four roles; changes: OWNER / ADMIN). Every attempt is written to the admin action log. There are no plain-text passwords in the game files.
 
+## Citizen AI (v2.8.0)
+
+Admin Center → **CITIZENS → 🧠 CITIZEN AI** shows the debug panel:
+- LOD counts and measured update rates (near / mid / far);
+- AI tick, hour-pass and day-pass times, and the decision count and cost;
+- errors and Citizen Life Health;
+- the **real decision scores** of the inspected or followed citizen, split into their parts.
+
+For an admin, the Citizen Inspector also gets a **🧠 AI debug** tab.
+
+`adminCitizenAI(action, value)` uses the guard id `cai:<action>`; the same 20 actions are admin tools in the **Population** category (`adminTool('<id>', value)`). Guard categories:
+- **view** (all four roles): `inspect`, `validate`, `forecast`, `planner`, `follow`;
+- **debug** (OWNER / ADMIN / DEVELOPER): `debug`;
+- **delete** (OWNER): `reset`;
+- **city** (OWNER / ADMIN): all other actions.
+
+The tools act on the inspected / followed citizen, or the first citizen agent:
+
+| Tool id | Action | What it does |
+|---|---|---|
+| `caiInspect` | `inspect` | profile of the citizen (packed form) |
+| `caiDebug` | `debug` | the last decision's utility scores and their parts |
+| `caiValidate` | `validate` | Citizen Life Health and its issues |
+| `caiAutoFix` | `fix` | repairs homeless citizens, lost jobs, broken households, invalid needs; job search |
+| `caiHour` / `caiDay` | `hour` / `day` | runs the hourly / daily Citizen AI pass now |
+| `caiSick` / `caiHeal` | `sick` / `heal` | makes the citizen sick (→ hospital choice) / healthy |
+| `caiPromote` | `promote` | one career level up |
+| `caiFire` / `caiJob` | `fire` / `job` | removes the job / runs the job search |
+| `caiNeed` | `need` | drains one need (value = need id, e.g. `food`) |
+| `caiAge` | `age` | sets the age (value = years) |
+| `caiOpinion` | `opinion` | sets every citizen's opinions (value −100…100) |
+| `caiFestival` | `festival` | starts a City Festival (Event Crowd AI) |
+| `caiMigrate` | `migrate` | forces a housing AI / migration pass for the citizen's household |
+| `caiFollow` | `follow` | follows the citizen (camera + route) |
+| `caiForecast` / `caiPlanner` | `forecast` / `planner` | population forecast / AI City Planner suggestions |
+| `caiReset` | `reset` | resets the Citizen AI (profiles are rebuilt) |
+
+With these, the admin tool count is 195. For a normal player every call returns nothing and changes nothing; `scripts/qa-test.js` checks this ("Citizen AI admin tools are hidden and denied for a normal player").
+
 ## World Builder 2.0 and admin tools (v2.7.0)
 
 Admin Center → **WORLD → 🧬 WORLD BUILDER 2.0**:

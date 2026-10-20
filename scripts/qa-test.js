@@ -18,6 +18,9 @@
    save → restart → load, v2.5.0 / corrupt saves, Windows ↔ Android, the City Management UI and admin security.
    Part 19 adds WORLDGEN (20 presets, pipeline, clean-world limits, auto-fix / rejection, determinism, transport tiers),
    TRANSPORT (dashboard, line editor, Traffic AI 3.0, validator, Save 3.2) and STRESS19 (tests A–M of the Part 19 plan).
+   Part 20 adds CITIZENS: identity / households / needs / Happiness 3.0, utility decisions, commute + shopping + health + job AI,
+   opinions → approval, housing + migration, life score / forecast / planner, LOD rates, 10K–500K, recession + festival,
+   Save 3.3, validator, the City Life UI and the mobile inspector flow.
    Every wait is a wait-until with a deadline (no fixed sleeps that flake on a slow runner). A failure prints
    Test / Expected / Actual / Device / Resolution / Build / Commit.
    Usage:  node scripts/qa-test.js [--out=dist/qa] [--only=save,weather] [--profile=android|windows|both]
@@ -1200,7 +1203,7 @@ async function runProfile(browser, base, dev) {
         const plat = ['windows', 'android'].map(function (pf) { const w = JSON.parse(JSON.stringify(raw)); w.header.platform = pf; if (w.origin) { w.origin.platform = pf; w.origin.lastPlatform = pf; } Store.setItem(slotKey(x.slot), JSON.stringify(w)); loadGame(x.slot); return S.transportation.traffic.defaultMode === 'adaptive'; });
         return { isNew: lr.isNew, kept: kept, oldOk: oldOk, plat: plat };
       }, a);
-      return { ok: !b.isNew && b.kept && b.oldOk && b.plat.every(Boolean) && a.schema === '3.2', actual: 'saved ' + a.keys + ' (schema ' + a.schema + ') · after restart kept ' + b.kept + ' · v2.6.0 save → defaults ' + b.oldOk + ' · Windows → this device ' + b.plat[0] + ' · Android → this device ' + b.plat[1] };
+      return { ok: !b.isNew && b.kept && b.oldOk && b.plat.every(Boolean) && parseFloat(a.schema) >= 3.2, actual: 'saved ' + a.keys + ' (schema ' + a.schema + ') · after restart kept ' + b.kept + ' · v2.6.0 save → defaults ' + b.oldOk + ' · Windows → this device ' + b.plat[0] + ' · Android → this device ' + b.plat[1] };
     });
   await T('stress19', 'Stress A–C: 100K · 250K · 500K citizens — transport + world systems stay light', 'at 100K / 250K / 500K citizens (statistical) the transport stats, prediction and routing stay fast, all values finite, 4 s at 100× without errors',
     async function () {
@@ -1264,6 +1267,177 @@ async function runProfile(browser, base, dev) {
       return { ok: r.ok, actual: 'budget finite and ≥ 0 · ' + r.lines + ' lines intact' };
     });
 
+  /* ===================== Part 20: CITIZEN AI · LIVING CITY 3.0 ===================== */
+  const caiRun = async function (ms, speed) { await ev(async function (a) { setSpeed(a[1]); const t0 = performance.now(); await __qa.until(function () { return performance.now() - t0 > a[0]; }, a[0] + 3000); setSpeed(0); }, [ms, speed || 10]); };
+  await T('citizens', 'Citizen AI: identity, life stages, Household 2.0, 11 needs, Happiness 3.0 (13 factors)', 'every simulated citizen has a stable id and a procedural name, a life stage, a household (adults + children / teens) with one budget, 11 needs and 13 happiness factors (all finite)',
+    async function () {
+      await ev(async function () { await __qa.world('MEDIUM', 2020, 3); });
+      await caiRun(9000, 10);
+      const r = await ev(function () {
+        caiHour(); const ppl = caiPeople(), A = S.citizenAI;
+        const ids = ppl.map(function (P) { return P.id; }), uniq = new Set(ids).size === ids.length;
+        const named = ppl.every(function (P) { return /^\S+$/.test(P.fn) && P.ln.length > 1; }), bound = ppl.every(function (P) { return P.agent && P.agent.cid === P.id; });
+        const hh = Object.keys(A.households).map(function (k) { return A.households[k]; }), kids = hh.reduce(function (a, H) { return a + H.kids.length; }, 0);
+        const stages = {}; ppl.forEach(function (P) { stages[caiStageOf(caiAge(P))] = 1; }); hh.forEach(function (H) { H.kids.forEach(function (k) { stages[caiStageOf(Math.floor((gameDay() - k.by) / CAI_YEAR_DAYS))] = 1; }); });
+        const needs = ppl.every(function (P) { return CAI_NEEDS.every(function (n) { return isFinite(P.needs[n[0]]) && P.needs[n[0]] >= 0 && P.needs[n[0]] <= 100; }); });
+        const fac = ppl.filter(function (P) { return P.f && Object.keys(P.f).length === 13 && Object.keys(P.f).every(function (k) { return isFinite(P.f[k]); }); }).length;
+        const budget = hh.filter(function (H) { return isFinite(H.income) && isFinite(H.rent) && isFinite(H.sav); }).length;
+        return { n: ppl.length, uniq: uniq, named: named, bound: bound, hh: hh.length, kids: kids, stages: Object.keys(stages), needs: needs, fac: fac, budget: budget, sample: ppl.slice(0, 3).map(function (P) { return P.fn + ' ' + P.ln + ' (' + caiAge(P) + ')'; }) };
+      });
+      return { ok: r.n >= 5 && r.uniq && r.named && r.bound && r.hh >= 3 && r.needs && r.fac >= r.n - 1 && r.budget === r.hh && r.stages.length >= 3, actual: r.n + ' citizens (' + r.sample.join(', ') + ') · ids unique ' + r.uniq + ' · ' + r.hh + ' households, ' + r.kids + ' children / teens · stages ' + r.stages.join('/') + ' · 11 needs ok ' + r.needs + ' · 13 factors for ' + r.fac + '/' + r.n + ' · budgets ' + r.budget + '/' + r.hh };
+    });
+  await T('citizens', 'Decisions: utility scores (no pure randomness), routines, weather and season', 'the chosen activity is the highest utility; the same state gives the same choice; storms make the park less attractive; routines differ (early / standard / late / night / student / retired / part-time)',
+    async function () {
+      const r = await ev(function () {
+        const c = AG.citizens.find(function (x) { return !x.tourist && x.cid; }); if (!c) return { skip: true };
+        const P = caiProfile(c), keep = function () { return { state: c.state, path: c.path, pi: c.pi, target: c.target, work: c.work, inside: c.inside }; }, back = function (k) { Object.assign(c, k); };
+        let k = keep(); caiDecide(c); const a = JSON.stringify(P.dec); back(k); caiDecide(c); const b = JSON.stringify(P.dec); back(k);
+        const sorted = P.dec.every(function (d, i, x) { return i === 0 || x[i - 1].u >= d.u; }), parts = P.dec.every(function (d) { return Math.abs(Object.keys(d.p).reduce(function (s, q) { return s + d.p[q]; }, 0) - d.u) < 0.5; });
+        const park = function (w) { const fx = FX.weather; FX.weather = w; c.needs.fun = 10; caiDecide(c); const o = P.dec.find(function (d) { return d.s === 'GO_PARK'; }); back(k); FX.weather = fx; return o ? o.u : 0; };
+        const sunny = park('clear'), storm = park('storm');
+        const routines = {}; caiPeople().forEach(function (Q) { routines[Q.rt] = (routines[Q.rt] || 0) + 1; });
+        return { same: a === b, sorted: sorted, parts: parts, sunny: sunny, storm: storm, routines: routines, top: P.dec[0] };
+      });
+      if (r.skip) return { ok: false, actual: 'no citizen agent' };
+      return { ok: r.same && r.sorted && r.parts && r.storm < r.sunny && Object.keys(r.routines).length >= 3, actual: 'deterministic ' + r.same + ' · sorted by utility ' + r.sorted + ' · scores = sum of parts ' + r.parts + ' · park utility clear ' + Math.round(r.sunny) + ' vs storm ' + Math.round(r.storm) + ' · routines ' + JSON.stringify(r.routines) + ' · top ' + r.top.s + ' ' + r.top.u + ' ' + JSON.stringify(r.top.p) };
+    });
+  await T('citizens', 'Smart Commute · Shopping AI · Entertainment AI · Health AI · job search · education · career', 'eco-minded citizens avoid the car; richer citizens value time; shoppers pick by price, distance, quality, brand and income; sick citizens choose a hospital; the unemployed find open jobs; xp leads to promotions (Intern → Executive)',
+    async function () {
+      const r = await ev(function () {
+        const c = AG.citizens.find(function (x) { return !x.tourist && x.cid; }), P = caiProfile(c);
+        const opts = function () { return [{ mode: 'car', min: 12, cost: 1.5, score: 18 }, { mode: 'bike', min: 22, cost: 0, score: 20 }, { mode: 'transit', min: 20, cost: 0.6, score: 21 }]; };
+        const pers0 = P.pers, wage0 = P.wage;
+        P.pers = 'ECO_FRIENDLY'; P.wage = 1500; const eco = caiCommuteAdjust(c, null, opts())[0].mode;
+        P.pers = 'LUXURY'; P.wage = 9000; const lux = caiCommuteAdjust(c, null, opts())[0].mode; P.pers = pers0; P.wage = wage0;
+        // shopping: same candidates, a much better rated shop wins
+        const shops = (MAP.lists.SHOPPING || []).filter(function (b) { return b._op; }); let shop = 'n/a';
+        if (shops.length >= 2) { const r0 = shops.map(function (b) { return [b.rating, b.nrev]; }); CAI.cache = {}; shops.forEach(function (b) { b.rating = 1; b.nrev = 50; }); const best = shops[shops.length - 1]; best.rating = 5; const pick = caiPickShop(c, P, 'GO_SHOPPING', shops); shop = pick === best || (pick && pick.rating >= 4); shops.forEach(function (b, i) { b.rating = r0[i][0]; b.nrev = r0[i][1]; }); CAI.cache = {}; }
+        const hosp = caiPickHospital(c, P), fun = caiPickFun(c, P, 'GO_ENTERTAINMENT', MAP.lists.ENTERTAINMENT || []);
+        const w0 = c.work; c.work = 0; CAI.cache = {}; const job = caiPickJob(c, P); c.work = w0;
+        const lvl0 = P.career.lvl; P.career.lvl = 0; P.career.xp = 1e6; P.career.since = -10; const wasWork = c.work; if (!c.work && job) c.work = job.id; caiHour(); const promoted = P.career.lvl === 1; P.career.lvl = lvl0; c.work = wasWork;
+        P.sick = true; caiDecide(c); const goesHosp = P.dec.some(function (d) { return d.s === 'GO_HOSPITAL'; }); P.sick = false;
+        return { eco: eco, lux: lux, shop: shop, hosp: hosp ? bdef(hosp).name : null, fun: fun ? bdef(fun).name : null, job: job ? bdef(job).name : null, promoted: promoted, goesHosp: goesHosp, career: CAI_CAREER.length };
+      });
+      return { ok: r.eco !== 'car' && r.lux === 'car' && r.shop !== false && (r.hosp === null || r.goesHosp) && r.promoted && r.career === 7, actual: 'eco citizen → ' + r.eco + ' · rich luxury citizen → ' + r.lux + ' · best-rated shop chosen ' + r.shop + ' · hospital ' + r.hosp + ' (sick → hospital option ' + r.goesHosp + ') · entertainment ' + r.fun + ' · job found ' + r.job + ' · promotion ' + r.promoted + ' · ' + r.career + ' career levels' };
+    });
+  await T('citizens', 'Opinions → City Approval · Comments 2.0 from real data · memory · social ties', 'citizens form opinions per topic from their own experience; the city mood moves approval by at most ±4 points; comments quote real numbers (commute minutes, rent share, unemployment); memories and friendships build up',
+    async function () {
+      const r = await ev(function () {
+        const ppl = caiPeople(); caiDay();
+        const A = S.citizenAI, ops = Object.keys(A.opinions).length;
+        const G = S.government; let lo = null, hi = null;
+        if (G && typeof govSatisfactionHour === 'function') { const v0 = G.approval.value; ppl.forEach(function (P) { CAI_TOPICS.forEach(function (t) { P.op[t[0]] = -100; }); }); caiOpinions(ppl); A.opinions = {}; CAI_TOPICS.forEach(function (t) { A.opinions[t[0]] = -100; }); for (let i = 0; i < 60; i++) govSatisfactionHour(); lo = G.approval.value; CAI_TOPICS.forEach(function (t) { A.opinions[t[0]] = 100; }); for (let i = 0; i < 60; i++) govSatisfactionHour(); hi = G.approval.value; G.approval.value = v0; }
+        caiComments(ppl); const nums = A.comments.filter(function (c) { return /\d/.test(c[2]); }).length;
+        return { ops: ops, lo: lo, hi: hi, comments: A.comments.length, nums: nums, sample: A.comments.slice(0, 2).map(function (c) { return c[1] + ': ' + c[2]; }), mem: ppl.reduce(function (a, P) { return a + P.mem.length; }, 0), friends: ppl.reduce(function (a, P) { return a + P.friends.length; }, 0) };
+      });
+      const spread = r.hi !== null ? r.hi - r.lo : 0;
+      return { ok: r.ops === 10 && (r.hi === null || (spread > 0.5 && spread <= 8.5)) && r.mem > 0, actual: r.ops + ' opinion topics · approval with the angriest / happiest citizens ' + (r.lo !== null ? r.lo.toFixed(1) + ' / ' + r.hi.toFixed(1) + ' (spread ' + spread.toFixed(1) + ' ≤ 8)' : 'n/a') + ' · ' + r.comments + ' comments, ' + r.nums + ' with real numbers (' + r.sample.join(' | ') + ') · ' + r.mem + ' memories · ' + r.friends + ' friendships' };
+    });
+  await T('citizens', 'Housing AI · migration · City Life Score · District Life Score · Population Forecast · AI City Planner', 'an unhappy household moves to a better affordable home or leaves; the City Life Score and district scores are 0–100 with labels; the forecast gives 1 / 5 / 10 / 25 / 50 years; the planner only suggests (builds nothing)',
+    async function () {
+      const r = await ev(function () {
+        const A = S.citizenAI, k = Object.keys(A.households).find(function (q) { return A.households[q].adults.some(function (id) { const P = CAI.live.get(id); return P && P.agent && AG.citizens.indexOf(P.agent) >= 0; }); }), H = A.households[k], home0 = H ? H.home : 0, m0 = A.migration.moved + A.migration.left;
+        if (H) { H.sat = 5; H.unhappy = 8; caiHousingAndMigration(caiPeople()); }
+        const moved = A.migration.moved + A.migration.left > m0;
+        caiHour(); const L = A.life, F = caiForecast(), n0 = S.buildings.list.length, money0 = S.money, plan = caiPlanner(), same = S.buildings.list.length === n0 && S.money === money0;
+        return { moved: moved, home: home0 !== (A.households[k] || {}).home, life: L.score, label: L.label, dist: L.districts.length, distOk: L.districts.every(function (d) { return d.score >= 0 && d.score <= 100 && d.label; }), F: F.map(function (f) { return f.years + 'y ' + f.pop; }), plan: plan.length, planText: plan[0] ? plan[0].text : '', same: same };
+      });
+      return { ok: r.moved && r.life >= 0 && r.life <= 100 && !!r.label && r.distOk && r.F.length === 5 && r.plan > 0 && r.same, actual: 'unhappy household moved / left ' + r.moved + ' · City Life ' + r.life + ' ' + r.label + ' · ' + r.dist + ' district scores · forecast ' + r.F.join(', ') + ' · planner ' + r.plan + ' suggestion(s) ("' + r.planText + '"), city unchanged ' + r.same };
+    });
+  await T('citizens', 'LOD: near 5–10 Hz full AI · mid 1–2 Hz · far statistical · AI caches', 'citizens near the camera are updated 5–10 times per simulated second, mid-distance 1–2 times, far ones not at all (district statistics); the AI tick stays well under a millisecond per frame',
+    async function () {
+      await ev(function () { caiRates(); CAI.rate.t0 = S.clock.runSec; CAI.rate.near = CAI.rate.mid = 0; });
+      await caiRun(6000, 1);
+      const r = await ev(function () { const R = caiRates(); return { near: R.near, mid: R.mid, counts: R.counts, ms: CAI.prof.ms, dec: CAI.prof.decMs, far: CAI.prof.far }; });
+      const nearOk = !r.counts[0] || (r.near >= 4.5 && r.near <= 10.5), midOk = !r.counts[1] || (r.mid >= 0.9 && r.mid <= 2.2);
+      return { ok: nearOk && midOk && r.ms < 4, actual: 'near ' + r.near.toFixed(1) + ' Hz (' + r.counts[0] + ' citizens) · mid ' + r.mid.toFixed(1) + ' Hz (' + r.counts[1] + ') · far ' + r.counts[2] + ' statistical · AI tick ' + r.ms.toFixed(2) + ' ms · decision ' + r.dec.toFixed(3) + ' ms' };
+    });
+  await T('citizens', 'Scale: 10K · 50K · 100K · 250K · 500K citizens', 'the statistical population grows to 500K while the detailed sample stays within the quality cap; hour / day passes and the life score stay fast and finite; 3 s at 100× without errors',
+    async function () {
+      const r = await ev(async function () {
+        const out = [];
+        for (const pop of [10000, 50000, 100000, 250000, 500000]) {
+          S.city.population = pop; const t0 = performance.now(); caiHour(); const hourMs = performance.now() - t0, t1 = performance.now(); caiDay(); const dayMs = performance.now() - t1;
+          setSpeed(100); const w0 = performance.now(); let worst = 0, last = performance.now(); await __qa.until(function () { const n = performance.now(); worst = Math.max(worst, n - last); last = n; S.city.population = pop; return n - w0 > 3000; }, 5000); setSpeed(0);
+          out.push({ pop: pop, hourMs: hourMs, dayMs: dayMs, worst: worst, agents: AG.citizens.length, life: S.citizenAI.life.score, stages: S.citizenAI.stats ? Object.keys(S.citizenAI.stats.stages).reduce(function (a, k) { return a + S.citizenAI.stats.stages[k]; }, 0) : 0, statPop: S.citizenAI.stats ? S.citizenAI.stats.pop : 0 });
+        }
+        S.city.population = 12000; return { out: out, errors: CAI.errors, cap: perf().npc };
+      });
+      const ok = r.errors === 0 && r.out.every(function (x) { return isFinite(x.life) && x.hourMs < 60 && x.dayMs < 120 && x.agents <= r.cap * 2 + 40 && Math.abs(x.stages - x.statPop) <= x.statPop * 0.02 + 10; });
+      return { ok: ok, actual: r.out.map(function (x) { return x.pop.toLocaleString('en-US') + ': hour ' + x.hourMs.toFixed(1) + ' ms, day ' + x.dayMs.toFixed(1) + ' ms, ' + x.agents + ' agents, life stages ' + x.stages.toLocaleString('en-US') + ' of ' + x.statPop.toLocaleString('en-US') + ', frame ≤ ' + Math.round(x.worst) + ' ms'; }).join(' · ') + ' · errors ' + r.errors };
+    });
+  await T('citizens', 'Recession · festival (Event Crowd AI + event transport) · rain', 'in a recession the AI keeps running with finite budgets; a festival sends citizens to the venue and pushes the route choice towards transit; rain lowers outdoor utilities',
+    async function () {
+      const r = await ev(async function () {
+        forceEconPhase('RECESSION'); setSpeed(50); let t0 = performance.now(); await __qa.until(function () { return performance.now() - t0 > 2500; }, 4000); setSpeed(0);
+        const fin = caiPeople().every(function (P) { return isFinite(P.hap) && isFinite(P.wage) && isFinite(P.sav); }); forceEconPhase('RECOVERY');
+        const day = Math.floor(S.clock.gameSec / 86400); S.clock.gameSec = (day + (gameHour() >= 15 ? 1 : 0)) * 86400 + 15 * 3600; startGlobalEvent(GLOBAL_EVENTS.find(function (g) { return g.id === 'festival'; })); AG.citizens.forEach(function (c) { if (!c.tourist) c.pending = true; });
+        setSpeed(5); t0 = performance.now(); let seen = 0; await __qa.until(function () { seen = Math.max(seen, AG.citizens.filter(function (c) { return c.state === 'GO_EVENT'; }).length); return performance.now() - t0 > 4000; }, 6000); setSpeed(0);
+        const c = AG.citizens.find(function (x) { return !x.tourist && x.cid; }), opts = [{ mode: 'car', min: 12, cost: 1, score: 15 }, { mode: 'transit', min: 15, cost: 0.6, score: 17 }];
+        const withEvent = c ? caiCommuteAdjust(c, null, opts.map(function (o) { return Object.assign({}, o); }))[0].mode : '';
+        S.events.active = S.events.active.filter(function (a) { return a.id !== 'festival'; });
+        return { fin: fin, seen: seen, withEvent: withEvent, attended: S.citizenAI.events.attended, errors: CAI.errors };
+      });
+      return { ok: r.fin && r.seen >= 1 && r.withEvent === 'transit' && r.errors === 0, actual: 'recession: values finite ' + r.fin + ' · festival: up to ' + r.seen + ' citizens heading to the venue, ' + r.attended + ' visits · route choice during the event → ' + r.withEvent + ' · errors ' + r.errors };
+    });
+  await T('citizens', 'Save 3.3: citizens, households, routines, memories, opinions, jobs, housing · v2.7.0 save · Windows ↔ Android', 'the citizen AI block survives save → restart → load with the same ids, names, households and opinions; a v2.7.0 save without it creates profiles; Windows / Android saves keep it',
+    async function () {
+      const a = await ev(function () {
+        caiHour(); saveGame(true); const raw = JSON.parse(Store.getItem(slotKey(S.slot)));
+        const names = {}; raw.citizens.forEach(function (c) { const Q = c.cid ? raw.citizenAI.people[c.cid] : null; if (Q) names[c.cid] = Q.fn + ' ' + Q.ln; }); const first = raw.citizens.find(function (c) { return c.cid && names[c.cid]; }), P = first ? raw.citizenAI.people[first.cid] : null;
+        return { names: names, slot: S.slot, schema: raw.header.schema, n: Object.keys(raw.citizenAI.people).length, hh: Object.keys(raw.citizenAI.households).length, cid: first ? first.cid : 0, name: P ? P.fn + ' ' + P.ln : '', mem: P ? P.mem.length : 0, op: JSON.stringify(raw.citizenAI.opinions) };
+      });
+      await page.reload();
+      await page.waitForFunction(function () { return document.getElementById('bootSplash').style.display === 'none' && typeof loadGame === 'function'; }, null, { timeout: 120000 });
+      await helpers();
+      const b = await ev(async function (x) {
+        if (PSH.dialogOpen) { const q = document.querySelector('#sysBtns button'); if (q) q.click(); }
+        const lr = loadGame(x.slot); if (!STARTED) { startGame(lr); closeModal(); clearDialogues(); setSpeed(0); }
+        setSpeed(2); await __qa.until(function () { return AG.citizens.filter(function (z) { return z.cid; }).length >= 3; }, 6000); setSpeed(0);   // agents are restored by the population tick
+        let match = 0, wrong = 0; AG.citizens.forEach(function (z) { if (!z.cid || !x.names[z.cid]) return; const Q = caiProfile(z); if (Q.fn + ' ' + Q.ln === x.names[z.cid]) match++; else wrong++; });
+        const c = AG.citizens.find(function (z) { return z.cid && x.names[z.cid]; }), P = c ? caiProfile(c) : null;
+        const same = match >= 1 && wrong === 0, ops = JSON.stringify(S.citizenAI.opinions) === x.op, hh = Object.keys(S.citizenAI.households).length;
+        const raw = JSON.parse(Store.getItem(slotKey(x.slot))), old = JSON.parse(JSON.stringify(raw)); delete old.citizenAI; old.header.gameVersion = '2.7.0'; old.citizens.forEach(function (q) { delete q.cid; });
+        Store.setItem(slotKey(x.slot), JSON.stringify(old)); const lo = loadGame(x.slot); const oldOk = !lo.isNew && !!S.citizenAI && Object.keys(S.citizenAI.people).length === 0;
+        const plat = ['windows', 'android'].map(function (pf) { const w = JSON.parse(JSON.stringify(raw)); w.header.platform = pf; if (w.origin) { w.origin.platform = pf; w.origin.lastPlatform = pf; } Store.setItem(slotKey(x.slot), JSON.stringify(w)); loadGame(x.slot); return Object.keys(S.citizenAI.people).length === Object.keys(raw.citizenAI.people).length; });
+        Store.setItem(slotKey(x.slot), JSON.stringify(raw)); loadGame(x.slot);
+        return { dbg: AG.citizens.length + ' agents, cids ' + AG.citizens.slice(0, 6).map(function (z) { return z.cid; }).join('/') + ' · saved ' + Object.keys(x.names).slice(0, 6).join('/'), isNew: lr.isNew, same: same, match: match, wrong: wrong, ops: ops, hh: hh, oldOk: oldOk, plat: plat, name: P ? P.fn + ' ' + P.ln : '' };
+      }, a);
+      return { ok: !b.isNew && a.schema === '3.3' && a.n > 0 && b.same && b.ops && b.oldOk && b.plat.every(Boolean), actual: 'saved ' + a.n + ' profiles, ' + a.hh + ' households (schema ' + a.schema + ') · after restart ' + b.match + ' citizen(s) kept id + name (' + b.name + '), ' + b.wrong + ' changed [' + b.dbg + '] · opinions kept ' + b.ops + ' · ' + b.hh + ' households · v2.7.0 save → new profiles ' + b.oldOk + ' · Windows ' + b.plat[0] + ' · Android ' + b.plat[1] };
+    });
+  if (want('citizens')) await caiRun(5000, 5);                           // the save test reloads the city: let the agents come back
+  await T('citizens', 'Citizen validator + auto fix (Citizen Life Health)', 'a homeless citizen, a lost job, a broken household and invalid needs are found and repaired; the health score returns to 100 %',
+    async function () {
+      const r = await ev(function () {
+        const ppl = caiPeople(); if (ppl.length < 3) return { skip: true };
+        ppl[0].agent.home = 99999991; ppl[1].agent.work = 99999992; ppl[2].hh = 99999993; ppl[2].needs.food = NaN;
+        const before = caiValidate(), fx = caiAutoFix(), after = fx.after;
+        return { found: before.issues.map(function (i) { return i.id; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(','), before: before.health, after: after.health, actions: fx.actions.length, left: after.issues.length };
+      });
+      if (r.skip) return { ok: false, actual: 'fewer than 3 citizens' };
+      return { ok: /homeless/.test(r.found) && /job/.test(r.found) && /household/.test(r.found) && /nan/.test(r.found) && r.left === 0, actual: 'found ' + r.found + ' (health ' + r.before + '%) · ' + r.actions + ' repair(s) → ' + r.after + '% · remaining ' + r.left };
+    });
+  await T('citizens', 'City Life UI · Citizen Inspector · FOLLOW · route · Household (desktop and mobile flow)', 'all City Life tabs render; tapping a citizen opens the inspector (mobile: Tap → Inspector → PROFILE / Follow → Route → Household); FOLLOW tracks the citizen and the route is drawn; 10 citizen heatmaps have data',
+    async function () {
+      const r = await ev(async function () {
+        let tabs = 0; for (const t of CL_TABS) { openCityLife(t[0]); await __qa.frames(2); if ((document.getElementById('clRoot') || {}).innerText.length > 40) tabs++; } closeModal();
+        const c = AG.citizens.find(function (x) { return !x.tourist && x.cid; }); if (!c) return { tabs: tabs, skip: true };
+        const P = caiProfile(c), mobile = document.body.classList.contains('mobileUI');
+        showAgentInfo({ c: c }); await __qa.frames(3);
+        let flow = '';
+        if (mobile) { const ins = MINS.el && MINS.kind === 'citizen'; flow += 'inspector ' + !!ins; const route = MINS.el && MINS.el.querySelector('[data-caimi="route"]'); if (route) route.click(); flow += ' · route ' + (CAI.route === c); const house = MINS.el && MINS.el.querySelector('[data-caimi="house"]'); if (house) { house.click(); await __qa.frames(2); flow += ' · household ' + /household/i.test(($('modalTitle') || {}).innerText || ''); closeModal(); } const prof = MINS.el && MINS.el.querySelector('[data-mi="more"]'); if (prof) { prof.click(); await __qa.frames(2); } }
+        const ins = document.getElementById('caiIns'), named = ins ? (($('modalTitle') || {}).innerText || '').indexOf(P.fn) >= 0 : false;
+        let insTabs = 0; for (const t of CAI_INS_TABS) { CLUI.insTab = t[0]; caiInsRender(); if ((document.getElementById('caiIns') || {}).innerText.length > 30) insTabs++; }
+        const fb = document.querySelector('#caiIns [data-caif]'); if (fb) fb.click(); await __qa.frames(3);
+        const follow = typeof MOBX !== 'undefined' && MOBX.track === c; if (typeof stopTracking === 'function') stopTracking();
+        let heats = 0; for (const h of CL_HEATS) if (caiHeatGrid(h[0])) heats++;
+        closeModal(); if (typeof closeInspector === 'function') closeInspector(true); CAI.route = null;
+        return { tabs: tabs, named: named, insTabs: insTabs, follow: follow, heats: heats, mobile: mobile, flow: flow };
+      });
+      if (r.skip) return { ok: false, actual: 'no citizen' };
+      return { ok: r.tabs === 8 && r.named && r.insTabs === 7 && r.follow && r.heats === 10 && (!r.mobile || /inspector true · route true · household true/.test(r.flow)), actual: r.tabs + '/8 City Life tabs · inspector named ' + r.named + ' · ' + r.insTabs + '/7 inspector tabs · FOLLOW tracks ' + r.follow + ' · ' + r.heats + '/10 heatmaps' + (r.mobile ? ' · mobile flow: ' + r.flow : '') };
+    });
+
   await T('security', 'Government admin tools are OWNER / ADMIN / developer only', 'a normal player cannot reset the government, run its ticks, start government events or use the government.* console commands; the admin view is hidden',
     async function () {
       const r = await ev(function () {
@@ -1284,6 +1458,16 @@ async function runProfile(browser, base, dev) {
         return { denied: [a, b, c, d, e].every(function (x) { return x === undefined; }), same: S.money === m0 && S.buildings.list.length === n0 && (S.worldbuilder ? S.worldbuilder.quality : null) === q0 && !WG.busy, pal: pal };
       });
       return { ok: r.denied && r.same && r.pal === 0, actual: 'tool calls denied ' + r.denied + ' · city unchanged ' + r.same + ' · palette admin entries ' + r.pal };
+    });
+  await T('security', 'Citizen AI admin tools are hidden and denied for a normal player', 'the 20 citizen AI admin actions / tools do nothing without an admin session; the AI debug tab is not shown in the inspector',
+    async function () {
+      const r = await ev(function () {
+        const c = AG.citizens.find(function (x) { return !x.tourist && x.cid; }), P = c ? caiProfile(c) : null, s0 = P ? JSON.stringify(caiPack(P)) : '', ev0 = S.events.active.length;
+        const calls = [adminCitizenAI('sick'), adminCitizenAI('reset'), adminCitizenAI('festival'), adminTool('caiPromote'), adminTool('caiReset'), adminTool('caiOpinion', '-100')];
+        let debugTab = false; if (c) { caiInspect(c); debugTab = !!document.querySelector('#caiIns [data-cait="debug"]'); closeModal(); }
+        return { denied: calls.every(function (x) { return x === undefined; }), same: !P || JSON.stringify(caiPack(P)) === s0, events: S.events.active.length === ev0, debugTab: debugTab, tools: AT_TOOLS.filter(function (t) { return /^cai/.test(t.id); }).length };
+      });
+      return { ok: r.denied && r.same && r.events && !r.debugTab && r.tools === 20, actual: r.tools + ' citizen admin tools · calls denied ' + r.denied + ' · citizen unchanged ' + r.same + ' · no event started ' + r.events + ' · AI debug tab visible ' + r.debugTab };
     });
   await T('security', 'Economy admin tools are OWNER / ADMIN only', 'a normal player cannot start shocks, force the cycle or run ticks; the economy debug lines and admin view are hidden',
     async function () {

@@ -9,7 +9,7 @@
    freshly built EXE) or in a browser with  index.html?selftest . It plays through the 20 checks of the release test plan,
    restarts the EXE in the middle (save → restart → load) and writes a JSON report to logs/selftest.json (and <file>).
    The self-test uses its own temporary user-data folder, so it never touches real cities. */
-const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 56, running: false };
+const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 57, running: false };
 function stPhase() {
   if (DESKTOP && BCT.selftest && BCT.selftest.phase) return BCT.selftest.phase;
   if (IS_ANDROID_APP && ANDROID_INFO.selftest) return ANDROID_INFO.selftestPhase || 1;
@@ -273,6 +273,7 @@ async function runSelfTest() {
   await stStep(54, 'Economy 2.0 · Market · Companies · Housing · Banking', stEconomy2);
   await stStep(55, 'Government 2.0 · Budget · Taxes · Services · Policies · Projects · Approval', stGovernment);
   await stStep(56, 'Transportation 3.0 · World Builder 2.0 · Admin Tools', stTransport3);
+  await stStep(57, 'Citizen AI · Living City 3.0', stCitizenAI);
   stDone();
 }
 /* ===================================== Part 12 helpers ===================================== */
@@ -439,7 +440,7 @@ async function part12DesktopSteps() {
 
 /* ===================================== Part 12/13: Android APK self-test (24 steps) ===================================== */
 async function runAndroidSelfTest(phase) {
-  SELFTEST.total = 33;
+  SELFTEST.total = 34;
   const native = IS_ANDROID_APP;
   if (phase === 1) {
     SELFTEST.t0 = Date.now(); SELFTEST.steps = []; SELFTEST.data = {};
@@ -719,6 +720,7 @@ async function runAndroidSelfTest(phase) {
   await stStep(31, 'Economy 2.0 · Market · Companies · Housing · Banking', stEconomy2);
   await stStep(32, 'Government 2.0 · Budget · Taxes · Services · Policies · Projects · Approval', stGovernment);
   await stStep(33, 'Transportation 3.0 · World Builder 2.0 · Admin Tools', stTransport3);
+  await stStep(34, 'Citizen AI · Living City 3.0', stCitizenAI);
   stDone();
 }
 /* ===================================== Part 17: ECONOMY 2.0 (shared by the desktop and Android runs) ===================================== */
@@ -775,6 +777,35 @@ async function stGovernment() {
     detail: (failed.length ? 'FAILED: ' + failed.join(', ') + ' · ' : '') + svc + '/' + GOV_SERVICES.length + ' services · budget ' + money(B.income) + ' in / ' + money(B.expenses) + ' out per day · maintenance ' + G.maint.avg + '% · approval ' + Math.round(G.approval.value) + ' ' + G.approval.label + ' · commercial tax 14→22→30 %: pressure ' + Math.round(p14) + '/' + Math.round(p22) + '/' + Math.round(p30) + ', happiness ' + (a14.hap - a22.hap).toFixed(2) + ' then ' + (a22.hap - a30.hap).toFixed(2) + ' lost (non-linear ' + nonlin + ')' + ' · policy conflict refused ' + pConf + ' · project ' + (pr || 'none (no free site)') + ' · save 3.1 ' + saveOk + ' · ' + ui + '/' + GOV_TABS.length + ' tabs · ' + heats + ' heatmaps · errors ' + GOV.errors };
 }
 /* ===================================== Part 19: TRANSPORTATION 3.0 + WORLD BUILDER 2.0 (desktop and Android) ===================================== */
+async function stCitizenAI() {
+  if (!S.citizenAI) return { ok: false, detail: 'no citizenAI state' };
+  const chk = {};
+  // citizens get stable identities, households and utility-scored decisions while the city runs
+  setSpeed(5); await stUntil(function () { return AG.citizens.filter(function (c) { return !c.tourist && c.cid; }).length >= 3 && CAI.prof.decisions >= 3; }, 15000); setSpeed(0);
+  const c = AG.citizens.find(function (x) { return !x.tourist && x.cid; }), P = c ? caiProfile(c) : null;
+  chk.identity = !!P && P.fn.length > 1 && P.ln.length > 1 && c.cid === P.id && !!caiHousehold(P);
+  chk.needs = !!P && CAI_NEEDS.every(function (n) { return isFinite(P.needs[n[0]]); }) && CAI_NEEDS.length === 11;
+  if (P) { caiUpdate(c, P, 1); } chk.happiness = !!P && Object.keys(P.f).length === 13 && P.hap >= 0 && P.hap <= 100;
+  if (c) { c.pending = false; caiDecide(c); } chk.decision = !!P && P.dec.length > 0 && P.dec.every(function (d, i, a) { return i === 0 || a[i - 1].u >= d.u; });
+  // deterministic: the same state and time give the same choice
+  if (c) { const keep = { state: c.state, path: c.path, pi: c.pi, target: c.target, work: c.work }; caiDecide(c); const a = P.dec.map(function (d) { return d.s + d.u; }).join(); caiDecide(c); const b = P.dec.map(function (d) { return d.s + d.u; }).join(); chk.deterministic = a === b; Object.assign(c, keep); } else chk.deterministic = false;
+  // hour / day passes, validator, forecast, planner
+  caiHour(); caiDay(); const v = caiValidate(); chk.validator = typeof v.health === 'number' && Array.isArray(v.issues);
+  const F = caiForecast(); chk.forecast = F.length === 5 && F.every(function (f) { return isFinite(f.pop) && f.pop >= 0; });
+  chk.planner = caiPlanner().length > 0; chk.life = S.citizenAI.life.score >= 0 && S.citizenAI.life.score <= 100;
+  // save 3.3 round trip: profiles keyed by the stable id
+  const o = buildSaveObject(), errs = validateImport(JSON.parse(JSON.stringify(o))), clean = sanitizeCitizenAI(JSON.parse(JSON.stringify(o.citizenAI))), bad = sanitizeCitizenAI({ people: { 5: { fn: '<b>x', nd: ['NaN'] } }, households: 7 });
+  chk.save = parseFloat(o.header.schema) >= 3.3 && !errs.length && Object.keys(clean.people).length === Object.keys(o.citizenAI.people).length && bad.people[5].fn === 'bx' && bad.people[5].nd[0] === 70 && Object.keys(bad.households).length === 0 && o.citizens.some(function (x) { return x.cid; });
+  // UI: City Life tabs + Citizen Inspector; admin tools stay guarded for a normal player
+  let ui = 0; for (let i = 0; i < CL_TABS.length; i++) { openCityLife(CL_TABS[i][0]); await stWait(15); if ((document.getElementById('clRoot') || {}).innerText.length > 40) ui++; } closeModal();
+  if (c) { caiInspect(c); await stWait(15); chk.inspector = (document.getElementById('caiIns') || {}).innerText.indexOf(P.fn) >= 0 || (document.getElementById('modalTitle') || {}).innerText.indexOf(P.fn) >= 0; closeModal(); } else chk.inspector = false;
+  chk.ui = ui === CL_TABS.length;
+  const admin = typeof AdminAuth !== 'undefined' && AdminAuth.active();
+  chk.guard = admin || (adminCitizenAI('heal') === undefined && adminTool('caiHeal') === undefined);
+  chk.errors = CAI.errors === 0;
+  const failed = Object.keys(chk).filter(function (k) { return !chk[k]; });
+  return { ok: !failed.length, detail: (failed.length ? 'FAILED: ' + failed.join(', ') + ' · ' : '') + (P ? P.fn + ' ' + P.ln + ' · ' + caiAge(P) + ' · happiness ' + Math.round(P.hap) + ' · ' : '') + CAI.live.size + ' profiles · ' + Object.keys(S.citizenAI.households).length + ' households · life ' + Math.round(S.citizenAI.life.score) + ' · ' + ui + '/' + CL_TABS.length + ' tabs · errors ' + CAI.errors };
+}
 async function stTransport3() {
   if (!S.transportation) return { ok: false, detail: 'no transportation state' };
   const chk = {};
@@ -807,7 +838,7 @@ async function stTransport3() {
   chk.guard = admin || (adminTool('moneyEditor', '1') === undefined && paletteCommands().every(function (c) { return !/^Admin · /.test(c.label || ''); }));
   // save 3.2: transportation block round trip + old save defaults
   const o = buildSaveObject(), errs = validateImport(JSON.parse(JSON.stringify(o))), old = sanitizeTransportation(undefined), bad = sanitizeTransportation({ traffic: { modes: { 5: 'evil', 7: 'smart' }, oneway: { 3: 9 } }, metro: { lines: { L1: { color: '<x>' } } } });
-  chk.save = !!o.transportation && !errs.length && o.header.schema === '3.2' && old.traffic.defaultMode === null && !bad.traffic.modes[5] && bad.traffic.modes[7] === 'smart' && !bad.traffic.oneway[3] && bad.metro.lines.L1.color === null;
+  chk.save = !!o.transportation && !errs.length && parseFloat(o.header.schema) >= 3.2 && old.traffic.defaultMode === null && !bad.traffic.modes[5] && bad.traffic.modes[7] === 'smart' && !bad.traffic.oneway[3] && bad.metro.lines.L1.color === null;
   // UI: every tab renders
   let ui = 0; for (let i = 0; i < TP_TABS.length; i++) { openTransport(TP_TABS[i][0]); await stWait(15); if ((document.getElementById('tpRoot') || {}).innerText.length > 40) ui++; } closeModal();
   chk.ui = ui === TP_TABS.length;

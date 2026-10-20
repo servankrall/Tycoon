@@ -269,6 +269,8 @@ const WB_RUN = {
     const t0 = performance.now(), okSeed = Number.isInteger(cfg.seed) && cfg.seed >= 0 && cfg.seed < 1000000, okSize = !!WORLD_SIZES[cfg.size];
     if (!okSeed || !okSize) throw new Error('Invalid world request (seed ' + cfg.seed + ', size ' + cfg.size + ')');
     ctx.wbProfile = wbProfileFor(cfg);
+    // the weather of the previous session changes traffic, tourism and growth: every new world starts clear and steady
+    if (typeof FX !== 'undefined') { FX.weather = 'clear'; FX.lock = null; FX.natStorm = false; FX.weatherUntil = Number.MAX_SAFE_INTEGER; } if (typeof VE !== 'undefined' && VE.wx) VE.wx.plan = [];
     // a new world must not inherit caches keyed by MAP.version from the previous one
     if (typeof TRANSIT !== 'undefined') { TRANSIT.legs.clear(); TRANSIT.pods = []; } if (typeof GOV !== 'undefined') { GOV.cache = {}; GOV.hourKey = -1; } TPE.cache = null; TPE.heat = null; TPE.heatKey = ''; TPAI.pred = null; TPAI.rr.clear(); TPAI.window = []; if (typeof JX !== 'undefined') { JX.types.clear(); JX.sig.clear(); }
     wbRec(ctx, 'seed', 'Seed validation', t0, seedLabel(cfg.seed) + ' · ' + cfg.size + ' · profile ' + ctx.wbProfile.name);
@@ -324,6 +326,7 @@ const WB_RUN = {
     wbRec(ctx, 'perf', 'Performance pass', t0, 'path cache reset · ' + trimmed + ' surplus vehicle(s) · ' + MAP.W + '×' + MAP.H + ' map'); await ctx.tick('wbperf', 1);
   },
   wb_final: async function (ctx, cfg) {
+    if (typeof FX !== 'undefined' && FX.weatherUntil === Number.MAX_SAFE_INTEGER) FX.weatherUntil = S.clock.gameSec + 2 * 3600;   // natural weather resumes 2 game hours after the start
     const t0 = performance.now(); let v = wbValidate(ctx.wbProfile), q = wbQuality(v), extra = 0;
     while (!q.ready && extra < 5 - (ctx.wbPasses || 0)) { extra++; ctx.wbFixes = (ctx.wbFixes || []).concat(wbRepairPass(v, ctx, ctx.wbProfile)); v = wbValidate(ctx.wbProfile); q = wbQuality(v); }
     const warnings = Object.keys(v.tests).filter(function (k) { return v.tests[k].ok && v.tests[k].score < 75; }).length + (v.transport ? v.transport.issues.filter(function (i) { return TP_WARN.indexOf(i.id) >= 0; }).length : 0);
