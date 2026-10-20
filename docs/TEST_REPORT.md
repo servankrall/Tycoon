@@ -1,22 +1,48 @@
-# Test report — v2.6.0 (Part 18)
+# Test report — v2.7.0 (Part 19)
 
-All results below come from real runs in headless Chromium, on Linux, in the development sandbox. CI runs the same suites on Windows, an Android emulator and Linux for every push (`.github/workflows/release.yml`).
+All results below come from real runs in headless Chromium, on Linux, in the development sandbox. CI runs the same suites on Windows, an Android emulator and Linux for every push (`.github/workflows/release.yml`). In CI each QA group now runs as its own step.
 
 | Suite | Result |
 |---|---|
-| `scripts/check.js` | all checks passed (56 game scripts, Turkish dictionary 4108 phrases, version 2.6.0) |
-| `scripts/qa-test.js` (full, Android + Windows profiles) | 111/113 before the fix below; the 2 failures were a real bug (see Fixed during testing) |
-| `scripts/qa-test.js --only=government,economy,security` after the fix | **66/66** |
-| `scripts/mobile-ui-test.js` | **306/306** on 9 screen sizes (8-button toolbar with Management) |
-| Desktop self-test (`?selftest=1`, 1366×768) | 48/55 · **step 55 Government 2.0 passes** |
-| Android self-test (`?platform=android`) | 30/32 · **step 32 Government 2.0 passes** |
+| `scripts/check.js` | all checks passed (Turkish dictionary 4152 phrases, version 2.7.0) |
+| `scripts/qa-test.js` (full, Android + Windows profiles) | **143/143** |
+| `scripts/qa-test.js --only=worldgen` · `transport` · `stress19` · `security` · `economy,government` (isolated, as in CI) | 10/10 · 8/8 · 10/10 · 8/8 · 60/60 |
+| `scripts/mobile-ui-test.js` | **306/306** on 9 screen sizes |
+| Desktop self-test (`?selftest=1`, 1366×768) | 49/56 · **step 56 Transportation 3.0 / World Builder 2.0 / Admin Tools passes** |
+| Android self-test (`?platform=android`) | 31/33 · **step 33 passes** |
 
-The self-test failures are not caused by this release. They were already failing in v2.5.0, in the same environment:
+The self-test failures are not caused by this release; they failed in the same way in v2.6.0:
 
 - desktop steps 41–44 and Android steps 13–14 need admin test credentials, which do not exist in this sandbox;
-- desktop steps 30, 31 and 35 fail on the generated test city in this environment, also as before.
+- desktop steps 30, 31 and 35 fail on the generated test city in this environment.
 
-In CI the self-tests run against the built EXE / APK.
+## Part 19 QA scenarios
+
+- **worldgen:**
+  - 20 presets (quality 96–100, all WORLD READY);
+  - pipeline stages recorded, clean-world limits, industrial buffer and water protection (0 violations);
+  - broken world repaired (73 % → 99 %), or never delivered (WORLD GENERATION FAILED, previous city restored);
+  - deterministic regeneration;
+  - transport tiers: Small bus · Medium bus + metro candidates · Large metro + train + bus · Mega metro + train + bus.
+- **transport:** dashboard (14 numbers), all transport modes and their stations, line editor, 10 tabs and 10 heatmaps, Traffic AI (light modes, transit priority, prediction, diversion cap), validator + auto fix, Save 3.2 / v2.6.0 / Windows ↔ Android.
+- **stress19 (A–Q):**
+  - 100K, 250K and 500K citizens;
+  - 50K+ vehicles (statistical);
+  - mega metro network, regional airport and cargo port;
+  - extreme traffic, rain, snow, emergency under congestion, outage;
+  - recession with a low budget;
+  - regeneration, and save / restart / load with Windows ↔ Android (in the transport group).
+
+## Fixed during Part 19 testing
+
+- **Back-to-back worlds failed:**
+  - access roads could end on a building's corner tile, which is not an entrance (a port stayed unreachable);
+  - the economy reserve was sized before other repairs changed the running cost;
+  - metro and rail could not get a line once 16 bus lines existed;
+  - dense cities had no lot for a train station.
+- **Water protection:** the shore rule now covers waste, oil and untreated sewage. Sewage treatment plants are exempt, because they clean the water.
+- **Loading a save gave a slightly different first simulation tick** depending on what ran before. `SIM` derived values now start from the boot snapshot (`resetSim`).
+- **Stale traffic grid:** a congestion grid from a map of another size made A* costs, noise and water quality NaN in the next world. Map initialisation now drops these grids, and the readers guard against a size mismatch.
 
 ## Government QA scenarios (`qa-test.js`, group `government`)
 

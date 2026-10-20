@@ -22,6 +22,8 @@ Full release notes (Turkish) for every version: [.github/RELEASE_NOTES.md](.gith
   - access roads no longer end on a building's corner tile (a corner is not an entrance);
   - world-generation caches are reset between worlds;
   - large and mega cities keep room under the 16-line limit for metro and rail.
+  - a loaded or newly started city now begins from the boot-time simulation values (`SIM`), so the same save always simulates identically, whatever ran before it;
+  - per-tile traffic grids (congestion, prediction, one-way) are dropped when a map of another size is created. Before this fix, a stale grid made routes and environment values NaN in the next world.
 - Tests:
   - desktop self-test step 56 and Android self-test step 33;
   - QA groups `worldgen` (5), `transport` (4), `stress19` (5);

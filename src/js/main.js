@@ -2,6 +2,7 @@
 /* BLOCK CITY TYCOON — MAIN — loop, input, menus, boot (init is called by boot/loader.js) */
 /* =========================== 11. LOOP / INPUT =========================== */
 let STARTED = false;
+SIM_BOOT = simClone(SIM);                // derived values before any city runs (see resetSim)
 const INPUT = { pointers: new Map(), down: null, moved: false, pinch: null, lastTap: 0 };
 
 function clampCamera() {

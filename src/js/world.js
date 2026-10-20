@@ -45,6 +45,7 @@ function initMap(isNew) {
   const N = MAP.W * MAP.H;
   MAP.roads = new Uint8Array(N); MAP.nature = new Uint8Array(N); MAP.occ = new Int32Array(N);
   MAP.inter = new Uint8Array(N); MAP.comp = new Int32Array(N);
+  MAP.cong = null; MAP.oneway = null; if (typeof TPAI !== 'undefined') { TPAI.pred = TPAI.prev = TPAI.slope = null; TPAI.ver = -1; }   // per-tile traffic grids of the previous map are rebuilt for this one
   MAP.terrain = new Uint8Array(N); MAP.zone = new Uint8Array(N); MAP.res = new Uint8Array(N); MAP.sea = new Uint8Array(N);
   MAP.parent = new Int32Array(N); MAP.queue = new Int32Array(N);
   MAP.blocked = new Uint8Array(N); MAP.shape = new Uint8Array(N); MAP.gScore = new Float32Array(N); MAP.heap = new Int32Array(N * 4 + 8); MAP.heapF = new Float32Array(N * 4 + 8); MAP.deco = null;
@@ -657,6 +658,7 @@ function roadPath(a, b, allowBlocked, mode) {
   if (cached) return cached;
   if (typeof pathRequests !== 'undefined') pathRequests++;
   const W = MAP.W, par = MAP.parent, g = MAP.gScore, heap = MAP.heap, bl = MAP.blocked;
+  const congOk = !!MAP.cong && MAP.cong.length === W * MAP.H;     // a congestion grid from another map size is ignored
   par.fill(-1); g.fill(1e9);
   const bx = b % W, by = (b / W) | 0;
   let hn = 0;
@@ -686,7 +688,7 @@ function roadPath(a, b, allowBlocked, mode) {
       if (!MAP.roads[n]) continue;
       if (MAP.oneway && MAP.oneway[n] && MAP.oneway[n] !== k + 1) continue;      // Part 19: one-way road (enter only in its direction)
       const blk = bl[n] && !(allowBlocked && n === b) ? (bl[n] === 3 ? (allowBlocked ? 8 : 400) : bl[n] === 4 ? 3 : 40) : 0;
-      const cg = MAP.cong && !allowBlocked ? MAP.cong[n] : 0, rt = ROAD_TYPES[MAP.roads[n]];
+      const cg = congOk && !allowBlocked ? MAP.cong[n] : 0, rt = ROAD_TYPES[MAP.roads[n]];
       const cost = mk === 1 ? 1 + blk : mk === 2 ? 1 / rt.speed + blk + (MAP.inter[n] ? 0.3 : 0) + cg * 5 : mk === 3 ? 1 + blk + (MAP.inter[n] ? 0.05 : 0) + (rt.id === 4 ? 0.8 : 0) + cg * 0.5
         : 1 / rt.speed + blk + (MAP.inter[n] ? 0.15 : 0) + cg * 1.5;
       const ng = gc + cost;

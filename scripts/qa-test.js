@@ -138,6 +138,7 @@ async function runProfile(browser, base, dev) {
         if (PSH.dialogOpen) { const b = document.querySelector('#sysBtns button'); if (b) b.click(); }
         GSET.setupDone = true; GSET.mobileTutDone = true;
         const t0 = performance.now(); const g = await generateWorld('balanced', { seed: seed, name: 'QA ' + size, slot: slot || 3, size: size });
+        window.__qaDlg = g ? '' : ((document.getElementById('sysDialog') || {}).innerText || '').slice(0, 300) + ' busy ' + WG.busy;
         closeModal(); clearDialogues(); setSpeed(0); S.money = 5e7; S.budget = 5e7;
         return { ok: !!g && STARTED, ms: performance.now() - t0 };
       },
@@ -1014,7 +1015,7 @@ async function runProfile(browser, base, dev) {
         return { isNew: lr.isNew, t: JSON.stringify(govTaxes()), f: G.budget.funding.health, l: G.budget.loans.length, p: Object.keys(G.policies.active).join(), n: G.projects.length, ap: Math.round(G.approval.value * 100), rep: G.reports.length };
       });
       const same = !b.isNew && a.t === b.t && a.f === b.f && a.l === b.l && a.p === b.p && a.n === b.n && a.ap === b.ap && a.rep === b.rep;
-      return { ok: same && a.schema === '3.1' && a.l >= 1 && a.p === 'recycling', actual: 'save schema ' + a.schema + ' · taxes ' + (a.t === b.t) + ' · funding ' + (a.f === b.f) + ' · loans ' + b.l + ' · policies ' + b.p + ' · projects ' + b.n + ' (' + (a.pj || 'no free site') + ') · approval ' + (a.ap === b.ap) + ' · reports ' + b.rep };
+      return { ok: same && parseFloat(a.schema) >= 3.1 && a.l >= 1 && a.p === 'recycling', actual: 'save schema ' + a.schema + ' · taxes ' + (a.t === b.t) + ' · funding ' + (a.f === b.f) + ' · loans ' + b.l + ' · policies ' + b.p + ' · projects ' + b.n + ' (' + (a.pj || 'no free site') + ') · approval ' + (a.ap === b.ap) + ' · reports ' + b.rep };
     });
   await T('government', 'Government: old save (v2.5.0) and corrupt government data', 'a save without a government block loads with safe defaults; garbage in the block (bad numbers, unknown projects / policies / events, HTML) is sanitized; nothing crashes',
     async function () {
@@ -1224,17 +1225,19 @@ async function runProfile(browser, base, dev) {
   await T('stress19', 'Stress E–G: mega metro network · large airport · large port', 'a 6-line metro network (up to 10 stations each), a Regional Airport and a Small + Cargo port run 4 s at 100× without errors; the validator finds no critical issue',
     async function () {
       const r = await ev(async function () {
-        await __qa.world('LARGE', 1919, 3); setSpeed(0);                                   // a fresh large city: the earlier tests leave a full map
+        const wq = await __qa.world('LARGE', 1919, 3); setSpeed(0);                        // a fresh large city: the earlier tests leave a full map
         if (typeof wgUnlockTech === 'function') { wgUnlockTech('metro'); wgUnlockTech('rail'); }
         S.p9.transit.lines = S.p9.transit.lines.filter(function (L) { return !/^QA /.test(L.name); }); tpMakeRoom(6);
+        // airport and ports first: the six metro lines below take many free lots
+        const ap = tpPlaceNear('regionalairport', MAP.W >> 1, MAP.H >> 1, MAP.W) || wgPlaceAnywhere(null, 'regionalairport', { clearLocal: true }), pt = tpPlaceNear('smallport', 2, 2, MAP.W), pc = tpPlaceNear('port', 2, MAP.H - 4, MAP.W); onMapChanged();
+        const placed = { why: wq.ok ? '' : (window.__qaDlg || ''), world: wq.ok, ap: ap ? ap.type + '@' + ap.x + ',' + ap.y : 'no site', pt: !!pt, pc: !!pc, W: MAP.W };
         const before = tpLines('metro').length; let built = 0;
         for (let k = 0; k < 6 && tpLines().length < 16; k++) { const sites = []; for (let s = 0; s < 8; s++) sites.push({ x: 4 + ((k * 7 + s * 6) % (MAP.W - 8)), y: 4 + ((k * 11 + s * 5) % (MAP.H - 8)) }); if (tpBuildLine('metro', sites, 'QA Metro ' + k)) built++; }
-        const ap = tpPlaceNear('regionalairport', MAP.W >> 1, MAP.H >> 1, MAP.W) || wgPlaceAnywhere(null, 'regionalairport', { clearLocal: true }), pt = tpPlaceNear('smallport', 2, 2, MAP.W), pc = tpPlaceNear('port', 2, MAP.H - 4, MAP.W); onMapChanged();
         setSpeed(100); const t0 = performance.now(); await __qa.until(function () { return performance.now() - t0 > 4000; }, 6000); setSpeed(0);
         const v = tp3Validate(), crit = v.issues.filter(function (i) { return TP_WARN.indexOf(i.id) < 0; });
-        return { lines: tpLines('metro').length - before, built: built, air: tpAirport().level, port: tpPort().level, crit: crit.map(function (i) { return i.what; }).slice(0, 3), err: TPE.errors };
+        return { placed: placed, still: !!(ap && MAP.byId.has(ap.id) && ap.built), lines: tpLines('metro').length - before, built: built, air: tpAirport().level, port: tpPort().level, crit: crit.map(function (i) { return i.what; }).slice(0, 3), err: TPE.errors };
       });
-      return { ok: r.lines >= 1 && r.air !== 'none' && r.crit.length === 0 && r.err === 0, actual: r.built + ' new metro line(s) · airport ' + r.air + ' · port ' + r.port + ' · critical issues ' + (r.crit.join('; ') || 'none') + ' · errors ' + r.err };
+      return { ok: r.lines >= 1 && r.air !== 'none' && r.crit.length === 0 && r.err === 0, actual: r.built + ' new metro line(s) · airport ' + r.air + ' · port ' + r.port + ' · critical issues ' + (r.crit.join('; ') || 'none') + ' · errors ' + r.err + (r.air === 'none' ? ' · placement ' + JSON.stringify(r.placed) + ' still there ' + r.still : '') };
     });
   await T('stress19', 'Stress H–L: extreme traffic · rain · snow · emergency under congestion · power outage', 'traffic ×5, then heavy rain, snow and a city-wide outage: the game keeps running, dynamic routing works, an emergency unit is dispatched through congestion, signals fall back to 4-way stops in the outage',
     async function () {

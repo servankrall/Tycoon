@@ -103,7 +103,19 @@ function globalMods() {
 }
 
 /* Clear derived values when a new city starts (prestige, NG+, reset, import) */
+/* SIM as it is after boot (taken by main.js once every module has loaded): a city that is loaded or started
+   begins from exactly these values, so the same save always simulates the same way, whatever ran before it */
+let SIM_BOOT = null;
+function simClone(v) {
+  if (Array.isArray(v)) return v.map(simClone);
+  if (ArrayBuffer.isView(v)) return v.slice();
+  if (v instanceof Map) return new Map(v);
+  if (v instanceof Set) return new Set(v);
+  if (v && typeof v === 'object') { const o = {}; Object.keys(v).forEach(function (k) { o[k] = simClone(v[k]); }); return o; }
+  return v;                                           // numbers, strings, functions (kept by reference)
+}
 function resetSim() {
+  if (SIM_BOOT) { Object.keys(SIM).forEach(function (k) { if (!(k in SIM_BOOT)) delete SIM[k]; }); Object.keys(SIM_BOOT).forEach(function (k) { SIM[k] = simClone(SIM_BOOT[k]); }); }
   SIM.traffic = 0; SIM.unpaid = 0; SIM.dDisp = {}; SIM.sDisp = {}; SIM.flood = false; SIM.visualStopRatio = 0; SIM.goodsRatioSmooth = 1;
   // Part 9 derived values (neighbour flows, grid, water, sewage, construction crews) start fresh for every city
   ['p9InCommuters', 'p9OutCommuters', 'p9Tourists', 'p9PowerImport', 'p9PowerExport', 'p9WaterBoost', 'gridBrown', 'gridNoConn', 'sewageOverload', 'lowPressure', 'p9CrewNeed', 'p9CrewAvail'].forEach(function (k) { SIM[k] = 0; });
