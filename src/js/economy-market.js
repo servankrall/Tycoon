@@ -1,5 +1,7 @@
 'use strict';
 /* BLOCK CITY TYCOON — ECONOMY SYSTEM — production chains, storage, logistics, market, trade */
+/* Part 17: seeded normal noise for the simulation (the city's RNG stream is saved → same state, same economy) */
+function simGauss() { return (RNG.next() + RNG.next() + RNG.next() - 1.5) / 1.5; }
 /* ========================= 5b. ECONOMY SYSTEM (Part 4) =========================
    Money flows between three kinds of owners:
      PLAYER  → your companies' money (S.money)
@@ -194,8 +196,10 @@ function supplyChainTick(dt, mods, list) {
   PRODUCT_IDS.forEach(function (p) {
     const sup = R.prod[p] + R.imp[p] + 1, dem = R.dem[p] + R.del[p] * 0.5 + R.exp[p] + 1;
     const pl = priceLevel();
-    const target = PRODUCTS[p].base * pl * clamp(Math.sqrt(dem / sup), 0.6, 1.8) * (1 + gauss() * 0.01 * vol) * (S.p10 ? shockPriceMult(p) : 1);   // Part 10: supply shocks
-    price[p] = clamp(lerp(price[p], target, 0.04 * dt * (difficulty().dynamic ? 1.8 : 1)), PRODUCTS[p].base * 0.3 * pl, PRODUCTS[p].base * 4 * pl);
+    const noise = simGauss();          // Part 17: seeded market noise (same city → same prices)
+    const target = PRODUCTS[p].base * pl * clamp(Math.sqrt(dem / sup), 0.6, 1.8) * (1 + noise * 0.01 * vol) * (S.p10 ? shockPriceMult(p) : 1);   // Part 10: supply shocks
+    const step = price[p] * 0.0003 * dt * (difficulty().dynamic ? 1.8 : 1);       // Part 17: at most ≈ 1.8 % per game hour — prices move, never jump
+    price[p] = clamp(clamp(lerp(price[p], target, 0.04 * dt * (difficulty().dynamic ? 1.8 : 1)), price[p] - step, price[p] + step), PRODUCTS[p].base * 0.3 * pl, PRODUCTS[p].base * 4 * pl);
     if (!isFinite(inv[p]) || inv[p] < 0) inv[p] = 0;
   });
   used = 0; PRODUCT_IDS.forEach(function (p) { used += inv[p]; });
@@ -273,7 +277,7 @@ function econTick(dt) {
   }
   if (S.p10) jobs += p10ProjectJobs();                     // Part 10: megaproject construction crews
   const effJobs = jobs * mods.jobs;
-  const labor = Math.floor(pop * 0.55) + Math.round(SIM.p9InCommuters || 0);          // Part 9: commuters from neighbouring cities
+  const labor = Math.floor(pop * 0.55 * (mods.labor || 1)) + Math.round(SIM.p9InCommuters || 0);          // Part 9: commuters from neighbouring cities · Part 18: healthcare → workforce availability
   const staffRatio = jobs > 0 ? Math.min(1, labor / jobs) : 1;
   const employed = Math.min(labor, effJobs);
   const unemployment = Math.max(0, labor - employed - (SIM.p9OutCommuters || 0)) / Math.max(labor, 20);
@@ -291,8 +295,11 @@ function econTick(dt) {
     const b = list[i], d = bdef(b);
     if (d.power > 0 && b._op) {
       let out = d.power * lvlMult(b.level) * b._weff * (b.damaged ? 0.5 : 1) * Wx.powerProd * mods.powerProd;
-      if (d.id === 'solar') out *= renew * (hour > 6 && hour < 19 ? 1.15 : 0.6) * (FX.weather === 'rain' || FX.weather === 'storm' ? 0.7 : 1);
-      if (d.id === 'wind') out *= renew * (FX.weather === 'storm' ? 1.2 : 1);
+      if (typeof infraGenMult === 'function') out *= infraGenMult(b, d, hour, renew);   // Part 21: sun, clouds, wind speed, river flow, season, condition
+      else {
+        if (d.id === 'solar') out *= renew * (hour > 6 && hour < 19 ? 1.15 : 0.6) * (FX.weather === 'rain' || FX.weather === 'storm' ? 0.7 : 1);
+        if (d.id === 'wind') out *= renew * (FX.weather === 'storm' ? 1.2 : 1);
+      }
       b._gen = out; gen += out; fuelCost += out * (d.fuel || 0);
     } else b._gen = 0;
   }
@@ -306,7 +313,7 @@ function econTick(dt) {
     if (d.power < 0 && b._op) consumers.push(b);
   }
   const prio = { SERVICE: 0, CIVIC: 0, WATER: 1, HOUSING: 2, EDUCATION: 3, TRANSPORT: 3, WASTE: 3, SCIENCE: 4, LANDMARK: 5 };
-  const pv = function (b) { const p = prio[bdef(b).sector]; return p === undefined ? 6 : p; };
+  const pv = typeof infraPowerPrio === 'function' ? infraPowerPrio : function (b) { const p = prio[bdef(b).sector]; return p === undefined ? 6 : p; };   // Part 21: the player's outage priority order
   consumers.sort(function (a, b) { return pv(a) - pv(b) || a.id - b.id; });
   let powerDemand = (SIM.evDemand || 0) * useMult;
   const imported = S.events.active.some(function (a) { return a.id === 'energyshortage' && a.choice === 'import'; });
@@ -372,7 +379,7 @@ function econTick(dt) {
     if (d.rev) commOp++;
     if (d.wasteCap) { const c = d.wasteCap * lvlMult(b.level) * b._eff * (hasTech('env_waste') ? 1.3 : 1); wasteCap += c; if (d.recycle) recycleCap += c; }
   }
-  const wasteGen = (pop * 0.015 + indProd * 0.015 + commOp * 0.02) * (1 - 0.08 * ppLevel('waste'));
+  const wasteGen = (pop * 0.015 + indProd * 0.015 + commOp * 0.02) * (1 - 0.08 * ppLevel('waste')) * (mods.waste || 1);
   const wAvail = wasteGen * dt + city.waste;
   const processed = Math.min(wAvail, wasteCap * dt);
   const natural = (pop < 100 ? 3 : 1.5) * dt;
@@ -394,7 +401,7 @@ function econTick(dt) {
   }
   const noise = S.economy.noise;
   SECTORS.forEach(function (s) {
-    const v = (noise[s] || 1) + gauss() * 0.004 * (1 + 0.3 * S.meta.ngLevel) * diff.vol;
+    const v = (noise[s] || 1) + simGauss() * 0.004 * (1 + 0.3 * S.meta.ngLevel) * diff.vol;
     noise[s] = clamp(lerp(v, 1, 0.01), 0.8, 1.2);
   });
   const housingWish = pop * 1.04 + 8 + Math.max(0, (city.happiness - 50)) * pop * 0.004 + Math.max(0, city.reputation - 50) * pop * 0.002;
@@ -469,7 +476,7 @@ function econTick(dt) {
   const compStats = {};
   COMPANY_DEFS.forEach(function (c) { compStats[c.id] = { rev: 0, cost: 0, emp: 0, count: 0, assets: 0 }; });
   const tax = city.tax / 100;
-  const B = { incomeTax: 0, businessTax: 0, propertyTax: 0, utilities: 0, fares: 0, tourism: 0, rent: 0, energy: 0, space: 0, grant: 0 };
+  const B = { incomeTax: 0, businessTax: 0, propertyTax: 0, salesTax: 0, utilities: 0, fares: 0, tourism: 0, rent: 0, energy: 0, space: 0, grant: 0 };
   const BE = { salaries: 0, maintenance: 0, fuel: fuelCost * mods.electricity, roads: 0 };
   const P = { business: 0, products: 0, rent: 0, tourism: 0, transport: 0, fuel: 0 };
   const PE = { salaries: 0, maintenance: 0, bills: 0, taxes: 0, imports: 0, loans: 0, dividends: 0 };
@@ -503,14 +510,21 @@ function econTick(dt) {
       if (d.power > 0 && gen > 0 && b._gen) { const e = surplus * b._gen / gen; r += e; B.energy += e; }
     }
     // costs
-    const sal = b._actW * d.sal * pol.sal * mods.wage;
-    const mt = b.closed ? 0 : d.maint * lvlMult(b.level) * diff.maint * (S.p10 && b.owner === 'city' ? p10MaintCostMult(b) : 1);
+    const gf = b.owner === 'city' && mods.govFund ? mods.govFund(d) : 1;           // Part 18: service funding level of city-run buildings
+    const sal = b._actW * d.sal * pol.sal * mods.wage * gf;
+    const mt = b.closed ? 0 : d.maint * lvlMult(b.level) * diff.maint * (S.p10 && b.owner === 'city' ? p10MaintCostMult(b) : 1) * gf;
     let cost = sal + mt + (d.fuel ? b._gen * d.fuel * mods.electricity : 0) + (b._inputCost || 0) + (b._impCost || 0);
     if (b.owner !== 'city') {
       // private owners pay taxes and utility bills to the city
-      const biz = r * tax * 0.6 * mods.taxHoliday;
-      const prop = Math.pow(buildingValue(b), 0.8) * 0.0004;
-      const bills = (b._powered && b._pneed ? b._pneed * 0.02 : 0) + (d.water < 0 ? -d.water * lvlMult(b.level) * 0.01 : 0);
+      // Part 17: business / property / sales tax policy (defaults reproduce the classic single tax)
+      const ind = d.cat === 'Industry' || d.cat === 'Resources';                       // Part 18: commercial / industrial tax rates
+      const bizRate = ind && mods.bizTaxInd !== undefined ? mods.bizTaxInd : !ind && d.cat === 'Commercial' && mods.bizTaxCom !== undefined ? mods.bizTaxCom : (mods.bizTax !== undefined ? mods.bizTax : tax);
+      const biz = r * bizRate * 0.6 * mods.taxHoliday;
+      if (ind) SIM._bizInd = (SIM._bizInd || 0) + biz; else if (d.cat === 'Commercial') SIM._bizCom = (SIM._bizCom || 0) + biz;
+      const prop = Math.pow(buildingValue(b), 0.8) * 0.0004 * (mods.propTax !== undefined ? mods.propTax : 1);
+      const sales = mods.salesTax && d.cat === 'Commercial' ? r * mods.salesTax * 0.5 : 0;
+      cost += sales; B.salesTax = (B.salesTax || 0) + sales; o.tax += sales; if (b.owner === 'player') PE.taxes += sales;
+      const bills = (b._powered && b._pneed ? b._pneed * 0.02 * (mods.elecPrice || 1) : 0) + (d.water < 0 ? -d.water * lvlMult(b.level) * 0.01 * (mods.waterPrice || 1) : 0);   // Part 21: utility prices
       cost += biz + prop + bills;
       B.businessTax += biz; B.propertyTax += prop; B.utilities += bills;
       o.tax += biz + prop; o.bills += bills; o.imp += (b._impCost || 0) + (b._inputCost || 0);
@@ -524,7 +538,7 @@ function econTick(dt) {
   }
   // City-wide budget items
   B.incomeTax = employed * WAGE_PER_WORKER * tax * mods.tax * mods.taxHoliday;
-  B.tourism += tourists * TOURIST_SPEND * 0.1;          // tourist tax
+  B.tourism += tourists * TOURIST_SPEND * 0.1 * (mods.tourTax !== undefined ? mods.tourTax : 1);          // tourist tax (Part 17: tourism tax policy)
   if (S.space.stage >= 3) B.space = 2000 * (1 + 0.1 * ppLevel('spacebonus'));
   if (S.space.stage >= 3) S.economy.inventory.rare += 4 * dt;
   BE.roads = MAP.roadCount * 0.004 * (1 - (SIM.evShare || 0) * 0.3) * diff.maint * (S.p10 ? 0.4 + 0.6 * S.p10.maint.roads : 1);
@@ -538,6 +552,13 @@ function econTick(dt) {
   SIM.companies = compStats;
   S.bank.loans.forEach(function (l) { PE.loans += Math.min(l.perSec, l.remaining / dt); });
 
+  // Part 18: corporate tax on the profit of companies (player and AI), collected by the city
+  if (mods.corpTax > 0) for (const ow in OWN) {
+    if (ow === 'city') continue;
+    const q = OWN[ow], pr = q.rev - q.cost; if (pr <= 0) continue;
+    const t = pr * mods.corpTax; B.corporateTax = (B.corporateTax || 0) + t; q.cost += t; q.tax += t; if (ow === 'player') PE.taxes += t;
+  }
+  SIM.taxSplit = { commercial: SIM._bizCom || 0, industrial: SIM._bizInd || 0 }; SIM._bizCom = 0; SIM._bizInd = 0;
   // --- 11. Apply cash flows ---------------------------------------------------------
   const po = OWN.player || { rev: 0, cost: 0 };
   const pInc = po.rev + (SIM._orphanSales || 0);
@@ -594,6 +615,7 @@ function econTick(dt) {
   raw += SIM.wastePenalty * 25;
   const netPol = Math.max(0, raw - absorb) * (hasTech('env_recycle') ? 0.85 : 1) * (hasTech('env_carbon') ? 0.6 : 1) * (1 - 0.05 * ppLevel('clean')) * mods.pollution;
   const polT = 100 * netPol / (netPol + 30 + builtTiles * 0.6);
+  SIM.polTarget = polT;                                                     // Part 19: World Builder balances the starting pollution against this
   city.pollution = clamp(lerp(city.pollution, polT, 0.06 * dt), 0, 100);
 
   // --- 14. Crime ------------------------------------------------------------------------
@@ -602,6 +624,7 @@ function econTick(dt) {
   let crimeT = 3 + (unemployment * 110 + Math.max(0, 55 - city.happiness) * 0.5 + density) * small + (pop > 150 ? (1 - SIM.cov.police) * 30 : 0);
   if (hasTech('d_police')) crimeT *= 0.85;
   if (SIM.budgetUnpaid > 0) crimeT += 8;
+  crimeT += mods.crimeAdj || 0;                                                   // Part 18: police funding, response time, policies
   city.crime = clamp(lerp(city.crime, clamp(crimeT, 0, 100), 0.05 * dt), 0, 100);
 
   // --- 15. Education & worker skill -------------------------------------------------------

@@ -259,7 +259,7 @@ function envTick(force) {
   });
   const trafficK = (hasTech('t_ev') ? 0.4 : 1) * (1 - (SIM.evShare || 0) * 0.8);
   for (let i = 0; i < N; i++) {
-    if (MAP.roads[i]) { const rt = MAP.roads[i], cg = MAP.cong ? MAP.cong[i] : SIM.traffic / 100; em[i] += (0.08 + cg * 0.5) * rt * 0.35 * trafficK; nz[i] += 0.12 * rt + cg * 0.35; }
+    if (MAP.roads[i]) { const rt = MAP.roads[i], cg = MAP.cong && MAP.cong.length === N ? MAP.cong[i] || 0 : (SIM.traffic || 0) / 100; /* a congestion grid from another map size is ignored */ em[i] += (0.08 + cg * 0.5) * rt * 0.35 * trafficK; nz[i] += 0.12 * rt + cg * 0.35; }
     if (MAP.nature[i] === 1) absorb[i] += 0.35;
   }
   const brush = S.p9.env.polBrush; for (const k in brush) { const i = +k; if (i >= 0 && i < N) em[i] += brush[k]; }

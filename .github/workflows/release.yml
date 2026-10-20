@@ -2,7 +2,8 @@
 # version) and by hand (Actions → "Release (Windows + Android)" → Run workflow).
 #   windows : Setup + Portable EXE (dist/windows) → automatic self-test of the built EXE (restart included)
 #   android : debug + signed release APK (dist/android) → automatic self-test of the release APK on an Android emulator
-#   mobile-ui: the Android UI on 8 phone / tablet screen sizes with real touch input (scripts/mobile-ui-test.js)
+#   mobile-ui: the Android UI on 9 phone / tablet screen sizes with real touch input (scripts/mobile-ui-test.js) and the
+#             deep QA run on the Android + Windows profiles (scripts/qa-test.js)
 #   release : one GitHub Release with the EXEs, APKs, both self-test reports and SHA-256 checksums
 name: Release (Windows + Android)
 
@@ -131,6 +132,42 @@ jobs:
         env:
           PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
         run: node scripts/mobile-ui-test.js --out=dist/mobile-ui
+      # one step per check so each shows its own status; every qa-test.js group must appear in exactly one --only list
+      - name: Deep QA — save migration · determinism · weather · outages · camera · speed · events · memory · performance · world sizes · governor
+        if: always()
+        env:
+          PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
+        run: node scripts/qa-test.js --only=audio,camera,city,controller,determinism,device,draw,events,governor,lights,memory,photo,power,save,scale,settings,speed,weather,world,worst --out=dist/mobile-ui/qa
+      - name: Deep QA — economy · government
+        if: always()
+        env:
+          PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
+        run: node scripts/qa-test.js --only=economy,government --out=dist/mobile-ui/qa-econ
+      - name: Deep QA — World Generation · World Validator · Auto Fix (20 presets, clean world, buffer, water, rejection, determinism, transport tiers)
+        if: always()
+        env:
+          PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
+        run: node scripts/qa-test.js --only=worldgen --out=dist/mobile-ui/qa-worldgen
+      - name: Deep QA — Transportation · Traffic AI · transport validator / auto fix · Save 3.2 migration (Windows ↔ Android)
+        if: always()
+        env:
+          PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
+        run: node scripts/qa-test.js --only=transport --out=dist/mobile-ui/qa-transport
+      - name: Deep QA — Stress A–Q (100K / 250K / 500K citizens, 50K vehicles, mega metro, airport, port, extreme traffic, rain, snow, emergency, outage, recession)
+        if: always()
+        env:
+          PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
+        run: node scripts/qa-test.js --only=stress19 --out=dist/mobile-ui/qa-stress
+      - name: Deep QA — Citizen AI · Living City 3.0 (identity, households, decisions, commute, shopping, health, opinions, migration, LOD, 10K–500K, festival, save 3.3, inspector)
+        if: always()
+        env:
+          PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
+        run: node scripts/qa-test.js --only=citizens --out=dist/mobile-ui/qa-citizens
+      - name: Deep QA — release security (admin tools hidden and denied, no debug / dev tools)
+        if: always()
+        env:
+          PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright
+        run: node scripts/qa-test.js --only=security --out=dist/mobile-ui/qa-security
       - uses: actions/upload-artifact@v4
         if: always()
         with:

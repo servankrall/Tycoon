@@ -337,7 +337,7 @@ function applyCrisisChoice(id, k) {
   const o = C.options[+k]; if (!o) return;
   const t = S.clock.runSec;
   if (o.eff) S.p6.effects.push({ id: id, until: t + (o.dur || 300), eff: Object.assign({}, o.eff), label: C.icon + ' ' + o.label });
-  if (o.eff && o.eff.rateUp) S.p5.econ.rate = clamp(S.p5.econ.rate + o.eff.rateUp, 0.005, 0.15);
+  if (o.eff && o.eff.rateUp) S.p5.econ.rate = clamp(S.p5.econ.rate + o.eff.rateUp, 0.01, 0.15);
   if (o.special === 'generator') placeEmergencyGenerator();
   if (o.special === 'crash') { for (const sid in S.companies.stocks) S.companies.stocks[sid].price *= 0.8; AI_DEFS.forEach(function (a) { if (a.sectors[0] === 'FINANCE') stockOf(a.id).price *= 0.6; }); }
   if (S.p6.effects.length > 12) S.p6.effects.shift();

@@ -20,6 +20,104 @@
 ## Eski tarayıcı kayıtları
 Oyunu Chrome/Edge'de oynadıysanız: tarayıcıda Ayarlar → **📦 Export all saves** (veya **⬇️ Download .json**), sonra EXE'de **📦 Import old browser save** ile dosyayı seçin.
 
+## 2.8.0 — Part 20: Advanced Citizen AI & Living City 3.0
+Yeni **🌆 CITY LIFE** paneli (Windows: Transit sekmesinde **🌆 OPEN CITY LIFE** · Android: Ekonomi sayfasında **🌆 CITY LIFE** · komut paleti „Open City Life"). Vatandaşa dokunmak **Citizen Inspector**'ı açar. Mevcut CitizenEngine korunur; CitizenAIEngine onun üstüne kurulur.
+- **Kimlik ve yaşam:** kalıcı vatandaş kimliği ve adı; Child → Teen → Young Adult → Adult → Middle Age → Senior; yaşlanma, emeklilik, mezuniyet.
+- **Household 2.0:** yetişkinler ve çocuklar tek bütçede (gelir, kira, harcama, birikim); kira ortalama maaşa göre.
+- **Karar AI:** 11 ihtiyaç, 7 rutin, saat, hava, mevsim, para, sosyal yaşam ve etkinliklerden fayda puanı; aynı durum aynı kararı verir.
+- **Happiness 3.0:** 13 faktör (konut, iş, gelir, yolculuk, sağlık, eğitim, güvenlik, çevre, eğlence, sosyal yaşam, kamu hizmetleri, vergiler, hava).
+- **Smart Commute, alışveriş, eğlence, sağlık:** kişisel ulaşım seçimi; fiyat / kalite / marka / gelire göre mağaza; ilçe karakterine göre eğlence; hastane seçimi; ziyaretler işletme puanını etkiler.
+- **İş ve kariyer:** iş arama, eğitim, Intern → Executive.
+- **Sosyal, anılar, görüşler:** arkadaşlıklar, son anılar, 10 konuda görüş → City Approval; gerçek sayılarla vatandaş yorumları.
+- **Konut AI ve göç:** mutsuz hane taşınır veya şehri terk eder; City Life Score göçü etkiler.
+- **City Life:** CITY LIFE SCORE, ilçe yaşam puanları, Population Statistics 3.0, Smart City Analytics, Population Forecast (1–50 yıl), AI City Planner (yalnızca öneri), Event Crowd AI, 10 ısı haritası.
+- **Araçlar:** Citizen / Household Inspector, FOLLOW CITIZEN, rota görünümü; mobil akış Dokun → Inspector → Takip → Rota → Hane.
+- **Performans:** yakın tam AI 5–10 Hz, orta 1–2 Hz, uzak istatistiksel; 500K nüfusta birkaç ms.
+- **Save 3.3:** `citizenAI` bloğu; vatandaşlar kayıt sonrası aynı kimlikle döner; v2.7.0 kayıtları açılır; Windows ↔ Android.
+- **Admin:** CITIZEN AI debug sekmesi (gerçek karar puanları) ve 20 korumalı vatandaş aracı; normal oyuncuda gizli.
+
+## 2.7.0 — Part 19: Advanced Transportation & Mobility 3.0 + Admin World Builder 2.0
+Yeni **🚦 TRANSPORTATION** paneli (Windows: Transit sekmesinde **🚦 OPEN TRANSPORTATION** · Android: Ekonomi sayfasında **🚦 TRANSPORTATION** · komut paleti „Open Transportation"). Mevcut TrafficEngine (trafik 2.0, hatlar, kavşaklar, rota) korunur; TransportationEngine 3.0 onunla birlikte çalışır.
+- **Metro:** istasyon kapasitesi, yolcu, bekleyen, kapsama, gelir, bakım; metro deposu ek tren kapasitesi verir.
+- **Hat editörü:** hat oluştur, durak ekle / sil / taşı / yeniden sırala, renk, sefer sıklığı, tren veya otobüs sayısı, yeniden adlandır; oyuncunun durak sırası korunur.
+- **Otobüs:** otobüs deposu, sefer saatleri ve sıklık. **Tren:** yolcu ve yük trenleri; yük treni sanayi ürününü taşır, gelir ekonomiye yazılır.
+- **Havaalanı:** Small → Regional → International → Mega. **Liman:** Small → Cargo → Passenger → Industrial → Mega.
+- **Bisiklet, yaya, otopark:** bisiklet şeritleri ve park yerleri, kaldırımlar ve yaya geçitleri, sokak parkı ve otoparklar, park arama süresi.
+- **Traffic AI 3.0:** kavşak modları Fixed · Adaptive · Smart · Emergency Priority; toplu taşıma önceliği; tıkanıklık tahmini; dinamik rota (10 saniyede en fazla araçların %15'i, yalnızca ≥ %15 kazançta — herkes aynı yola kaçmaz); acil durum aracı 16 kare önden yeşil alır.
+- **Dashboard:** 14 sayı, 10 ulaşım ısı haritası; ulaşım ekonomiye bağlı (yolculuk süresi → iş gücü, kapsama → lojistik, yük geliri, istasyon yakınında kira primi).
+- **City Transport Generator:** 14 adım, Smart Metro ve Smart Bus; şehir boyutuna göre Small → otobüs + bisiklet + yaya · Medium → otobüs + metro adayı · Large → otobüs + metro + tren · Mega → hepsi.
+- **Transport Validator + Auto Fix:** kopuk istasyon, çıkmaz hat, imkânsız ray, eksik depo, yolsuz bina, elektriksiz istasyon, kırık hat, geçersiz araç bulunur ve onarılır.
+- **Admin World Builder 2.0** (yalnızca yetkili admin):
+  - pipeline: Seed Validation → … → Transportation → Environment / Traffic Balance → Service Coverage → World Validator → Auto Fix (≤ 5 tur) → Balance → Performance → Final Validator; her aşamanın sonucu kaydedilir;
+  - onarılamayan dünya **WORLD GENERATION FAILED** ile reddedilir ve önceki şehir geri yüklenir;
+  - World Quality Score (10 kategori), Clean World Balancer, endüstri tamponu, su koruması;
+  - 20 preset, 8 kalite profili, 16 testlik paket, WORLD HEALTH REPORT;
+  - CREATE OPTIMIZED WORLD: PLAY yalnızca WORLD READY olunca.
+- **175 admin aracı** (13 kategori), arama, favoriler, Ctrl+K (yalnızca admin), Ctrl+Z / Ctrl+Y geri al / yinele. Normal oyuncuda gizli ve reddedilir.
+- **Save 3.2:** `transportation` bloğu; v2.6.0 kayıtları güvenli varsayılanlarla açılır; Windows ↔ Android.
+
+## 2.6.0 — Part 18: Advanced Government, Public Services & City Governance 2.0
+Yeni **🏛️ CITY MANAGEMENT** paneli (Windows: Şehir → Ekonomi veya **K** · Android: alt araç çubuğunda **🏛️ MANAGE** · komut paleti „Open City Management"). 13 sekme: Overview, Budget, Taxes, Healthcare, Education, Safety, Fire, Transport, Maintenance, Policies, Projects, Citizen Satisfaction, Reports. EconomyEngine 2.0, CitizenEngine, Emergency AI ve kayıt sistemi korunur; Government Engine bunlara bağlanır.
+- **Government Engine:** Budget, Tax, PublicService, Healthcare, Education, Police, FireDepartment, Maintenance, UtilityService, TransportService, Policy, Project, CitizenSatisfaction, CityApproval ve GovernmentReport sistemleri; hizmetler / memnuniyet / bakım saatlik, bütçe / rapor / olaylar günlük; her alt sistem korumalı (hata oyunu durdurmaz).
+- **City Budget:** gerçek ekonomi defterinden 11 gelir (Residential, Commercial, Industrial, Corporate, Tourism, Property, Service Fees, Transport, Utility, Grants, Special) ve 15 gider kalemi (Education, Healthcare, Police, Fire, Road Maintenance, Public Transport, Water, Electricity, Waste, Parks, Emergency, Construction Projects, Debt, Policies, Administration); gelir, gider, denge, borç, faiz, acil durum rezervi, aylık / yıllık değişim; BUDGET DEFICIT uyarısı; şehir kredileri.
+- **Taxes:** Residential / Commercial / Industrial / Corporate %0–30, Property %0–20; gelir tahmini; doğrusal olmayan etkiler (mutluluk, büyüme, şirket geliri); Corporate tax şirket kârından alınır.
+- **Public Services:** kapasite, kapsama, kalite, bütçe, çalışan, bakım ve memnuniyet; %0–150 finansman; Healthcare (Large Hospital ve Research Hospital eklendi, bekleme süresi, ambulans süresi), Education (nitelik → gelir, verimlilik, GSYH), Police (müdahale süresi, devriye, ilçe suç riski), Fire (trafik, yol durumu, mesafe, araç ve hava ile müdahale süresi; mevcut yangın sistemine bağlı).
+- **Maintenance:** 9 ağ Excellent / Good / Warning / Critical / Failed; finansman Part 10 bakım ağlarını sürer; FAILED ağ gerçekten bozulur (elektrik kesintisi, su kaçağı, bina kapanması, köprü çökmesi uyarısı).
+- **Citizen Satisfaction 2.0 + City Approval:** 12 bileşen, City Satisfaction, onay 0–100 (Excellent / Very Good / Stable / Warning / Critical / Collapse); vatandaş yorumları gerçek ilçe verisinden („The hospital near my home is excellent.", „Taxes are getting too high." …).
+- **Policies:** 12 politika (Green City, Public Transport Priority, Free Education, Healthcare Investment, Industrial Incentive, Technology Incentive, Tourism Campaign, Road Maintenance Priority, Emergency Preparedness, Affordable Housing, Energy Efficiency, Recycling) — günlük maliyet, süre, fayda, yan etki, çakışma.
+- **Government Projects:** 12 proje (New Hospital, University Campus, Airport Expansion, Metro Line, Fire HQ, Police HQ, Water Treatment, Power Plant, Recycling Center, Central Park, Mega Highway, Flood Defense) normal inşaat hattından (işçi + malzeme, şehir bütçesi); Low / Normal / High / Emergency öncelik (Emergency: hız ↑ maliyet ↑); dolu şehirde küçük varyanta düşer.
+- **Government Events:** Hospital Overload, School Shortage, Police Shortage, Fire Emergency, Infrastructure Failure, Budget Crisis, Tax Protest (seçenekli kararlar) ve Construction Boom, Healthcare Breakthrough, Education Boom, Transport Upgrade, Infrastructure Recovery — gerçek şehir verisinden tetiklenir.
+- **Rapor, danışman, harita:** günlük CITY GOVERNMENT REPORT; Smart Government Advisor („Hospital capacity is reaching 92%" …); 10 ısı haritası (Healthcare, Education, Police / Fire Coverage, Maintenance, Public Transport, Government Satisfaction, Tax Pressure, Service Quality, Infrastructure Risk) ve Government Service Map; ilçe yönetim tablosu.
+- **Ekonomi ve konut bağlantısı:** vergiler → gelir, harcama → GSYH, eğitim → verimlilik, sağlık → iş gücü, ulaşım → lojistik, altyapı → şirket büyümesi, hizmetler → kira / mülk değeri (üst sınırlı), borç → faiz.
+- **Save 3.1:** `government` bloğu (budget, taxes, services, policies, projects, approval, districts, reports); v2.5.0 kayıtları güvenli varsayılanlarla açılır; bozuk veri temizlenir; Windows ↔ Android.
+- **Admin:** inspector (Government, Budget, Taxes, Services, Projects, Policies, Approval, District Coverage) ve `government.stats / budget / services / projects / approval / reset` komutları yalnızca yetkili OWNER / ADMIN / developer / debug kullanıcılarına; normal oyuncuda gizli.
+- **Performans:** saatlik geçiş birkaç ms, ısı haritaları ve kapsama ızgaraları önbellekte; 100× hızda hafif.
+
+## 2.5.0 — Part 17: Advanced Economy, Companies & Global Market 2.0
+Yeni **📊 EKONOMİ MERKEZİ** (Windows: Şehir → Ekonomi · Android: Ekonomi sayfası · komut paleti „Open Economy"). Mevcut ekonomi motorları (tedarik zinciri, Company AI 2.0, Part 11 bankacılık, döngü ve TÜFE) korunur; Economy Engine 2.0 bunları genişletip birbirine bağlar.
+- **Advanced Economy 2.0:** saatlik (piyasa, iş, konut, şirket grubu) ve günlük (kapanışlar, şirket finansalları, enflasyon, bankacılık, GSYH, duyarlılık, şoklar) tick'ler; her kare hesap yok, sabit zaman adımı korunur.
+- **Dynamic Markets:** 18 ürün (Wheat, Flour, Bread, Food, Metal, Electronics, Fuel, Construction Materials, Medicine, Clothing, Technology …) için arz, talep, üretim, tüketim, ithalat, ihracat ve fiyat; fiyat oyun saatinde en fazla ≈ %1,8 hareket eder (sıçrama yok); günlük fiyat geçmişi ve grafik, 7 kategori ve ürün araması (mobil arama dahil).
+- **Company AI:** tüm şirketler için kayıt: Startup → Growth → Established → Expansion → Mature ve Decline → Restructuring → Bankruptcy; iflas artık kademeli (önce yeniden yapılanma); HQ seviye 1–5; kredi notu; talep, rekabet, maliyet, stok, marka ve gelire göre fiyatlama; sektör pazar payı; iflas eden marka adı bir daha kullanılmaz.
+- **Housing Market / Rental Market:** ilçe bazında ev fiyatı, kira, boşluk oranı ve erişilebilirlik (Very Affordable … Critical); talep ≫ arz → KONUT KRİZİ (kira ↑, mutluluk ↓, göç baskısı ↑); boş konut fazlası → kira ve inşaat ↓.
+- **Banking · Loans · Mortgages:** merkez bankası (faiz hiçbir zaman %1'in altına inmez — 3 eski açık kapatıldı), para arzı, acil likidite; bankalar tablosu; krediler Late → Restructuring → Default; şirket ve vatandaş kredi notu; konut kredisi hesaplayıcı.
+- **Trade:** ürün bazında ihracat / ithalat ve dış ticaret dengesi, lojistik maliyeti, depolar, ticaret aksaması.
+- **GDP:** sektörlere göre GSYH (Industry, Services, Technology, Tourism, Construction, Retail, Transport), kişi başı GSYH, büyüme.
+- **Inflation:** kategori bazında (gıda, kira, inşaat, maaş, hizmet, faiz) ve enflasyon beklentisi (fiyatları, maaş taleplerini ve yatırımı etkiler); maaşlar iş gücü açığına ve işsizliğe göre değişir.
+- **Economic Cycles:** Expansion · Peak · Slowdown · Recession · Recovery.
+- **Economic Crises:** Energy Price Shock, Food Shortage, Banking Crisis, Housing Bubble, Technology Boom, Market Crash, Trade Disruption, Construction Boom — Minor / Moderate / Major / Severe; ECONOMIC ALERT bildirimi ve her biri için iki politika seçeneği; oyuncunun parası asla sıfırlanmaz.
+- **Advanced Stock Market:** yatırımcı duyarlılığı (Bullish … Panic), ekonomik haberler („… reports record profits", „… delivery delays", „Food prices rise …") hisse ve tüketiciyi etkiler.
+- **Economic Dashboard:** GSYH, büyüme, enflasyon, işsizlik, ortalama maaş, konut fiyatı, kira, tüketici harcaması, şirket kârları, dış ticaret, faiz, vergi geliri, borç, borsa; hane bütçesi; 5 vergi türü (gelir, kurumlar, emlak, satış, turizm) ve uygulamadan önce gelir / mutluluk / iş büyümesi tahmini; grafikler 7 gün … 25 yıl; ekonomi danışmanı ve günlük rapor satırları.
+- **Economic Heatmaps:** Business Demand, Rent, House Prices, Employment, Income, Commercial / Industrial Demand, Investment, Company Density, Housing Affordability.
+- **Cross-platform Save Improvements:** ekonomi verisi kayıtta (piyasalar, fiyatlar, şirketler, bankacılık, krediler, konut, ticaret, GSYH, enflasyon, döngü, şoklar); v2.4.1 kayıtları varsayılanlarla açılır; Windows ↔ Android; tarayıcı depolama dolduğunda eski yedek bırakılır, kayıt kaybolmaz.
+- **Large-city Optimization:** 10.000 şirkette saatlik geçiş ≈ 500 şirketlik gruplar halinde (birkaç ms), uzak şirketler basitleştirilmiş simülasyonla; şirket listesi sayfalı (25 satır); kompakt kayıt (10.000 şirket ≈ 1,5 MB); aynı kayıt + aynı adımlar → aynı ekonomi (seed'li rastgelelik).
+- **Güvenlik:** ekonomi yönetici araçları (şok başlatma, döngü, tick) yalnızca OWNER / ADMIN; normal oyuncuda gizli.
+
+## 2.4.1 — Part 16: v2.4.0 stabilizasyon / hardening sürümü
+- **Performance hardening:** kare bütçesi ölçümü (input · simülasyon · UI · render · Visual Engine · ses · uzun duraklamalar), F3'te draw call sayacı, ışık / gölge / particle sayıları ve son yüklemenin aşama süreleri (Read · Migrate · Validate · World · Simulation · Visual). Kalite yöneticisi histerezisli: 5 sn düşük FPS → bir kademe düşüş, en az 20 sn bekleme, 30 sn iyi FPS → bir kademe geri; oturumda tek bildirim: „Performance reduced to keep the game stable." AUTO PERFORMANCE ile Visual Engine artık aynı anda iki kademe düşürmüyor.
+- **Visual Engine optimization:** güneş / ışık hesabı oyun dakikasında bir kez (dirty flag), hava durumu 10 Hz, sis / pus gradyanları önbellekte, mekân ve geçit yolu önbellekte; pencereler, cephe pencereleri, sokak lambası renkleri, trafik ışıkları, ıslak yol / kar / su yansıması toplu (batch) çiziliyor; bina emojileri sprite önbelleğinden. Büyük şehir merkezinde draw call ~30.000 → ~13.500 (zoom 0.5, 1080p).
+- **Memory leak fixes:** yağmur / kar damlaları havuzda (hava değişince atılmıyor), particle bütçesi 100 % → 66 % → 46 % → 27 % kademeli, emoji önbelleği sınırlı; fotoğraf modu, geçmiş, harita, hava, mevsim, etkinlik ve chunk streaming döngülerinde bellek / DOM / listener artışı yok (test edildi). Düşük bellek modu artık kalıcı değil: 3 dk sonra kalite kademe kademe geri gelir.
+- **Save/load compatibility:** v2.4 / v2.3 / v2.2 / v2.1 kayıtları, geçmiş verisi olmayan eski kayıtlar, v11 → v12 göçü (ön yedekle), Windows ↔ Android kayıtları, bozuk ana kayıt → yedek ve masaüstü dosya deposu (.tmp → doğrula → yeniden adlandır, yarım kalan .tmp temizliği) otomatik test ediliyor. Aynı seed aynı şehri ve artık aynı vatandaşları üretiyor (deterministik vatandaş üretimi).
+- **Mobile stability:** pil tasarrufu particle bütçesini yarıya indirir; arka plana geçince kayıt + ses durur; mobil UI testi 9 ekranda 297/297.
+- **Photo Mode fixes:** telefonda fotoğraf çubuğu ekranın en fazla yarısını kaplar (şehir görünür ve dokunulabilir kalır); fotoğraf modunda kritik uyarı sahnenin üstüne çıkmaz, çıkışta gösterilir; sinematik kamera 1–120 sn, kamera ve City Tour harita dışına çıkmaz.
+- **Weather stability:** 9 × 9 hava geçiş matrisi (sıçrama yok) ve 4 mevsim × 9 hava kombinasyonu test edildi; elektrik kesintisi gece / yağmur / fırtına / kar altında lambaları söndürür, kavşakları 4 yönlü dura alır ve „Power restored" ile geri gelir.
+- **World streaming improvements:** chunk cache sınırlı, SMALL / MEDIUM / LARGE / HUGE dünyalar üretim, kayıt, yükleme ve çizimde ölçüldü.
+- **CI reliability:** yeni `scripts/qa-test.js` (49 kontrol: Android + Windows profili, bekleme yerine wait-until), mobil UI ve QA hataları Test / Expected / Actual / Device / Resolution / Build / Commit ile raporlanır; araç ışıkları DAY / NIGHT / RAIN / FOG / BRAKING / TURNING / EMERGENCY durum makinesi.
+- **Large-city optimization:** MEGA şehir + 500K nüfus + gece + fırtına + kesinti + festival + yoğun trafik + 100× senaryosu hatasız çalışıyor, kayıt ve yükleme sağlam; çizilen vatandaş / araç sayısı kalite sınırında, gerisi istatistiksel simülasyon. Ses havuzu (mobil 10 / masaüstü 20 ses) ve öncelik (acil > UI > olay > efekt > ortam) test edildi; çift siren sesi kaldırıldı. Yalnızca ikon üretim kaynakları (icon.svg, icon-256.png) EXE / APK paketinden çıkarıldı.
+
+## 2.4.0 — Part 15: Visual Engine 2.0, atmosfer ve yaşayan şehir
+- **Visual Engine 2.0:** mevcut renderer genişletildi — LOW / MEDIUM / HIGH / ULTRA kalite seviyeleri, yavaş veya ısınan cihazda otomatik düşüş, particle bütçesi 100 / 300 / 800 / 1500.
+- **Day/Night:** Dawn · Morning · Noon · Evening · Night · Midnight · Late Night; mevsime göre gün uzunluğu; güneş açısı, yoğunluk, renk sıcaklığı ve gölge yönü.
+- **Dynamic Lighting & Street Lights:** yol tipine göre sokak lambaları, ilçe renkleri, LOD'lu pencere ışıkları ve saate göre doluluk, neon tabelalar, landmark projektörleri, uçak ikaz ışıkları.
+- **Power-based lighting:** elektrik kesintisinde lambalar ve trafik ışıkları söner (kavşaklar 4 yönlü dur), binalar acil durum ışığına geçer, bildirim gelir.
+- **Vehicle Lights:** farlar (gece, yağmur, sis, kar), fren lambası, sinyal, tekerlekler, acil araç ışıkları ve siren.
+- **Weather:** yumuşak geçişler (Clear → Cloudy → Rain → Heavy Rain → Storm), ıslak yollar ve su birikintileri, kar örtüsü, sis, bulut gölgeleri; sis / kar / fırtına araç ve acil durum hızını hafifçe etkiler.
+- **Seasons:** sonbahar yaprak geçişi, ilkbahar çiçekleri, rüzgâra göre sallanan ağaçlar, su yansıması ve kıyı köpüğü.
+- **Building Animations:** inşaat ekipleri ve kamyonlar, seviyeye göre çatı detayları, seviye 5 / 8 / 10'da değişen Mega Mall ve Arcology.
+- **Living City & City Atmosphere:** ilçe kimliği (Downtown, Financial District, Industrial Zone, Old Town, Tourism District, Tech Valley, Suburbs, Luxury Coast), gece hayatı, yeni etkinlikler (konser, spor finali, sokak pazarı, resmî tatil, geçit töreni), şehir evrimi ve silüet, mesafe / kirlilik pusu, bölgeye göre ambiyans sesi.
+- **Photo Mode 2.0:** 8 hava durumu, HIDE UI, derinlik efekti, simülasyonu duraklatma, sinematik kamera (A → B), CITY TOUR; **City History** grafikleri ve Year 1 / 5 / 10 / 25 karşılaştırması.
+- **Performance Improvements:** ekrandaki vatandaş çizimi seviyeye göre sınırlı, chunk yükleme geçişi (fade), ses havuzu ve öncelik; v2.3.0 ile aynı kare süresi, kayıt süresi ve bellek.
+- **Testler:** Android self-test 30 adım, mobil UI testine gece / yağmur, Photo Mode 2.0 ve döndürme regresyonu eklendi; Part 14 düzeltmeleri (minimap, yorum balonu, danışman düğmesi, gamepad zamanlaması) korunuyor.
+
 ## 2.3.0 — Part 14: Mobile 2.0, dokunmatik UX, performans ve sürüm kalitesi
 - **Platform adapter:** ortak oyun motoru + `AndroidPlatformAdapter` / `WindowsPlatformAdapter`; dağınık `if Android` kontrolleri yerine tek katman. Ortak **Action** sistemi (dokunma · fare · klavye · kontrolcü).
 - **HUD 2.0:** seviye · şehir · tarih / nüfus · mutluluk / para · elektrik · su; **≡** ile FULL → COMPACT → MINIMAL (araç çubuğu TOOLS ▲ tutamacına katlanır).

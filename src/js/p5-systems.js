@@ -48,7 +48,7 @@ function econCycleTick(dt) {
   e._h = (e._h || 0) + dt;
   if (e._h >= 10) { e._h = 0; e.hist.push(+(e.rate * 100).toFixed(2)); if (e.hist.length > 60) e.hist.shift(); }
 }
-function interestRate() { return S.p5 ? S.p5.econ.rate : 0.05; }
+function interestRate() { return S.p5 ? Math.max(0.01, S.p5.econ.rate) : 0.05; }      // the central bank rate never goes below 1 %
 /* Cheap money helps businesses grow; expensive money slows them down */
 function businessGrowthMult() { return clamp(1 + (0.05 - interestRate()) * 6, 0.6, 1.3) * (S && S.p9 ? S.p9.econ.growthMult : 1); }
 

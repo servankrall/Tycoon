@@ -5,7 +5,7 @@
    Incident Center (emergency vehicles, response times), citizen opinions & petitions, long-term city goals, dynamic
    objectives, City AI Assistant (problem → cause → options with costs → expected result from the engine), live graphs,
    Time Machine (year 1/5/10/25/50/100 snapshots), Simulation Lab & What-If mode (the real economy engine runs on a
-   copy of the world — nothing changes until APPLY), World Factory, World Presets 2.0, GENERATE MEGA WORLD (22-step
+   copy of the world — nothing changes until APPLY), World Factory, World Presets 2.0, GENERATE MEGA WORLD (22-step + 10 World Builder 2.0 steps since Part 19,
    pipeline) and the World Generation Score. */
 
 /* ===================================== STATE ===================================== */

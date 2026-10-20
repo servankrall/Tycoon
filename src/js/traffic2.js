@@ -138,6 +138,9 @@ function signalGreen(tile, axis, turn) {
   return false;
 }
 function signalLight(tile, axis) {
+  if (typeof inOutage === 'function' && S.p9.util.failures.length && inOutage(tile % MAP.W, (tile / MAP.W) | 0)) {   // Part 15: lights OFF → 4-way stop
+    const ph = Math.floor((AG.lightClock + (tile % 7)) / 2.6) % 2; return (ph === 0) === (axis === 'NS') ? 'g' : 'r';
+  }
   const st = sigState(tile);
   if (st.preUntil > AG.lightClock) return st.pre === axis ? 'g' : 'r';
   const ph = SIG_PHASES[st.ph];

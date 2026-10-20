@@ -281,6 +281,7 @@ body.mobileUI .toast{font-size:var(--fs-s);padding:6px 12px;max-width:100%;overf
 body.mobileUI .toast:nth-last-child(n+3){display:none;}
 #mHeld{position:fixed;z-index:131;left:50%;transform:translateX(-50%);bottom:calc(var(--above-bar) + 4px);min-height:36px;padding:0 12px;border-radius:999px;background:rgba(20,24,52,.96);border:1px solid var(--gold);color:var(--gold);font-weight:900;font-size:var(--fs-s);}
 #mHeld.hidden{display:none;}
+body.photo #mHeld,body.photoHide #mHeld{display:none;}   /* Part 17: not over the photo bar */
 #mSaveChip{position:fixed;z-index:1200;left:50%;top:var(--below-hud);transform:translateX(-50%);padding:8px 16px;border-radius:999px;background:rgba(20,24,52,.97);border:1px solid var(--gold);color:var(--gold);font-weight:900;font-size:var(--fs);letter-spacing:.5px;box-shadow:var(--shadow);white-space:nowrap;}
 #mSaveChip.good{border-color:#06d6a0;color:#8cffc1;} #mSaveChip.bad{border-color:#ef476f;color:#ff8fa3;} #mSaveChip.hidden{display:none;}
 body.mobileUI #dialogBox{left:var(--L);right:auto;transform:none;bottom:var(--above-bar);width:min(560px,calc(var(--vw) - var(--L) - var(--R)));max-height:calc(var(--vh) - var(--below-hud) - var(--above-bar));overflow-y:auto;padding:10px 12px;font-size:var(--fs);}
@@ -295,7 +296,7 @@ body.mobileUI #levelFlash div{font-size:max(24px,calc(var(--u)*30));}
 body.mobileUI #dailyCard{right:var(--R);left:auto;bottom:var(--above-bar);width:min(300px,calc(var(--vw) - var(--L) - var(--R)));max-height:calc(var(--vh) - var(--below-hud) - var(--above-bar));overflow-y:auto;}
 body.mobileUI #heatLegend{left:calc(var(--L) + var(--touch) + 10px);top:var(--below-hud);}
 body.mobileUI #admPill{right:var(--R);bottom:calc(var(--above-bar) + 4px);min-height:36px;}
-body.mobileUI #photoBar{bottom:var(--B);left:var(--L);right:var(--R);flex-wrap:wrap;}
+body.mobileUI #photoBar{bottom:var(--B);left:var(--L);right:var(--R);flex-wrap:wrap;transform:none;width:auto;max-height:max(calc(var(--touch) * 2 + 24px), calc((var(--vh) - var(--T) - var(--B)) * 0.46));overflow-y:auto;overscroll-behavior:contain;}   /* Part 15: photo mode 2.0 has more rows — scroll, never off-screen · Part 16: at most ~half the screen, the city above stays visible and touchable */
 body.mobileUI #photoBar .btn{min-height:var(--touch);}
 body.mobileUI #paletteWrap{padding:var(--T) var(--R) var(--B) var(--L);}
 
@@ -510,3 +511,44 @@ body.mobileUI.mini-l{--mini-sz:clamp(120px,calc(var(--u)*170),240px);}
 /* PHOTO MODE: hide every control (tap to bring them back) */
 body.photoHide #photoBar,body.photoHide #mHud,body.photoHide #mSide,body.photoHide #mBar,body.photoHide #minimap,body.photoHide #mMiniCtl,body.photoHide #toasts,body.photoHide #mAdv,body.photoHide #mComment{display:none !important;}
 body.mobileUI.mSheetOpen #undoBar,body.mobileUI.mPageOpen #undoBar,body.mobileUI.mMapOpen #undoBar,body.mobileUI.mInsOpen #undoBar{display:none;}
+/* Part 15: city history on phones, debug overlay above the toolbar */
+body.mobileUI .veHistGrid{grid-template-columns:repeat(auto-fill,minmax(min(100%,calc(var(--u)*220)),1fr));}
+body.mobileUI .veHistTable{font-size:var(--fs-xs);display:block;overflow-x:auto;}
+body.mobileUI #veDebug{left:var(--L);bottom:calc(var(--above-bar) + 4px);font-size:10px;}
+body.mobileUI #photoBar .phDur input{width:calc(var(--u)*110);}
+/* Part 17 — Economy center on phones: bigger touch targets, scrolling tabs, two tiles per row */
+body.mobileUI #e2Root .btn{min-height:var(--touch);}
+body.mobileUI #e2Root .e2Grid{grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*140),1fr));}
+body.mobileUI #e2Root .e2Tbl td,body.mobileUI #e2Root .e2Tbl th{padding:8px 6px;font-size:max(12px,calc(var(--u)*12));}
+body.mobileUI #e2Root .e2Slider input[type=range]{height:var(--touch);}
+body.mobileUI #e2Root .e2Tabs{-webkit-overflow-scrolling:touch;}
+body.mobileUI #gvRoot .btn{min-height:var(--touch);}
+body.mobileUI #gvRoot .e2Grid{grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*140),1fr));}
+body.mobileUI #gvRoot .e2Tbl td,body.mobileUI #gvRoot .e2Tbl th{padding:8px 6px;font-size:max(12px,calc(var(--u)*12));}
+body.mobileUI #gvRoot .e2Slider input[type=range]{height:var(--touch);}
+body.mobileUI #gvRoot .e2Tabs{-webkit-overflow-scrolling:touch;}
+body.mobileUI #gvRoot .gvFund input,body.mobileUI #gvRoot .gvTax input{height:var(--touch);}
+body.mobileUI #gvRoot .gvCards{grid-template-columns:1fr;}
+body.mobileUI #tpRoot .btn{min-height:var(--touch);}
+body.mobileUI #tpRoot .e2Grid{grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*140),1fr));}
+body.mobileUI #tpRoot .e2Tbl td,body.mobileUI #tpRoot .e2Tbl th{padding:8px 6px;font-size:max(12px,calc(var(--u)*12));}
+body.mobileUI #tpRoot .e2Slider input[type=range]{height:var(--touch);}
+body.mobileUI #tpRoot .e2Tabs{-webkit-overflow-scrolling:touch;}
+body.mobileUI #tpRoot .gvFund input,body.mobileUI #tpRoot .gvTax input{height:var(--touch);}
+body.mobileUI #tpRoot .gvCards{grid-template-columns:1fr;}
+body.mobileUI .atBtn .btn{min-height:var(--touch);}
+/* Part 20: City Life panel + Citizen Inspector (same layout as the government / transport panels) */
+body.mobileUI #clRoot .btn{min-height:var(--touch);}
+body.mobileUI #caiIns .btn{min-height:var(--touch);}
+body.mobileUI #clRoot .e2Grid{grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*140),1fr));}
+body.mobileUI #caiIns .e2Grid{grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*140),1fr));}
+body.mobileUI #clRoot .e2Tbl td,body.mobileUI #clRoot .e2Tbl th{padding:8px 6px;font-size:max(12px,calc(var(--u)*12));}
+body.mobileUI #caiIns .e2Tbl td,body.mobileUI #caiIns .e2Tbl th{padding:8px 6px;font-size:max(12px,calc(var(--u)*12));}
+body.mobileUI #clRoot .e2Slider input[type=range]{height:var(--touch);}
+body.mobileUI #caiIns .e2Slider input[type=range]{height:var(--touch);}
+body.mobileUI #clRoot .e2Tabs{-webkit-overflow-scrolling:touch;}
+body.mobileUI #caiIns .e2Tabs{-webkit-overflow-scrolling:touch;}
+body.mobileUI #clRoot .gvFund input,body.mobileUI #clRoot .gvTax input{height:var(--touch);}
+body.mobileUI #caiIns .gvFund input,body.mobileUI #caiIns .gvTax input{height:var(--touch);}
+body.mobileUI #clRoot .gvCards{grid-template-columns:1fr;}
+body.mobileUI #caiIns .gvCards{grid-template-columns:1fr;}

@@ -9,7 +9,7 @@
    freshly built EXE) or in a browser with  index.html?selftest . It plays through the 20 checks of the release test plan,
    restarts the EXE in the middle (save → restart → load) and writes a JSON report to logs/selftest.json (and <file>).
    The self-test uses its own temporary user-data folder, so it never touches real cities. */
-const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 53, running: false };
+const SELFTEST = { phase: 0, steps: [], t0: 0, key: 'bct_selftest', total: 57, running: false };
 function stPhase() {
   if (DESKTOP && BCT.selftest && BCT.selftest.phase) return BCT.selftest.phase;
   if (IS_ANDROID_APP && ANDROID_INFO.selftest) return ANDROID_INFO.selftestPhase || 1;
@@ -17,6 +17,8 @@ function stPhase() {
   return +m[1] || 1;
 }
 function stWait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+/* wait-until with a deadline (Part 16: no fixed sleeps where a state change is awaited) */
+function stUntil(fn, ms) { const end = performance.now() + (ms || 2000); return new Promise(function (r) { (function tick() { let v = false; try { v = fn(); } catch (e) { v = false; } if (v || performance.now() > end) r(!!v); else setTimeout(tick, 25); })(); }); }
 function stLoad() { try { return JSON.parse(Store.getItem(SELFTEST.key) || 'null'); } catch (e) { return null; } }
 function stStore() { try { Store.setItem(SELFTEST.key, JSON.stringify({ steps: SELFTEST.steps, t0: SELFTEST.t0, data: SELFTEST.data })); } catch (e) { /* storage */ } }
 async function stStep(n, name, fn) {
@@ -266,8 +268,12 @@ async function runSelfTest() {
     const res = await generateMegaWorld('tinyisland', { seed: 31337, name: 'SELFTEST ISLAND', slot: 3 });
     closeModal(); clearDialogues();
     const sc = S.p10 && S.p10.genScore;
-    return { ok: !!res && res.steps === 22 && !!sc && sc.overall >= 60 && STARTED, detail: res ? res.steps + '-step pipeline · ' + fmt(res.population) + ' citizens · ' + res.buildings + ' buildings · score ' + (sc ? sc.overall : '?') + '/100 · ' + res.seconds.toFixed(1) + ' s' : 'generation failed' };
+    return { ok: !!res && res.steps === MEGA_STAGES.length && MEGA_STAGES.length === 32 && !!sc && sc.overall >= 60 && STARTED, detail: res ? res.steps + '-step pipeline · ' + fmt(res.population) + ' citizens · ' + res.buildings + ' buildings · score ' + (sc ? sc.overall : '?') + '/100 · ' + res.seconds.toFixed(1) + ' s' : 'generation failed' };
   });
+  await stStep(54, 'Economy 2.0 · Market · Companies · Housing · Banking', stEconomy2);
+  await stStep(55, 'Government 2.0 · Budget · Taxes · Services · Policies · Projects · Approval', stGovernment);
+  await stStep(56, 'Transportation 3.0 · World Builder 2.0 · Admin Tools', stTransport3);
+  await stStep(57, 'Citizen AI · Living City 3.0', stCitizenAI);
   stDone();
 }
 /* ===================================== Part 12 helpers ===================================== */
@@ -434,7 +440,7 @@ async function part12DesktopSteps() {
 
 /* ===================================== Part 12/13: Android APK self-test (24 steps) ===================================== */
 async function runAndroidSelfTest(phase) {
-  SELFTEST.total = 28;
+  SELFTEST.total = 34;
   const native = IS_ANDROID_APP;
   if (phase === 1) {
     SELFTEST.t0 = Date.now(); SELFTEST.steps = []; SELFTEST.data = {};
@@ -484,13 +490,22 @@ async function runAndroidSelfTest(phase) {
         stopCameraMotion(); CAM.rot = 0; CAM.zoom = 1; CAM.x = (spot.x + 0.5) * TILE; CAM.y = (spot.y + 0.5) * TILE; clampCamera(); await stWait(60);   // camera pinned (no fly / easing) before the tap point is computed
         if (UI.ghost && Math.abs(UI.ghost.x - spot.x) <= 2 && Math.abs(UI.ghost.y - spot.y) <= 2) { UI.ghost = { x: spot.x + 4, y: spot.y + 4 }; renderBuildBar(); }   // start away from the spot
         const p = worldToScreen((spot.x + 0.5) * TILE, (spot.y + 0.5) * TILE);
-        stPtr('pointerdown', 1, p.x, p.y); await stWait(40); stPtr('pointerup', 1, p.x, p.y); await stWait(60);    // tap → the ghost moves there (nothing is built yet)
-        const moved = !!UI.ghost && UI.ghost.x === spot.x && UI.ghost.y === spot.y && S.buildings.list.length === n0;
+        // tap → the ghost moves there (nothing is built yet). Waits for the result instead of a fixed delay; if the emulator
+        // stalled so long that the synthetic press itself lasted > 650 ms (a long press, not a tap), the tap is repeated once
+        const atSpot = function () { return !!UI.ghost && UI.ghost.x === spot.x && UI.ghost.y === spot.y; };
+        let retried = '';
+        for (let k = 0; k < 2 && !atSpot(); k++) {
+          const t0 = performance.now(); stPtr('pointerdown', 1, p.x, p.y); await stWait(40); const held = performance.now() - t0; stPtr('pointerup', 1, p.x, p.y);
+          await stUntil(atSpot, 1500);
+          if (!atSpot() && held < 650) break;                     // a real miss: report it
+          if (!atSpot()) retried = ' (press stretched to ' + Math.round(held) + ' ms by a stalled frame → tapped again)';
+        }
+        const moved = atSpot() && S.buildings.list.length === n0;
         const checks = $('mbInfo').querySelectorAll('.mChk').length, state = ($('mbInfo').querySelector('.mbState') || {}).textContent || '';
         const cf = MOB.buildBar.querySelector('[data-mb="confirm"]'); cf.click(); cf.disabled = false; cf.click(); await stWait(100);   // the second fast press is ignored
         const built = S.buildings.list.length - n0;
         MOB.buildBar.querySelector('[data-mb="cancel"]').click();
-        return { ok: cats === 8 && bar && moved && checks === 5 && /✓ VALID/.test(state) && built === 1, detail: cats + ' categories · ' + d.name + ' · build bar ' + bar + ' · tap moved the ghost ' + moved + ' · ' + state.slice(0, 30) + ' · ' + checks + ' checks · CONFIRM ×2 → ' + built + ' building' };
+        return { ok: cats === 8 && bar && moved && checks === 5 && /✓ VALID/.test(state) && built === 1, detail: cats + ' categories · ' + d.name + ' · build bar ' + bar + ' · tap moved the ghost ' + moved + retried + (moved ? '' : ' (ghost ' + (UI.ghost ? UI.ghost.x + ',' + UI.ghost.y : 'none') + ', spot ' + spot.x + ',' + spot.y + ')') + ' · ' + state.slice(0, 30) + ' · ' + checks + ' checks · CONFIRM ×2 → ' + built + ' building' };
       });
     });
     await stStep(7, 'Road Building (START → DRAG → END → CONFIRM)', function () {
@@ -675,7 +690,160 @@ async function runAndroidSelfTest(phase) {
     const set = Store.getItem('bct_settings') !== null || Store.keys().some(function (k) { return /settings/.test(k); });
     return { ok: ok && valid && set, detail: 'save written atomically and validated ' + valid + ' (' + Math.round((raw || '').length / 1024) + ' KB) · settings stored separately ' + set + ' · autosave 5/10/15/30 min · ' + esc(SaveProviders.active.name) };
   });
+  /* ---------- Part 15: VISUAL ENGINE 2.0 ---------- */
+  await stStep(29, 'Visual Engine 2.0 · Night City · Weather', async function () {
+    const h0 = gameHour(), w0 = FX.weather;
+    setHour(22); setWeather('clear', 1); CAM.zoom = 1; const c = cityCentre(); CAM.x = c.x; CAM.y = c.y; clampCamera();
+    VE.at = 0; veFrame(0.016); render();
+    const night = nightFactor() > 0.5, lamps = VE.stats.lamps, wins = VE.stats.windows, phase = dayPhase(22).name;
+    setHour(12); veFrame(0.016); updateSun(); const noon = VE.sun.elev > 0.8 && VE.sun.intensity > 0 && SUN.on !== false;
+    setHour(2); veFrame(0.016); updateSun(); const noSun = VE.sun.intensity === 0 && SUN.on === false;
+    const chain = weatherPath('clear', 'storm').join('>');
+    const cap = veParticleCap(), budgets = VE_TIERS.map(function (t) { return VE_BUDGET[t].particles; }).join('/');
+    const sub = S.buildings.list.find(function (b) { return b.built; });
+    S.p9.util.failures.push({ x: sub.x, y: sub.y, r: 3, until: S.clock.runSec + 20, cause: 'selftest' });
+    VE.at = 0; veFrame(0.016); const out = inOutage(sub.x, sub.y) && /POWER OUTAGE/.test((UI.notifs[0] || {}).msg || '');
+    S.p9.util.failures = S.p9.util.failures.filter(function (f) { return f.cause !== 'selftest'; });
+    setHour(h0); FX.lock = null; FX.weather = w0;
+    return { ok: night && lamps > 0 && wins > 0 && noon && noSun && chain === 'cloudy>rain>heavyrain>storm' && cap > 0 && out, detail: 'tier ' + VE.tier + ' · 22:00 ' + phase + ': ' + lamps + ' street lights, ' + wins + ' lit windows · noon sun ' + noon + ' · 02:00 no direct sun ' + noSun + ' · weather ' + chain + ' · particle budget ' + budgets + ' (now ' + cap + ') · power outage → lights off + notice ' + out };
+  });
+  await stStep(30, 'Photo Mode 2.0 · City Tour · History', async function () {
+    enterPhoto(); await stWait(80);
+    const ctl = ['phHide', 'phDepth', 'phPause', 'phA', 'phB', 'phPlay', 'phTour'].every(function (id) { return !!document.getElementById(id); });
+    $('phPause').click(); const paused = S.settings.speed === 0; $('phPause').click();
+    cineSetPoint('A'); CAM.x += 120; cineSetPoint('B'); const cine = cinePlay(3); stopCinematic();
+    exitPhoto();
+    const tour = startCityTour(), stops = VE.tour ? VE.tour.stops.length : 0; stopCityTour();
+    historySample(true); openCityHistory(); await stWait(60); const graphs = document.querySelectorAll('[data-vehist]').length; closeModal();
+    return { ok: ctl && paused && cine && tour && stops > 0 && graphs === 6 && !!S.p15 && S.p15.hist.length > 0, detail: 'photo controls ' + ctl + ' · pause simulation ' + paused + ' · cinematic A→B ' + cine + ' · city tour ' + stops + ' stops · history graphs ' + graphs + ' (' + S.p15.hist.length + ' samples, saved with the city)' };
+  });
+  await stStep(31, 'Economy 2.0 · Market · Companies · Housing · Banking', stEconomy2);
+  await stStep(32, 'Government 2.0 · Budget · Taxes · Services · Policies · Projects · Approval', stGovernment);
+  await stStep(33, 'Transportation 3.0 · World Builder 2.0 · Admin Tools', stTransport3);
+  await stStep(34, 'Citizen AI · Living City 3.0', stCitizenAI);
   stDone();
+}
+/* ===================================== Part 17: ECONOMY 2.0 (shared by the desktop and Android runs) ===================================== */
+async function stEconomy2() {
+  if (!S.p17) return { ok: false, detail: 'no Economy 2.0 state' };
+  const P = S.p17, hours = function (n) { for (let i = 0; i < n; i++) { S.clock.gameSec += 3600; S.clock.runSec += 3600 / TIME_SCALE; econTick(1); part17Tick(); } };
+  P.day = 0; E2.hourKey = -1; hours(24 * 3);
+  const goods = Object.keys(E2_GOODS), priced = goods.filter(function (g) { return e2GoodPrice(g) > 0; }).length, hist = P.goods.bread.h.length;
+  const maxDay = goods.reduce(function (a, g) { return Math.max(a, Math.abs(e2Change(g))); }, 0);
+  const reg = AI_DEFS.every(function (a) { const c = P.co[a.id]; return c && E2_STAGES.indexOf(c.stage) >= 0 && c.hq >= 1 && c.hq <= 5 && c.cr >= 300 && c.cr <= 850; });
+  // gradual bankruptcy: the first trigger restructures, a company still failing two days later goes bankrupt under a NEW, never reused name
+  const a = AI_DEFS.find(function (x) { return S.ai[x.id] && !S.ai[x.id].acquired; }), n0 = a.name;
+  bankruptCompany(a.id); const restr = P.co[a.id].stage === 'Restructuring' && a.name === n0;
+  hours(48); bankruptCompany(a.id); const renamed = a.name !== n0 && P.names.retired.indexOf(n0.replace(/ (GROUP|HOLDINGS|GLOBAL)$/, '')) >= 0 && P.names.retired.indexOf(a.name) < 0;
+  const r0 = S.p5.econ.rate; S.p5.econ.rate = 0.002; const floor = interestRate() >= 0.01; S.p5.econ.rate = r0;
+  P.shocks = P.shocks.filter(function (x) { return x.id !== 'food'; });            // a random food shock may already run
+  const sh = e2ShockStart('food', 2, true), resp = e2ShockRespond('food', 'imports').ok; P.shocks = P.shocks.filter(function (x) { return x.id !== 'food'; });
+  const o = buildSaveObject(), errs = validateImport(JSON.parse(JSON.stringify(o)));
+  const old = sanitizeP17(undefined), oldOk = Object.keys(old.goods).length === goods.length && old.tax === null;
+  let ui = 0; for (let i = 0; i < E2_TABS.length; i++) { openEconomy2(E2_TABS[i][0]); await stWait(20); if ((document.getElementById('e2Root') || {}).innerText.length > 80) ui++; } closeModal();
+  return { ok: priced === goods.length && hist >= 3 && maxDay < 0.6 && reg && restr && renamed && floor && !!sh && resp && !errs.length && !!o.p17 && oldOk && ui === E2_TABS.length,
+    detail: priced + '/' + goods.length + ' products priced · ' + hist + ' daily closes · biggest daily move ' + Math.round(maxDay * 100) + '% · ' + Object.keys(P.co).length + ' companies with lifecycle/HQ/credit ' + reg + ' · restructuring first ' + restr + ' → bankrupt as ' + a.name + ' (old name retired) ' + renamed + ' · interest floor 1 % ' + floor + ' · food shock ' + !!sh + ' + response ' + resp + ' · save p17 ' + (!!o.p17) + ', import errors ' + errs.length + ', old save defaults ' + oldOk + ' · ' + ui + '/' + E2_TABS.length + ' economy tabs' };
+}
+/* ===================================== Part 18: GOVERNMENT 2.0 (shared by the desktop and Android runs) ===================================== */
+async function stGovernment() {
+  if (!S.government) return { ok: false, detail: 'no government state' };
+  const G = S.government, hours = function (n) { for (let i = 0; i < n; i++) { S.clock.gameSec += 3600; S.clock.runSec += 3600 / TIME_SCALE; econTick(1); govTick(); } };
+  GOV.hourKey = -1; hours(26);
+  const svc = GOV_SERVICES.filter(function (s) { const v = G.services[s[0]]; return v && isFinite(v.quality) && v.quality >= 0 && v.quality <= 100 && v.coverage >= 0 && v.coverage <= 1; }).length;
+  const inc = Object.keys(G.budget.last.inc).length >= GOV_INCOME.length && Object.keys(G.budget.last.exp).length >= GOV_EXPENSE.length - 1, B = govBudgetSummary();
+  const maint = ['roads', 'bridges', 'tunnels', 'buildings', 'power', 'water', 'sewage', 'transport', 'emergency'].every(function (k) { return G.maint[k] && ['Excellent', 'Good', 'Warning', 'Critical', 'Failed'].indexOf(G.maint[k].level) >= 0; });
+  const lbl = govApprovalLabel(95) === 'Excellent' && govApprovalLabel(80) === 'Very Good' && govApprovalLabel(65) === 'Stable' && govApprovalLabel(45) === 'Warning' && govApprovalLabel(25) === 'Critical' && govApprovalLabel(10) === 'Collapse';
+  // taxes: non-linear pressure, the residential tax is the classic slider
+  const T = govTaxes(), t0 = Object.assign({}, T), hapAt = function (v) { govSetTax('commercial', v); const m = globalMods(); return { p: govTaxPressure(), hap: m.hap, growth: m.growth }; };
+  const a14 = hapAt(14), a22 = hapAt(22), a30 = hapAt(30), p14 = a14.p, p22 = a22.p, p30 = a30.p;
+  const nonlin = p22 > p14 && (a22.hap - a30.hap) > (a14.hap - a22.hap) && a30.growth < a22.growth && a22.growth < a14.growth;   // each extra point hurts more (EconomyEngine reads these modifiers) GOV_TAXES.forEach(function (t) { govSetTax(t[0], t0[t[0]]); });
+  const res = govSetTax('residential', 13) && S.city.tax === 13; govSetTax('residential', t0.residential);
+  // policies: conflicts are refused
+  const b0 = S.budget; S.budget += 1e6;
+  const pOn = govPolicyEnable('green').ok, pConf = !govPolicyEnable('industrial').ok, pOff = govPolicyDisable('green').ok;
+  // projects: a quote has cost / time / workers or an honest reason; one project starts through the construction pipeline
+  const quotes = Object.keys(GOV_PROJECTS).map(function (k) { return govProjectQuote(k, 'normal'); }), qok = quotes.every(function (q) { return q.reason || (q.cost > 0 && q.days > 0); });
+  const pr = ['park', 'firehq', 'policehq', 'power', 'flood'].reduce(function (a, k) { return a || (govProjectStart(k, 'emergency').ok ? k : null); }, null);
+  const rec = pr ? G.projects.find(function (p) { return p.type === pr; }) : null, site = rec ? MAP.byId.get(rec.b) : null, pipe = !!site && site.owner === 'city' && site.govProject === rec.id;
+  if (rec) govProjectCancel(rec.id);
+  S.budget = b0;
+  // save 3.1 round trip + an old save without a government block
+  const o = buildSaveObject(), errs = validateImport(JSON.parse(JSON.stringify(o))), oldG = sanitizeGov(undefined), bad = sanitizeGov({ budget: { funding: { health: 'x' }, loans: [null, 5] }, projects: [{ type: 'nope' }], approval: { value: 1e9 } });
+  const saveOk = !!o.government && !errs.length && oldG.approval.value === 60 && oldG.taxes === null && bad.budget.funding.health === 1 && bad.projects.length === 0 && bad.approval.value === 100;
+  let ui = 0; for (let i = 0; i < GOV_TABS.length; i++) { openGovernment(GOV_TABS[i][0]); await stWait(15); if ((document.getElementById('gvRoot') || {}).innerText.length > 60) ui++; } closeModal();
+  const heats = GOV_HEATS.filter(function (h) { const g = p9HeatGrid(h[0]); return g && g.length === MAP.W * MAP.H; }).length;
+  const chk = { services: svc === GOV_SERVICES.length, budget: inc, maintenance: maint, approvalLabels: lbl, taxEffects: nonlin, residentialTax: res, policyOn: pOn, policyConflict: pConf, policyOff: pOff, quotes: qok, project: !pr || pipe, save: saveOk, tabs: ui === GOV_TABS.length, heatmaps: heats === GOV_HEATS.length, noErrors: GOV.errors === 0 }, failed = Object.keys(chk).filter(function (k) { return !chk[k]; });
+  return { ok: !failed.length,
+    detail: (failed.length ? 'FAILED: ' + failed.join(', ') + ' · ' : '') + svc + '/' + GOV_SERVICES.length + ' services · budget ' + money(B.income) + ' in / ' + money(B.expenses) + ' out per day · maintenance ' + G.maint.avg + '% · approval ' + Math.round(G.approval.value) + ' ' + G.approval.label + ' · commercial tax 14→22→30 %: pressure ' + Math.round(p14) + '/' + Math.round(p22) + '/' + Math.round(p30) + ', happiness ' + (a14.hap - a22.hap).toFixed(2) + ' then ' + (a22.hap - a30.hap).toFixed(2) + ' lost (non-linear ' + nonlin + ')' + ' · policy conflict refused ' + pConf + ' · project ' + (pr || 'none (no free site)') + ' · save 3.1 ' + saveOk + ' · ' + ui + '/' + GOV_TABS.length + ' tabs · ' + heats + ' heatmaps · errors ' + GOV.errors };
+}
+/* ===================================== Part 19: TRANSPORTATION 3.0 + WORLD BUILDER 2.0 (desktop and Android) ===================================== */
+async function stCitizenAI() {
+  if (!S.citizenAI) return { ok: false, detail: 'no citizenAI state' };
+  const chk = {};
+  // citizens get stable identities, households and utility-scored decisions while the city runs
+  setSpeed(5); await stUntil(function () { return AG.citizens.filter(function (c) { return !c.tourist && c.cid; }).length >= 3 && CAI.prof.decisions >= 3; }, 15000); setSpeed(0);
+  const c = AG.citizens.find(function (x) { return !x.tourist && x.cid; }), P = c ? caiProfile(c) : null;
+  chk.identity = !!P && P.fn.length > 1 && P.ln.length > 1 && c.cid === P.id && !!caiHousehold(P);
+  chk.needs = !!P && CAI_NEEDS.every(function (n) { return isFinite(P.needs[n[0]]); }) && CAI_NEEDS.length === 11;
+  if (P) { caiUpdate(c, P, 1); } chk.happiness = !!P && Object.keys(P.f).length === 13 && P.hap >= 0 && P.hap <= 100;
+  if (c) { c.pending = false; caiDecide(c); } chk.decision = !!P && P.dec.length > 0 && P.dec.every(function (d, i, a) { return i === 0 || a[i - 1].u >= d.u; });
+  // deterministic: the same state and time give the same choice
+  if (c) { const keep = { state: c.state, path: c.path, pi: c.pi, target: c.target, work: c.work }; caiDecide(c); const a = P.dec.map(function (d) { return d.s + d.u; }).join(); caiDecide(c); const b = P.dec.map(function (d) { return d.s + d.u; }).join(); chk.deterministic = a === b; Object.assign(c, keep); } else chk.deterministic = false;
+  // hour / day passes, validator, forecast, planner
+  caiHour(); caiDay(); const v = caiValidate(); chk.validator = typeof v.health === 'number' && Array.isArray(v.issues);
+  const F = caiForecast(); chk.forecast = F.length === 5 && F.every(function (f) { return isFinite(f.pop) && f.pop >= 0; });
+  chk.planner = caiPlanner().length > 0; chk.life = S.citizenAI.life.score >= 0 && S.citizenAI.life.score <= 100;
+  // save 3.3 round trip: profiles keyed by the stable id
+  const o = buildSaveObject(), errs = validateImport(JSON.parse(JSON.stringify(o))), clean = sanitizeCitizenAI(JSON.parse(JSON.stringify(o.citizenAI))), bad = sanitizeCitizenAI({ people: { 5: { fn: '<b>x', nd: ['NaN'] } }, households: 7 });
+  chk.save = parseFloat(o.header.schema) >= 3.3 && !errs.length && Object.keys(clean.people).length === Object.keys(o.citizenAI.people).length && bad.people[5].fn === 'bx' && bad.people[5].nd[0] === 70 && Object.keys(bad.households).length === 0 && o.citizens.some(function (x) { return x.cid; });
+  // UI: City Life tabs + Citizen Inspector; admin tools stay guarded for a normal player
+  let ui = 0; for (let i = 0; i < CL_TABS.length; i++) { openCityLife(CL_TABS[i][0]); await stWait(15); if ((document.getElementById('clRoot') || {}).innerText.length > 40) ui++; } closeModal();
+  if (c) { caiInspect(c); await stWait(15); chk.inspector = (document.getElementById('caiIns') || {}).innerText.indexOf(P.fn) >= 0 || (document.getElementById('modalTitle') || {}).innerText.indexOf(P.fn) >= 0; closeModal(); } else chk.inspector = false;
+  chk.ui = ui === CL_TABS.length;
+  const admin = typeof AdminAuth !== 'undefined' && AdminAuth.active();
+  chk.guard = admin || (adminCitizenAI('heal') === undefined && adminTool('caiHeal') === undefined);
+  chk.errors = CAI.errors === 0;
+  const failed = Object.keys(chk).filter(function (k) { return !chk[k]; });
+  return { ok: !failed.length, detail: (failed.length ? 'FAILED: ' + failed.join(', ') + ' · ' : '') + (P ? P.fn + ' ' + P.ln + ' · ' + caiAge(P) + ' · happiness ' + Math.round(P.hap) + ' · ' : '') + CAI.live.size + ' profiles · ' + Object.keys(S.citizenAI.households).length + ' households · life ' + Math.round(S.citizenAI.life.score) + ' · ' + ui + '/' + CL_TABS.length + ' tabs · errors ' + CAI.errors };
+}
+async function stTransport3() {
+  if (!S.transportation) return { ok: false, detail: 'no transportation state' };
+  const chk = {};
+  // dashboard + subsystems
+  const st = tpStats(true); chk.dashboard = ['cars', 'buses', 'metroPax', 'trainPax', 'airPax', 'portCargo', 'bikeTrips', 'walkTrips', 'commute', 'congestion', 'parking', 'ptSat', 'revenue', 'cost'].every(function (k) { return isFinite(st[k]); });
+  // line editor: create a bus line in the chosen order, reorder, colour, frequency, remove a stop
+  const stops = S.buildings.list.filter(function (b) { return b.type === 'busstop' && b.built; }).slice(0, 4);
+  let editor = stops.length < 3;                                             // a city without 3 stops: nothing to edit (reported)
+  if (stops.length >= 3) {
+    const ids = [stops[2].id, stops[0].id, stops[1].id], r = tpLineCreate('bus', ids, 'Selftest Line');
+    if (r.ok) {
+      const L = r.L, o1 = L.stops.join() === ids.join(); tpLineEdit(L.id, 'order', ids[0], 1); const o2 = L.stops[1] === ids[0];
+      tpLineEdit(L.id, 'color', '#ff00aa'); tpLineEdit(L.id, 'frequency', 30); const rm = tpLineEdit(L.id, 'remove', ids[1]).ok && L.stops.length === 2;
+      transitRebuild(true); const kept = L.stops.length === 2 && L.color === '#ff00aa';
+      editor = o1 && o2 && rm && kept; removeTransitLine(L.id);
+    }
+  }
+  chk.lineEditor = editor;
+  // traffic light modes + prediction + validator
+  const j = (function () { for (let i = 0; i < MAP.roads.length; i++) if (MAP.inter[i] && junctionType(i) === 'signal') return i; return -1; })();
+  chk.lights = j < 0 || (tpSetLightMode(j, 'smart').ok && tpLightMode(j) === 'smart' && tpSetLightMode(j, 'auto').ok);
+  tpPredictTick(); chk.predict = !!TPAI.pred && TPAI.pred.length === MAP.roads.length;
+  const v = tp3Validate(); chk.validator = Array.isArray(v.issues) && typeof v.ok === 'boolean';
+  // world builder: quality score, golden rule, safe custom limits
+  const a = wbAnalyzeCurrent(); chk.quality = a.q.overall >= 0 && a.q.overall <= 100 && Object.keys(a.q.cats).length === 10 && WB_TESTS.length === 16;
+  const P = wbProfileFor({ wbProfile: 'custom', wbCustom: { pollution: 100, industry: 100, density: 100 } }); chk.limits = P.pol <= 45 && P.ind <= 0.35;
+  // admin tools: 170+, all guarded for a normal player, none in the palette
+  const admin = typeof AdminAuth !== 'undefined' && AdminAuth.active();
+  chk.tools = AT_TOOLS.length >= 170 && AT_CATS.length === 13;
+  chk.guard = admin || (adminTool('moneyEditor', '1') === undefined && paletteCommands().every(function (c) { return !/^Admin · /.test(c.label || ''); }));
+  // save 3.2: transportation block round trip + old save defaults
+  const o = buildSaveObject(), errs = validateImport(JSON.parse(JSON.stringify(o))), old = sanitizeTransportation(undefined), bad = sanitizeTransportation({ traffic: { modes: { 5: 'evil', 7: 'smart' }, oneway: { 3: 9 } }, metro: { lines: { L1: { color: '<x>' } } } });
+  chk.save = !!o.transportation && !errs.length && parseFloat(o.header.schema) >= 3.2 && old.traffic.defaultMode === null && !bad.traffic.modes[5] && bad.traffic.modes[7] === 'smart' && !bad.traffic.oneway[3] && bad.metro.lines.L1.color === null;
+  // UI: every tab renders
+  let ui = 0; for (let i = 0; i < TP_TABS.length; i++) { openTransport(TP_TABS[i][0]); await stWait(15); if ((document.getElementById('tpRoot') || {}).innerText.length > 40) ui++; } closeModal();
+  chk.ui = ui === TP_TABS.length;
+  const failed = Object.keys(chk).filter(function (k) { return !chk[k]; });
+  return { ok: !failed.length, detail: (failed.length ? 'FAILED: ' + failed.join(', ') + ' · ' : '') + 'cars ' + fmt(st.cars) + ' · commute ' + st.commute.toFixed(1) + ' min · ' + tpLines().length + ' lines · line editor ' + (stops.length >= 3 ? editor : 'n/a (<3 stops)') + ' · world quality ' + a.q.overall + '% ' + a.q.label + ' · ' + AT_TOOLS.length + ' admin tools (guarded ' + chk.guard + ') · save 3.2 ' + chk.save + ' · ' + ui + '/' + TP_TABS.length + ' tabs · errors ' + TPE.errors };
 }
 /* starts once the boot sequence has finished */
 (function () {

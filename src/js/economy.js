@@ -94,6 +94,7 @@ function globalMods() {
   if (hasTech('c_tourism')) m.tour *= 1.25;
   part5Mods(m);
   part6Mods(m);
+  S.events.active.forEach(function (a) { if (a.kind !== 'global') return; const g = GLOBAL_EVENTS.find(function (x) { return x.id === a.id; }); if (g && g.traffic) m.traffic = (m.traffic || 1) * (1 + g.traffic); });   // Part 15: events move the traffic (after part5Mods resets it)
   part8Mods(m);
   part9Mods(m);
   if (typeof part10Mods === 'function') part10Mods(m);
@@ -102,7 +103,19 @@ function globalMods() {
 }
 
 /* Clear derived values when a new city starts (prestige, NG+, reset, import) */
+/* SIM as it is after boot (taken by main.js once every module has loaded): a city that is loaded or started
+   begins from exactly these values, so the same save always simulates the same way, whatever ran before it */
+let SIM_BOOT = null;
+function simClone(v) {
+  if (Array.isArray(v)) return v.map(simClone);
+  if (ArrayBuffer.isView(v)) return v.slice();
+  if (v instanceof Map) return new Map(v);
+  if (v instanceof Set) return new Set(v);
+  if (v && typeof v === 'object') { const o = {}; Object.keys(v).forEach(function (k) { o[k] = simClone(v[k]); }); return o; }
+  return v;                                           // numbers, strings, functions (kept by reference)
+}
 function resetSim() {
+  if (SIM_BOOT) { Object.keys(SIM).forEach(function (k) { if (!(k in SIM_BOOT)) delete SIM[k]; }); Object.keys(SIM_BOOT).forEach(function (k) { SIM[k] = simClone(SIM_BOOT[k]); }); }
   SIM.traffic = 0; SIM.unpaid = 0; SIM.dDisp = {}; SIM.sDisp = {}; SIM.flood = false; SIM.visualStopRatio = 0; SIM.goodsRatioSmooth = 1;
   // Part 9 derived values (neighbour flows, grid, water, sewage, construction crews) start fresh for every city
   ['p9InCommuters', 'p9OutCommuters', 'p9Tourists', 'p9PowerImport', 'p9PowerExport', 'p9WaterBoost', 'gridBrown', 'gridNoConn', 'sewageOverload', 'lowPressure', 'p9CrewNeed', 'p9CrewAvail'].forEach(function (k) { SIM[k] = 0; });
@@ -163,14 +176,14 @@ function stockTick(dt) {
   for (const cid in S.companies.list) {
     const c = S.companies.list[cid], cs = SIM.companies[cid] || { profit: 0, assets: 0 };
     const fundamental = Math.max(0.05, (Math.max(0, cs.profit) * 3600 + cs.assets * 0.5 + c.level * 50000) / SHARES_TOTAL * (crash ? 0.7 : 1));
-    c.price = Math.max(0.1, c.price + (fundamental - c.price) * 0.03 * dt + c.price * gauss() * 0.012 * Math.sqrt(dt));
+    c.price = Math.max(0.1, c.price + (fundamental - c.price) * 0.03 * dt + c.price * simGauss() * 0.012 * Math.sqrt(dt));
   }
   NPC_STOCKS.forEach(function (s) {
     const st = S.companies.stocks[s.id];
     const sec = s.link;
     const trend = SIM.saleMult[sec] !== undefined ? (SIM.saleMult[sec] - 1) * 0.0003 : 0;
     const target = s.base * (1 + Math.log10(1 + S.city.population) / 6);
-    st.price = Math.max(0.5, st.price * (1 + gauss() * s.vol * 0.5 * Math.sqrt(dt) + trend * dt + (crash ? -0.003 * dt : 0)) + (target - st.price) * 0.006 * dt);
+    st.price = Math.max(0.5, st.price * (1 + simGauss() * s.vol * 0.5 * Math.sqrt(dt) + trend * dt + (crash ? -0.003 * dt : 0)) + (target - st.price) * 0.006 * dt);
   });
 }
 function recordStockHistory() {

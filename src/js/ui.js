@@ -42,6 +42,7 @@ function showModal(title, html, onClose) {
   $('modal').classList.remove('p10Wide');
   $('modalTitle').innerHTML = title; $('modalBody').innerHTML = html;
   $('modalWrap').classList.add('show');
+  const held = document.getElementById('mHeld'); if (held) held.classList.add('hidden');   // the "+N more" pill never covers a panel
   modalOnClose = onClose || null;
 }
 function closeModal() {
@@ -69,7 +70,7 @@ function refreshTopbar() {
   $('tClock').textContent = pad2(Math.floor(gameHour())) + ':' + pad2(Math.floor((S.clock.gameSec / 60) % 60));
   const se = currentSeason();
   const wx = { rain: '🌧️', snow: '🌨️', storm: '⛈️', heatwave: '🥵' }[FX.weather] || '';
-  $('tDate').textContent = weekdayName().slice(0, 3) + ' · Day ' + gameDay() + ' · ' + se.icon + ' ' + se.name + (wx ? ' ' + wx : '') + (specialWeekend() ? ' ' + specialWeekend().icon : '');
+  $('tDate').textContent = weekdayName().slice(0, 3) + ' · Day ' + gameDay() + ' · ' + se.icon + ' ' + se.name + (wx ? ' ' + wx : '') + (specialWeekend() ? ' ' + specialWeekend().icon : '') + (typeof dayPhase === 'function' ? ' · ' + dayPhase().icon + ' ' + dayPhase().name : '');
   $('tScore').textContent = S.p5.score.cur;
   $('tEcon').textContent = econPhase().icon;
   $('tCity').textContent = S.city.name;
@@ -204,6 +205,8 @@ function renderCityPanel() {
   } else if (t === 'mega') {
     h += renderMegaTab();
   } else if (t === 'economy') {
+    if (S.government) h += '<button class="btn blue" style="width:100%;margin-bottom:8px" data-act="gov">🏛️ CITY MANAGEMENT — budget · taxes · services · policies · projects · approval</button>';   // Part 18
+    if (S.p17) h += '<button class="btn gold" style="width:100%;margin-bottom:8px" data-act="econ2">📊 OPEN ECONOMY CENTER — GDP · market · companies · housing · banking · trade · taxes</button>';   // Part 17
     h += renderEconCycleCard() + renderInflationCard();
     const line = function (l, v, neg) { return '<div class="between small" style="padding:2px 0"><span>' + l + '</span><b class="' + (neg ? 'neg' : 'pos') + '">' + (neg ? '-' : '+') + money((v || 0) * 60) + '</b></div>'; };
     const P = SIM.P || {}, PE = SIM.PE || {}, B = SIM.B || {}, BE = SIM.BE || {};
@@ -215,7 +218,7 @@ function renderCityPanel() {
       '<div class="between" style="font-size:16px;margin-top:6px;border-top:1px solid var(--line);padding-top:6px"><span>NET</span><b class="' + ((SIM.pNet || 0) >= 0 ? 'pos' : 'neg') + '">' + signMoney((SIM.pNet || 0) * 60) + '</b></div></div>';
     h += '<div class="card"><h3>🏛️ CITY BUDGET <span class="tag">per minute</span></h3><p>Taxes & fees fund police, fire, hospitals, roads, education and public transport.</p>' +
       '<div class="between" style="font-size:15px;margin:6px 0"><span>Income</span><b class="pos">+' + money((SIM.bInc || 0) * 60) + '</b></div>' +
-      line('Income tax', B.incomeTax) + line('Business tax', B.businessTax) + line('Property tax', B.propertyTax) + line('Utility fees', B.utilities) + line('Public transport fares', B.fares) + line('Tourism & tourist tax', B.tourism) + line('Public housing rent', B.rent) + line('Energy exports', B.energy) + (B.grant ? line('State grant (small towns)', B.grant) : '') + (B.space ? line('Moon mining', B.space) : '') +
+      line('Income tax', B.incomeTax) + line('Business tax', B.businessTax) + line('Property tax', B.propertyTax) + (B.salesTax ? line('Sales tax', B.salesTax) : '') + line('Utility fees', B.utilities) + line('Public transport fares', B.fares) + line('Tourism & tourist tax', B.tourism) + line('Public housing rent', B.rent) + line('Energy exports', B.energy) + (B.grant ? line('State grant (small towns)', B.grant) : '') + (B.space ? line('Moon mining', B.space) : '') +
       '<div class="between" style="font-size:15px;margin:8px 0 4px"><span>Spending</span><b class="neg">-' + money((SIM.bExp || 0) * 60) + '</b></div>' +
       line('Public salaries (police, fire, health, education, transport)', BE.salaries, true) + line('Public maintenance', BE.maintenance, true) + line('Power plant fuel', BE.fuel, true) + line('Road maintenance', BE.roads, true) +
       '<div class="between" style="font-size:16px;margin-top:6px;border-top:1px solid var(--line);padding-top:6px"><span>BUDGET NET</span><b class="' + ((SIM.bNet || 0) >= 0 ? 'pos' : 'neg') + '">' + signMoney((SIM.bNet || 0) * 60) + '</b></div>' +

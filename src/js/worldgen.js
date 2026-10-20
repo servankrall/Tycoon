@@ -113,7 +113,7 @@ async function generateWorld(presetId, overrides) {
     STARTED = wasStarted && !!backup;
     sysDialog('❌ WORLD GENERATION FAILED', '<p class="small">' + esc(e && e.message || String(e)) + '</p><p class="small">The previous city was restored. Details are in logs/latest.log.</p>', [['OK', '', null]]);
     return null;
-  } finally { WG.busy = false; WG.rnd = null; }
+  } finally { WG.busy = false; WG.rnd = null; if (typeof WBLD !== 'undefined') WBLD.enforce = false; }
 }
 
 const WG_RUN = {
@@ -558,11 +558,13 @@ const WG_RUN = {
   /* --- 14. Traffic: citizens and vehicles start their routines (home → work → shop → home), buses on routes --- */
   traffic: async function (ctx) {
     resetAgents();
-    const q = perf(), n = Math.min(Math.floor(q.npc * PERF.scale), Math.floor(S.city.population));
+    // fixed counts (not the device's quality / PERF.scale): the same seed builds the same world on every machine; the runtime
+    // population sampler then grows or trims the agents to the device's cap
+    const q = { npc: 60, veh: 40 }, n = Math.min(q.npc, Math.floor(S.city.population));
     for (let k = 0; k < n; k++) spawnCitizen(false);
-    AG.citizens.forEach(function (c) { if (c.inside && Math.random() < 0.35) c.insideUntil = S.clock.gameSec + rand(30, 600); });
+    AG.citizens.forEach(function (c) { if (c.inside && wgR() < 0.35) c.insideUntil = S.clock.gameSec + 30 + wgR() * 570; });
     await ctx.tick('traffic', 0.5);
-    const veh = Math.floor(q.veh * PERF.scale * 0.5);
+    const veh = Math.floor(q.veh * 0.5);
     for (let k = 0; k < veh; k++) spawnAmbientVehicle(k % 5 === 0 ? 'truck' : (k % 9 === 0 ? 'garbage' : 'car'));
     const stops = busRouteStops();
     for (let k = 0; k < Math.min(8, Math.ceil(stops.length / 2)); k++) spawnBus(k);
@@ -886,6 +888,8 @@ function wgSpurRoad(x, y, d) {
   const W = MAP.W, H = MAP.H, start = [];
   for (let yy = y - 1; yy <= y + d.h; yy++) for (let xx = x - 1; xx <= x + d.w; xx++) {
     if (!inMap(xx, yy) || (xx >= x && xx < x + d.w && yy >= y && yy < y + d.h)) continue;
+    // corner tiles never count as an entrance (findEntry), so the spur must start beside an edge
+    if ((xx < x || xx >= x + d.w) && (yy < y || yy >= y + d.h)) continue;
     const i = idx(xx, yy); if (!MAP.occ[i] && MAP.nature[i] !== 2) start.push(i);
   }
   const path = wgBfsToRoad(start, function (i) { const xx = i % W, yy = (i / W) | 0; return !(xx >= x && xx < x + d.w && yy >= y && yy < y + d.h); }, null);
@@ -1096,7 +1100,7 @@ function applyClimate(cfg) {
 const WEATHER_TYPES = ['clear', 'cloudy', 'rain', 'storm', 'snow', 'fog', 'heatwave'];
 function setWeather(w, hours) {
   if (WEATHER_TYPES.indexOf(w) < 0) return false;
-  FX.weather = w; FX.lock = w; FX.drops = [];
+  FX.weather = w; FX.lock = w; FX.dropN = 0;
   FX.weatherUntil = S.clock.gameSec + (hours || 6) * 3600;
   SND.setRain(w === 'rain' || w === 'storm' || w === 'heavyrain');
   return true;

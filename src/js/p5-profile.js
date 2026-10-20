@@ -37,7 +37,7 @@ function sanitizeP5(src) {
   if (!src || typeof src !== 'object') return p;
   const e = src.econ || {};
   p.econ.phase = ECON_PHASES[e.phase] ? e.phase : 'NORMAL';
-  p.econ.until = num(e.until, 480, 0, 1e12); p.econ.rate = num(e.rate, 0.05, 0.005, 0.15);
+  p.econ.until = num(e.until, 480, 0, 1e12); p.econ.rate = num(e.rate, 0.05, 0.01, 0.15);
   p.econ.hist = Array.isArray(e.hist) ? e.hist.map(Number).filter(isFinite).slice(-60) : [];
   p.econ.stim = num(e.stim, 0, 0, 1e12); p.econ.aust = num(e.aust, 0, 0, 1e12);
   const w = src.week || {};

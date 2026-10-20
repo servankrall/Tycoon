@@ -108,6 +108,7 @@ function eventCost(g) { return Math.round(g.cost * costMult() * (SIM.mods ? SIM.
 function hostEvent(id) {
   const g = GLOBAL_EVENTS.find(function (x) { return x.id === id; });
   if (S.city.peakPop < 3000) { toast('🔒 Global events unlock at 3,000 population', 'bad'); sfx('error'); return; }
+  if (g.needs && !countBuilt(g.needs)) { toast('🔒 ' + g.name + ' needs a ' + BUILDINGS[g.needs].name, 'bad'); sfx('error'); return; }
   if (activeEvent(id)) { toast('Already running', 'bad'); return; }
   if ((S.events.cooldowns[id] || 0) > S.clock.runSec) { toast('⏳ On cooldown', 'bad'); sfx('error'); return; }
   const cost = eventCost(g);
@@ -131,7 +132,7 @@ function eventsTick(dt) {
     E.nextDisasterAt = t + RNG.range(1500, 2700) / ngf / difficulty().events / dfq;
   } else if (pop < 400 && E.nextDisasterAt < t + 600) E.nextDisasterAt = t + 600;
   if (S.city.peakPop >= 3000 && t >= E.nextGlobalAt) {
-    if (!E.active.some(function (a) { return a.kind === 'global'; })) startGlobalEvent(RNG.pick(GLOBAL_EVENTS), false);
+    if (!E.active.some(function (a) { return a.kind === 'global'; })) startGlobalEvent(RNG.pick(GLOBAL_EVENTS.filter(function (g) { return !g.needs || countBuilt(g.needs); })), false);
     E.nextGlobalAt = t + RNG.range(700, 1300);
   }
   // Tip bubbles on businesses (tap to collect)
@@ -158,7 +159,7 @@ function eventsTick(dt) {
           if (st) { dispatchVehicle('firetruck', st, b); const eta = responseEta(st, b._entry); if (isFinite(eta) && b.owner !== 'city') toast('🚒 Fire at ' + bdef(b).name + ' (' + districtName(b.x, b.y) + ') — ETA ' + Math.round(eta) + 's', 'bad'); }
         }
       }
-      b.fire -= dt * (covered ? 2.5 : 1);
+      b.fire -= dt * (covered ? 2.5 : 1) * (typeof govFireRate === 'function' ? govFireRate(b) : 1);   // Part 18: fire response time (traffic, roads, distance, trucks, weather)
       if (b.fire <= 0) {
         b.fire = 0; b._truck = false;
         if (Math.random() < (covered ? 0.3 : 1) * (1 - disasterMitigation() * 0.5)) damageBuilding(b);
@@ -273,7 +274,7 @@ function advisorTick() {
     { id: 'school', ok: pop > 200 && S.city.education < 25, msg: '🎓 Education is low. Build a School to raise worker skill and productivity.', act: { type: 'build', cat: 'Science', id: 'school' } },
     { id: 'housingprice', ok: pop > 300 && SIM.housingSat < 45, msg: '🏘️ Housing is too expensive. Build Affordable Housing or more homes.', act: { type: 'build', cat: 'Residential', id: bestAvailable(['house', 'apartment', 'socialhousing']) } },
     { id: 'expand', ok: S.city.expansion < maxExpansionFor(MAP.W) && S.budget >= expansionCost() && freeTileRatio() < 0.3, msg: '🗺️ Your land is getting crowded. You can afford to expand the city.', act: { type: 'panel', panel: 'city', tab: 'land' } }
-  ];
+  ].concat(typeof e2AdviceRules === 'function' ? e2AdviceRules() : []).concat(typeof govAdviceRules === 'function' ? govAdviceRules() : []);   // Part 17: economic advisor
   let adv = null;
   const t = S.clock.runSec;
   for (let i = 0; i < rules.length; i++) {

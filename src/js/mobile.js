@@ -146,8 +146,8 @@ function buildMobileHud() {
     '<button class="mFab" id="mSearchBtn" aria-label="Search">🔍</button><button class="mFab hidden" id="mRotReset" aria-label="North up">↺</button>';
   document.body.appendChild(side); MOB.side = side;
   const bar = document.createElement('nav'); bar.id = 'mBar';
-  bar.innerHTML = [['build', '🏗️', 'BUILD'], ['road', '🛣️', 'ROAD'], ['zone', '🟩', 'ZONE'], ['transport', '🚇', 'TRANSPORT'], ['city', '🏙️', 'CITY'], ['economy', '💰', 'ECONOMY'], ['map', '🗺️', 'MAP']]
-    .map(function (x) { return '<button class="mBtn" data-mbar="' + x[0] + '"><span>' + x[1] + '</span><b>' + x[2] + '</b></button>'; }).join('');
+  bar.innerHTML = [['build', '🏗️', 'BUILD'], ['road', '🛣️', 'ROAD'], ['zone', '🟩', 'ZONE'], ['transport', '🚇', 'TRANSPORT'], ['city', '🏙️', 'CITY'], ['economy', '💰', 'ECONOMY'], ['gov', '🏛️', 'MANAGE'], ['map', '🗺️', 'MAP']]
+    .map(function (x) { return '<button class="mBtn" data-mbar="' + x[0] + '" aria-label="' + (x[0] === 'gov' ? 'Management' : x[2]) + '"><span>' + x[1] + '</span><b>' + x[2] + '</b></button>'; }).join('');
   document.body.appendChild(bar); MOB.bar = bar;
   const handle = document.createElement('button'); handle.id = 'mBarHandle'; handle.setAttribute('aria-label', 'Show toolbar'); handle.innerHTML = '<span>🏗️</span> TOOLS ▲';
   handle.onclick = function () { document.body.classList.toggle('mBarPeek'); sfx('click'); if (typeof haptic === 'function') haptic('tap'); };
@@ -203,6 +203,7 @@ function mobileToolbar(k) {
   else if (k === 'transport') { if (was === 'transport') closeSheet(); else openTransportSheet(); }
   else if (k === 'city') openMobilePage('city');
   else if (k === 'economy') openMobilePage('economy');
+  else if (k === 'gov') { if (typeof openGovernment === 'function') openGovernment(); }
   else if (k === 'map') openCityMap();
   refreshMobileBar();
 }
@@ -318,7 +319,7 @@ function gstDown(e) {
   }
   if (GST.mode === 'ignore') return;
   GST.hadMulti = false;
-  GST.st = { x: e.clientX, y: e.clientY, t: performance.now(), camX: CAM.x, camY: CAM.y, id: e.pointerId };
+  GST.st = { x: e.clientX, y: e.clientY, t: performance.now(), ts: e.timeStamp || performance.now(), camX: CAM.x, camY: CAM.y, id: e.pointerId };
   const t = tileAtScreen(e.clientX, e.clientY);
   if (ghostRectHit(t)) { GST.mode = 'ghost'; GST.grab = { dx: t.x - UI.ghost.x, dy: t.y - UI.ghost.y, orig: { x: UI.ghost.x, y: UI.ghost.y } }; return; }
   if (drawModeOn() && inMap(t.x, t.y)) {                 // ROAD / ZONE: START
@@ -374,7 +375,9 @@ function gstUp(e) {
   const st = GST.st, mode = GST.mode;
   if (GST.pts.size) return;
   if (mode === 'draw') { finishDrawStroke(); gstReset(); return; }
-  if (mode === 'pending' && st && !GST.hadMulti && performance.now() - st.t < 650) {
+  // Part 16: press length from the events' own timestamps — a slow frame while the pointerup waits in the queue
+  // (low-end phone at 10 FPS) no longer turns a quick tap into "no tap"
+  if (mode === 'pending' && st && !GST.hadMulti && (e.timeStamp && st.ts ? e.timeStamp - st.ts : performance.now() - st.t) < 650) {
     const lt = GST.lastTap, now = performance.now();                       // DOUBLE TAP (select tool, nothing being placed) → zoom in
     if (lt && now - lt.t < 400 && Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < 34 && UI.tool === 'select' && !UI.placing && typeof mobileDoubleTap === 'function') { GST.lastTap = null; mobileDoubleTap(e.clientX, e.clientY); }
     else { GST.lastTap = { t: now, x: e.clientX, y: e.clientY }; mobileTap(e.clientX, e.clientY); }

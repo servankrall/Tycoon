@@ -76,7 +76,7 @@ function adminAction(a, v) {
     case 'setRep': { const x = admVal('admRep'); if (isFinite(x)) S.city.reputation = clamp(x, 0, 100); return re('Reputation set'); }
     case 'setTax': { const x = admVal('admTax'); if (isFinite(x)) S.city.tax = clamp(Math.round(x), 0, MAX_TAX); return re('Tax set'); }
     case 'setLevel': { const x = clamp(admVal('admLevel') | 0, 1, 20); S.city.peakPop = Math.max(S.city.peakPop, CITY_LEVEL_POP[x - 1]); S.city.population = Math.max(S.city.population, CITY_LEVEL_POP[x - 1]); return re('City level ' + cityLevel()); }
-    case 'setRate': { const x = admVal('admRate'); if (isFinite(x)) p.econ.rate = clamp(x / 100, 0.005, 0.15); return re('Interest rate set'); }
+    case 'setRate': { const x = admVal('admRate'); if (isFinite(x)) p.econ.rate = clamp(x / 100, 0.01, 0.15); return re('Interest rate set'); }
     case 'phase': forceEconPhase(v); return re();
     case 'setHour': { const x = admVal('admHour'); if (isFinite(x)) S.clock.gameSec = Math.floor(S.clock.gameSec / 86400) * 86400 + clamp(x, 0, 23.99) * 3600; return re('Time set'); }
     case 'day': S.clock.gameSec += 86400; return re('Day ' + gameDay());
